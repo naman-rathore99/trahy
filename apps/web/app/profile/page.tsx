@@ -4,15 +4,13 @@ import { useRouter } from "next/navigation";
 import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import { app } from "@/lib/firebase";
 import ImageUpload from "@/components/ImageUpload";
-import LoginButton from "@/components/LoginButton";
 import { apiRequest } from "@/lib/api";
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  // State for form data
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -22,157 +20,167 @@ export default function ProfilePage() {
     licenseUrl: "",
   });
 
-  // 1. Load User & Auto-fill Name
   useEffect(() => {
     const auth = getAuth(app);
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser?.displayName) {
-        // FIX: Initialize the name immediately so it's not empty on submit
-        setFormData((prev) => ({
-          ...prev,
-          name: currentUser.displayName || "",
-        }));
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (!u)
+        router.push("/login"); // Redirect if not logged in
+      else {
+        setUser(u);
+        setFormData((prev) => ({ ...prev, name: u.displayName || "" }));
       }
-      setLoadingUser(false);
     });
-    return () => unsubscribe();
-  }, []);
+    return () => unsub();
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // DEBUG: Print exactly what we are sending to the backend
-    console.log("Submitting Form Data:", formData);
-
     if (!formData.aadharUrl || !formData.licenseUrl) {
-      alert("Please wait for images to finish uploading!");
+      alert("Please upload both documents before saving.");
       return;
     }
 
+    setLoading(true);
     try {
       await apiRequest("/api/user/update", "POST", formData);
-      alert("Profile Saved Successfully!");
+      alert("Success! Profile submitted for verification.");
     } catch (error: any) {
-      console.error(error);
-      alert("Error: " + error.message);
+      alert(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loadingUser) return <div className="p-10 text-center">Loading...</div>;
-
-  if (!user) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <LoginButton onLoginSuccess={(u) => setUser(u)} />
-      </div>
-    );
-  }
+  if (!user) return null;
 
   return (
-    <div className="max-w-xl mx-auto mt-10 p-6 bg-white shadow rounded-lg">
-      <h1 className="text-2xl font-bold mb-6">Complete Profile</h1>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Name Input */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Full Name
-          </label>
-          <input
-            value={formData.name} // FIX: Controlled input (value comes from state)
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full p-2 border rounded"
-          />
-        </div>
-
-        {/* Phone */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Phone
-          </label>
-          <input
-            value={formData.phone}
-            onChange={(e) =>
-              setFormData({ ...formData, phone: e.target.value })
-            }
-            className="w-full p-2 border rounded"
-            placeholder="1234567890"
-          />
-        </div>
-
-        {/* Identity Numbers */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Aadhar Number
-            </label>
-            <input
-              value={formData.aadharNumber}
-              onChange={(e) =>
-                setFormData({ ...formData, aadharNumber: e.target.value })
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              License Number
-            </label>
-            <input
-              value={formData.licenseNumber}
-              onChange={(e) =>
-                setFormData({ ...formData, licenseNumber: e.target.value })
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
-        </div>
-
-        {/* Image Uploads */}
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <div
-            className={
-              formData.aadharUrl ? "border-green-500 border-2 rounded" : ""
-            }
-          >
-            <ImageUpload
-              label="Aadhar Card"
-              onUpload={(url) => {
-                console.log("Setting Aadhar URL:", url); // Verify this prints
-                setFormData((prev) => ({ ...prev, aadharUrl: url }));
-              }}
-            />
-            {formData.aadharUrl && (
-              <p className="text-xs text-green-600 text-center">✓ Uploaded</p>
-            )}
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto">
+        <div className="bg-white shadow-xl rounded-2xl overflow-hidden">
+          {/* Header Section */}
+          <div className="bg-blue-600 px-8 py-6">
+            <h1 className="text-2xl font-bold text-white">
+              Complete Your Profile
+            </h1>
+            <p className="text-blue-100 mt-1">
+              Please provide your details for identity verification.
+            </p>
           </div>
 
-          <div
-            className={
-              formData.licenseUrl ? "border-green-500 border-2 rounded" : ""
-            }
-          >
-            <ImageUpload
-              label="Driving License"
-              onUpload={(url) => {
-                console.log("Setting License URL:", url); // Verify this prints
-                setFormData((prev) => ({ ...prev, licenseUrl: url }));
-              }}
-            />
-            {formData.licenseUrl && (
-              <p className="text-xs text-green-600 text-center">✓ Uploaded</p>
-            )}
-          </div>
-        </div>
+          <form onSubmit={handleSubmit} className="px-8 py-8 space-y-8">
+            {/* Section 1: Personal Info */}
+            <div>
+              <h3 className="text-lg font-medium leading-6 text-gray-900 border-b pb-2 mb-4">
+                Personal Information
+              </h3>
+              <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData({ ...formData, name: e.target.value })
+                    }
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={formData.phone}
+                    onChange={(e) =>
+                      setFormData({ ...formData, phone: e.target.value })
+                    }
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                </div>
+              </div>
+            </div>
 
-        <button
-          type="submit"
-          className="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700"
-        >
-          Save Profile
-        </button>
-      </form>
+            {/* Section 2: Documents */}
+            <div>
+              <h3 className="text-lg font-medium leading-6 text-gray-900 border-b pb-2 mb-4">
+                Identity Documents
+              </h3>
+
+              {/* Aadhar Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Aadhar Number
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={12}
+                    placeholder="12-digit UID"
+                    value={formData.aadharNumber}
+                    onChange={(e) =>
+                      setFormData({ ...formData, aadharNumber: e.target.value })
+                    }
+                    className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                </div>
+                <ImageUpload
+                  label="Upload Aadhar Card (Front)"
+                  onUpload={(url) =>
+                    setFormData((prev) => ({ ...prev, aadharUrl: url }))
+                  }
+                  currentUrl={formData.aadharUrl}
+                />
+              </div>
+
+              {/* License Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Driving License Number
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="DL Number"
+                    value={formData.licenseNumber}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        licenseNumber: e.target.value,
+                      })
+                    }
+                    className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                </div>
+                <ImageUpload
+                  label="Upload Driving License"
+                  onUpload={(url) =>
+                    setFormData((prev) => ({ ...prev, licenseUrl: url }))
+                  }
+                  currentUrl={formData.licenseUrl}
+                />
+              </div>
+            </div>
+
+            {/* Footer Action */}
+            <div className="pt-4 flex justify-end">
+              <button
+                type="submit"
+                disabled={loading}
+                className={`
+                  w-full sm:w-auto flex justify-center py-3 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white 
+                  ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"}
+                `}
+              >
+                {loading ? "Submitting..." : "Save & Verify Profile"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }
