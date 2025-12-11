@@ -20,12 +20,11 @@ app.use(cors());
 app.use(express.json());
 
 // 2. Define Custom Request Interface
-// This tells TypeScript: "Our requests might have a 'user' property"
 interface AuthRequest extends Request {
   user?: DecodedIdToken;
 }
 
-// 3. Auth Middleware (Type-Safe)
+// 3. Auth Middleware
 const checkAuth = async (
   req: AuthRequest,
   res: Response,
@@ -48,21 +47,21 @@ const checkAuth = async (
   }
 };
 
-// 4. Routes
+// ==========================================
+// 4. ROUTES
+// ==========================================
 
 // Health Check
 app.get("/", (req: Request, res: Response) => {
-  res.json({ message: "Backend is running (TypeScript)!" }); // <--- This sends JSON
+  res.json({ message: "Backend is running (TypeScript)!" });
 });
 
-// Update Profile
+// Update User Profile
 app.post(
   "/api/user/update",
   checkAuth,
   async (req: AuthRequest, res: Response) => {
     try {
-      // TypeScript knows req.user exists because of our checkAuth middleware logic
-      // but to be strict, we check existence:
       if (!req.user) {
         res.status(401).json({ error: "User not identified" });
         return;
@@ -78,7 +77,6 @@ app.post(
         licenseUrl,
       } = req.body;
 
-      // TypeScript Tip: You could create an Interface for the User data here too!
       const userData = {
         name,
         phone,
@@ -100,6 +98,94 @@ app.post(
     }
   }
 );
+
+// ADMIN ROUTE: Add Hotel (UPDATED FOR MULTI-IMAGES)
+app.post("/api/admin/add-hotel", checkAuth, async (req: any, res: any) => {
+  try {
+    const uid = req.user.uid;
+
+    // 1. Verify User is Admin
+    const userDoc = await db.collection("users").doc(uid).get();
+    const userData = userDoc.data();
+
+    if (userData?.role !== "admin") {
+      return res.status(403).json({ error: "Access Denied: Admins only." });
+    }
+
+    // 2. Get Data from Body
+    const {
+      name,
+      location,
+      pricePerNight,
+      description,
+      imageUrls, // <--- CHANGED: Now expecting an Array of strings
+      hasVehicle,
+      vehicleDetails,
+    } = req.body;
+
+    // 3. Construct Hotel Object
+    const hotelData = {
+      name,
+      location,
+      pricePerNight: Number(pricePerNight),
+      description,
+
+      // Save the Full Gallery
+      imageUrls: imageUrls || [],
+
+      // Auto-select the first image as the "Main" image (for cards/previews)
+      imageUrl: imageUrls && imageUrls.length > 0 ? imageUrls[0] : "",
+
+      hasVehicle: !!hasVehicle,
+      // Only add vehicle details if the toggle is ON
+      vehicleDetails: hasVehicle
+        ? {
+            name: vehicleDetails.name,
+            type: vehicleDetails.type,
+            pricePerDay: Number(vehicleDetails.pricePerDay),
+            imageUrl: vehicleDetails.imageUrl, // Vehicle still uses single image
+          }
+        : null,
+      createdAt: new Date().toISOString(),
+    };
+
+    // 4. Save to Firestore
+    await db.collection("hotels").add(hotelData);
+
+    res.json({ success: true, message: "Hotel added successfully!" });
+  } catch (error: any) {
+    console.error("Add Hotel Error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ADMIN ROUTE: Get All Users
+app.get("/api/admin/users", checkAuth, async (req: any, res: any) => {
+  try {
+    // 1. Check Admin Role
+    const uid = req.user.uid;
+    const adminDoc = await db.collection("users").doc(uid).get();
+    if (adminDoc.data()?.role !== "admin") {
+      return res.status(403).json({ error: "Access Denied" });
+    }
+
+    // 2. Fetch Users
+    const snapshot = await db
+      .collection("users")
+      .orderBy("createdAt", "desc")
+      .get();
+
+    // 3. Format Data
+    const users = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    res.json({ success: true, users });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // 5. Start Server
 const PORT = process.env.PORT || 5000;

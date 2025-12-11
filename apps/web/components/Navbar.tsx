@@ -57,20 +57,20 @@ const Navbar = ({ variant = "transparent" }: NavbarProps) => {
             className={`hidden md:flex items-center gap-8 text-sm font-medium ${textColor}`}
           >
             <li className="flex flex-col items-center gap-1 cursor-pointer group">
-              <Link href="/">Home</Link>
+              <Link href="/" className="text-black">Home</Link>
               <span
                 className={`w-1.5 h-1.5 rounded-full opacity-100 transition-opacity ${
                   isDarkState ? "bg-black" : "bg-white"
                 }`}
               ></span>
             </li>
-            <li className="opacity-80 hover:opacity-100 cursor-pointer transition-opacity">
+            <li className="opacity-80 hover:opacity-100 text-black cursor-pointer transition-opacity">
               Book now
             </li>
-            <li className="opacity-80 hover:opacity-100 cursor-pointer transition-opacity">
+            <li className="opacity-80 hover:opacity-100 text-black cursor-pointer transition-opacity">
               Packages
             </li>
-            <li className="opacity-80 hover:opacity-100 cursor-pointer transition-opacity">
+            <li className="opacity-80 hover:opacity-100 text-black cursor-pointer transition-opacity">
               Popular places
             </li>
           </ul>
