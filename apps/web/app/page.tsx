@@ -1,30 +1,67 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import Hero from "@/components/Hero";
+import Hero from "@/components/Hero"; // *Note: See Step 2 below
 import DestinationSection from "@/components/DestinationSection";
 import SearchResults from "@/components/SearchResults";
-import { allDestinations, Destination } from "@/lib/data";
+import { Destination } from "@/lib/data"; // Keep for Type definition only
+import { apiRequest } from "@/lib/api"; // Import API helper
 
 type View = "home" | "search";
 
 export default function Home() {
   const router = useRouter();
   const [view, setView] = useState<View>("home");
-  const [filteredResults, setFilteredResults] =
-    useState<Destination[]>(allDestinations);
 
-  // --- LIFTED STATE (The "Source of Truth") ---
+  // --- REAL DATA STATE ---
+  const [hotels, setHotels] = useState<Destination[]>([]); // Stores DB data
+  const [loading, setLoading] = useState(true);
+  const [filteredResults, setFilteredResults] = useState<Destination[]>([]);
+
+  // --- SEARCH STATE ---
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
 
-  // 1. Handle Search Button Click
+  // 1. FETCH APPROVED PROPERTIES ON LOAD
+  useEffect(() => {
+    const fetchHotels = async () => {
+      try {
+        const data = await apiRequest("/api/hotels", "GET");
+
+        // 2. MAP BACKEND DATA TO FRONTEND UI FORMAT
+        const mappedHotels: Destination[] = data.hotels.map((h: any) => ({
+          id: h.id,
+          title: h.name, // Backend 'name' -> UI 'title'
+          location: h.location,
+          price: h.pricePerNight, // Backend 'pricePerNight' -> UI 'price'
+          image:
+            h.imageUrl ||
+            "https://images.unsplash.com/photo-1566073771259-6a8506099945", // Fallback
+          description: h.description,
+          rating: 4.8, // Default rating for now
+          reviews: 12, // Default review count
+        }));
+
+        setHotels(mappedHotels);
+        setFilteredResults(mappedHotels); // Show all by default
+      } catch (err) {
+        console.error("Failed to load hotels:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHotels();
+  }, []);
+
+  // 3. HANDLE SEARCH (Using Real Data)
   const handleSearch = (query: string) => {
-    const results = allDestinations.filter(
+    // Filter the 'hotels' state, NOT 'allDestinations'
+    const results = hotels.filter(
       (d) =>
         d.title.toLowerCase().includes(query.toLowerCase()) ||
         d.location.toLowerCase().includes(query.toLowerCase())
@@ -34,16 +71,12 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // 2. Handle Item Click (Navigates with current state)
   const handleItemClick = (dest: Destination) => {
     const params = new URLSearchParams();
-
-    // Use the LIVE state variables directly
     if (startDate) params.set("start", startDate);
     if (endDate) params.set("end", endDate);
     params.set("adults", adults.toString());
     params.set("children", children.toString());
-
     router.push(`/destinations/${dest.id}?${params.toString()}`);
   };
 
@@ -63,27 +96,33 @@ export default function Home() {
     );
   }
 
-  // --- VIEW: HOME (Default) ---
+  // --- VIEW: HOME ---
   return (
     <main className="bg-white min-h-screen">
+    
       <Hero
-        // Pass State Down
         startDate={startDate}
         endDate={endDate}
         adults={adults}
         children={children}
-        // Pass Setters Down
         setStartDate={setStartDate}
         setEndDate={setEndDate}
         setAdults={setAdults}
         setChildren={setChildren}
         onSearch={handleSearch}
+        data={hotels}
       />
 
-      <DestinationSection
-        destinations={allDestinations}
-        onItemClick={handleItemClick}
-      />
+      {loading ? (
+        <div className="p-20 text-center text-gray-500">
+          Loading amazing stays...
+        </div>
+      ) : (
+        <DestinationSection
+          destinations={hotels} // <--- Pass Real Data Here
+          onItemClick={handleItemClick}
+        />
+      )}
     </main>
   );
 }
