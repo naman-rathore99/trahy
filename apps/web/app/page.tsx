@@ -41,7 +41,7 @@ export default function Home() {
           price: h.pricePerNight,
           image:
             h.imageUrl ||
-            "https://images.unsplash.com/photo-1566073771259-6a8506099945",
+            "/hero-main.jpg",
           description: h.description,
           rating: 4.8,
           reviews: 12,

@@ -18,10 +18,6 @@ import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 
 interface NavbarProps {
-  /**
-   * Use 'transparent' if placing over a hero image (requires handling contrast manually via prop if needed),
-   * Use 'default' for standard pages.
-   */
   variant?: "transparent" | "default";
 }
 
@@ -92,20 +88,32 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
     setIsMobileMenuOpen(false);
   };
 
-  // --- STYLE LOGIC ---
+  // --- DYNAMIC STYLE LOGIC (THE FIX) ---
 
-  // Base Text Color: Adapts to Light/Dark mode automatically
-  // Light Mode: Gray-900 | Dark Mode: White
-  const baseTextColor = "text-gray-900 dark:text-white";
+  // We are in "Dark/Solid Mode" if:
+  // 1. Page is Scrolled OR
+  // 2. Mobile Menu is OPEN (Needs to contrast with white overlay) OR
+  // 3. Variant is 'default' (Always white nav)
+  const isSolidState = isScrolled || isMobileMenuOpen || variant === "default";
 
-  // Background Logic
-  const navBackground = isScrolled
+  // Background
+  const navBackground = isSolidState
     ? "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-sm py-4 border-b border-gray-200 dark:border-slate-800"
     : "bg-transparent py-6";
 
-  // Button Styles
-  const buttonBorder = "border-gray-300 dark:border-slate-700";
-  const buttonHover = "hover:bg-gray-100 dark:hover:bg-slate-800";
+  // Text Color (White on Hero, Black on Solid/Menu)
+  const textColor = isSolidState
+    ? "text-gray-900 dark:text-white"
+    : "text-white";
+
+  // Border Colors
+  const buttonBorder = isSolidState
+    ? "border-gray-300 dark:border-slate-700"
+    : "border-white/30";
+
+  const buttonHover = isSolidState
+    ? "hover:bg-gray-100 dark:hover:bg-slate-800"
+    : "hover:bg-white/10";
 
   return (
     <nav
@@ -115,14 +123,14 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
         {/* LOGO */}
         <Link
           href="/"
-          className={`text-2xl font-bold tracking-wide uppercase z-50 relative ${baseTextColor}`}
+          className={`text-2xl font-bold tracking-wide uppercase z-50 relative ${textColor}`}
         >
           Trav & Stay
         </Link>
 
         {/* --- DESKTOP MENU --- */}
         <ul
-          className={`hidden md:flex items-center gap-8 text-sm font-medium ${baseTextColor}`}
+          className={`hidden md:flex items-center gap-8 text-sm font-medium ${textColor}`}
         >
           <li>
             <Link href="/" className="hover:opacity-70 transition-opacity">
@@ -147,7 +155,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
         {/* --- DESKTOP ACTIONS --- */}
         <div className="hidden md:flex items-center gap-4">
           <button
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-full transition-colors ${baseTextColor} ${buttonBorder} ${buttonHover}`}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-full transition-colors ${textColor} ${buttonBorder} ${buttonHover}`}
           >
             <Globe size={16} /> <span>EN</span>
           </button>
@@ -157,7 +165,11 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
               {!firebaseUser ? (
                 <Link
                   href="/login"
-                  className="flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 active:scale-95 bg-gray-900 text-white dark:bg-white dark:text-black"
+                  className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 active:scale-95 ${
+                    isSolidState
+                      ? "bg-gray-900 text-white dark:bg-white dark:text-black"
+                      : "bg-white text-black"
+                  }`}
                 >
                   <UserIcon size={18} />
                   <span>Login</span>
@@ -166,7 +178,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                 <div className="relative" ref={profileRef}>
                   <button
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-full transition-colors ${baseTextColor} ${buttonBorder} ${buttonHover}`}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-full transition-colors ${textColor} ${buttonBorder} ${buttonHover}`}
                   >
                     {firebaseUser.photoURL ? (
                       <img
@@ -175,7 +187,9 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                         className="w-6 h-6 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center text-gray-500 dark:text-gray-300">
+                      <div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center ${isSolidState ? "bg-gray-200 text-gray-500" : "bg-white/20 text-white"}`}
+                      >
                         <UserIcon size={14} />
                       </div>
                     )}
@@ -187,7 +201,6 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                   {/* Dropdown Menu */}
                   {isProfileOpen && (
                     <div className="absolute right-0 mt-3 w-64 rounded-xl shadow-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 py-2 z-50 overflow-hidden text-gray-900 dark:text-gray-100">
-                      {/* User Info Header */}
                       <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
                         <p className="text-sm font-bold truncate">
                           {firebaseUser.displayName || "User"}
@@ -196,11 +209,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                           {firebaseUser.email}
                         </p>
                         <span
-                          className={`inline-block mt-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                            userRole === "admin"
-                              ? "bg-black text-white dark:bg-white dark:text-black"
-                              : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                          }`}
+                          className={`inline-block mt-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded ${userRole === "admin" ? "bg-black text-white" : "bg-blue-100 text-blue-700"}`}
                         >
                           {userRole === "admin"
                             ? "Partner Account"
@@ -208,21 +217,16 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                         </span>
                       </div>
 
-                      {/* Links */}
                       <div className="py-2">
                         <Link
                           href="/profile"
                           onClick={() => setIsProfileOpen(false)}
                           className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                         >
-                          <UserIcon
-                            size={16}
-                            className="text-gray-500 dark:text-gray-400"
-                          />{" "}
-                          My Profile
+                          <UserIcon size={16} className="text-gray-500" /> My
+                          Profile
                         </Link>
 
-                        {/* ADMIN LINKS */}
                         {userRole === "admin" && (
                           <>
                             <Link
@@ -232,7 +236,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                             >
                               <LayoutDashboard
                                 size={16}
-                                className="text-gray-500 dark:text-gray-400"
+                                className="text-gray-500"
                               />{" "}
                               Owner Dashboard
                             </Link>
@@ -243,34 +247,29 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                             >
                               <ShieldCheck
                                 size={16}
-                                className="text-gray-500 dark:text-gray-400"
+                                className="text-gray-500"
                               />{" "}
                               Join Requests
                             </Link>
                           </>
                         )}
 
-                        {/* CUSTOMER LINKS */}
                         {userRole !== "admin" && (
                           <Link
                             href="/bookings"
                             onClick={() => setIsProfileOpen(false)}
                             className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                           >
-                            <CreditCard
-                              size={16}
-                              className="text-gray-500 dark:text-gray-400"
-                            />{" "}
+                            <CreditCard size={16} className="text-gray-500" />{" "}
                             My Bookings
                           </Link>
                         )}
                       </div>
 
-                      {/* Logout */}
                       <div className="border-t border-gray-100 dark:border-slate-800 pt-1">
                         <button
                           onClick={handleLogout}
-                          className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
                         >
                           <LogOut size={16} /> Log Out
                         </button>
@@ -286,7 +285,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
         {/* --- MOBILE TOGGLE BUTTON --- */}
         <div className="md:hidden flex items-center gap-2">
           <button
-            className={`p-2 ${baseTextColor}`}
+            className={`p-2 transition-colors ${textColor}`}
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
             {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
@@ -312,14 +311,13 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
               </Link>
             </li>
           )}
-          {userRole !== "admin" && (
-            <li onClick={() => setIsMobileMenuOpen(false)}>
-              <Link href="/packages">Packages</Link>
-            </li>
-          )}
 
           <li onClick={() => setIsMobileMenuOpen(false)}>
-            <Link href="/join">Join as Partner</Link>
+            <Link href="/packages">Packages</Link>
+          </li>
+
+          <li onClick={() => setIsMobileMenuOpen(false)}>
+            <Link href="/join">Become a Partner</Link>
           </li>
         </ul>
 
