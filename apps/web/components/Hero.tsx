@@ -13,6 +13,7 @@ import {
   Search,
 } from "lucide-react";
 import { Destination } from "@/lib/data"; // Removed 'allDestinations' import since we use props now
+import Image from "next/image";
 
 interface HeroProps {
   startDate: string;
@@ -121,13 +122,14 @@ const Hero = ({
       <div className="relative h-[85vh] w-full">
         {/* Background Image */}
         <div className="absolute inset-0 rounded-[2.5rem] overflow-hidden -z-10">
-          <img
-            src="https://images.unsplash.com/photo-1537996194471-e657df975ab4?q=80&w=2600&auto=format&fit=crop"
+          <Image
+            src="/home-main.jpg"
             className="w-full h-full object-cover"
             alt="Hero"
+            fill
           />
           <div className="absolute inset-0 bg-black/20" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+          <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
         </div>
 
         <div className="absolute inset-0 flex flex-col justify-center items-center text-center px-4 pt-20">
@@ -135,7 +137,7 @@ const Hero = ({
             Where every journey <br /> becomes an adventure.
           </h1>
 
-          <div className="bg-white rounded-[2rem] p-3 shadow-2xl w-full max-w-4xl relative z-50">
+          <div className="bg-white rounded-4xl p-3 shadow-2xl w-full max-w-4xl relative z-50">
             <div className="flex flex-col lg:flex-row items-center gap-2">
               {/* --- Location Input --- */}
               <div className="flex items-center gap-3 flex-1 w-full px-4 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
@@ -187,7 +189,7 @@ const Hero = ({
                 {showCalendar && (
                   <div
                     ref={calendarRef}
-                    className="absolute top-full left-0 mt-4 bg-white p-4 rounded-2xl shadow-xl border border-gray-100 z-[60]"
+                    className="absolute top-full left-0 mt-4 bg-white p-4 rounded-2xl shadow-xl border border-gray-100 z-60"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <DayPicker

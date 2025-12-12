@@ -1,42 +1,61 @@
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { initializeApp, cert } from "firebase-admin/app";
+import { initializeApp, cert, ServiceAccount } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth, DecodedIdToken } from "firebase-admin/auth";
 
 // 1. SETUP & CONFIGURATION
-dotenv.config(); // Load secrets from .env file
+dotenv.config();
 
-const serviceAccount = require("../serviceAccountKey.json");
+// --- SMART CREDENTIAL LOADING (Local vs Cloud) ---
+let serviceAccount: ServiceAccount;
+
+// Option A: Cloud (Render) - Loads from Environment Variable
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    console.log("✅ Loaded Firebase credentials from Environment Variable.");
+  } catch (e) {
+    console.error("❌ Error parsing FIREBASE_SERVICE_ACCOUNT env var.");
+    process.exit(1);
+  }
+}
+// Option B: Localhost - Loads from file
+else {
+  try {
+    serviceAccount = require("../serviceAccountKey.json");
+    console.log("✅ Loaded Firebase credentials from local file.");
+  } catch (e) {
+    console.error(
+      "❌ Fatal Error: Could not find serviceAccountKey.json or FIREBASE_SERVICE_ACCOUNT env var."
+    );
+    process.exit(1);
+  }
+}
 
 initializeApp({
   credential: cert(serviceAccount),
 });
 
-const db = getFirestore(); // Database access
-const app = express(); // The server app
+const db = getFirestore();
+const app = express();
 
-app.use(cors()); // Security: Allow requests from other domains (like your frontend)
-app.use(express.json()); // Utility: specific parsing for JSON data in requests
+app.use(cors());
+app.use(express.json());
 
-// 2. TYPESCRIPT DEFINITIONS
-// We teach TypeScript that a "Request" might have a "user" attached to it later
+// 2. TYPESCRIPT INTERFACE
 interface AuthRequest extends Request {
   user?: DecodedIdToken;
 }
 
-// ==================================================================
-// 3. MIDDLEWARE (The Bouncer)
-// ==================================================================
-// This function runs BEFORE protected routes. It checks if the user is logged in.
+// 3. MIDDLEWARE
 const checkAuth = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    // Look for the "Authorization: Bearer <TOKEN>" header
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split("Bearer ")[1];
 
@@ -45,48 +64,43 @@ const checkAuth = async (
       return;
     }
 
-    // Ask Firebase: "Is this token real?"
     const decodedToken = await getAuth().verifyIdToken(token);
-
-    // If real, attach the user info to the request so the next function can use it
     req.user = decodedToken;
-    next(); // Pass control to the next function (the actual route)
+    next();
   } catch (error) {
     res.status(403).send({ error: "Unauthorized" });
   }
 };
 
-// ==================================================================
-// 4. PUBLIC ROUTES (Open to Everyone)
-// ==================================================================
+// ==========================================
+// 4. PUBLIC ROUTES (No Login Required)
+// ==========================================
 
-// Health Check - Just to see if server is alive
+// Health Check
 app.get("/", (req: Request, res: Response) => {
-  res.json({ message: "Backend is running (TypeScript)!" });
+  res.json({ message: "Backend is running!" });
 });
 
-// [NEW] JOIN REQUEST - Anyone can submit this form
-// We do NOT use 'checkAuth' here because the user is a stranger (not logged in yet)
+// Join Request (Public Form)
 app.post("/api/public/join-request", async (req: any, res: any) => {
   try {
     const { name, email, phone, serviceType, officialIdUrl } = req.body;
-
-    // Save to a separate "requests" collection (Inbox)
     await db.collection("join_requests").add({
       name,
       email,
       phone,
       serviceType,
       officialIdUrl,
-      status: "pending", // Mark as "Waiting for Admin"
+      status: "pending",
       createdAt: new Date().toISOString(),
     });
-
     res.json({ success: true, message: "Request received" });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Get APPROVED Hotels (For Home Page)
 app.get("/api/hotels", async (req: any, res: any) => {
   try {
     const snapshot = await db
@@ -100,9 +114,163 @@ app.get("/api/hotels", async (req: any, res: any) => {
   }
 });
 
-// ==================================================================
-// 5. PROTECTED ROUTES (Logged In Users Only)
-// ==================================================================
+// Get Single Hotel (Public read for Details Page)
+app.get("/api/hotels/:id", async (req: any, res: any) => {
+  try {
+    const doc = await db.collection("hotels").doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Not found" });
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// 5. USER ROUTES (Login Required)
+// ==========================================
+
+// Get My Profile (Role Check)
+app.get("/api/user/me", checkAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const uid = req.user!.uid;
+    const doc = await db.collection("users").doc(uid).get();
+    if (!doc.exists)
+      return res.status(404).json({ error: "Profile not found" });
+    res.json({ user: doc.data() });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update Profile
+app.post(
+  "/api/user/update",
+  checkAuth,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const uid = req.user!.uid;
+      const {
+        name,
+        phone,
+        aadharNumber,
+        licenseNumber,
+        aadharUrl,
+        licenseUrl,
+      } = req.body;
+
+      await db.collection("users").doc(uid).set(
+        {
+          name,
+          phone,
+          aadharNumber,
+          licenseNumber,
+          aadharUrl,
+          licenseUrl,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      res.status(200).json({ success: true, message: "Profile updated" });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ==========================================
+// 6. ADMIN ROUTES (Admin Role Required)
+// ==========================================
+
+// Get All Users
+app.get("/api/admin/users", checkAuth, async (req: any, res: any) => {
+  try {
+    const uid = req.user.uid;
+    const adminDoc = await db.collection("users").doc(uid).get();
+    if (adminDoc.data()?.role !== "admin")
+      return res.status(403).json({ error: "Access Denied" });
+
+    const snapshot = await db
+      .collection("users")
+      .orderBy("createdAt", "desc")
+      .get();
+    const users = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    res.json({ success: true, users });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get Join Requests
+app.get("/api/admin/requests", checkAuth, async (req: any, res: any) => {
+  try {
+    const uid = req.user.uid;
+    const adminDoc = await db.collection("users").doc(uid).get();
+    if (adminDoc.data()?.role !== "admin")
+      return res.status(403).json({ error: "Denied" });
+
+    const snapshot = await db
+      .collection("join_requests")
+      .where("status", "==", "pending")
+      .get();
+    const requests = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    res.json({ requests });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Approve Request (Create User)
+app.post(
+  "/api/admin/approve-request",
+  checkAuth,
+  async (req: any, res: any) => {
+    try {
+      const uid = req.user.uid;
+      const adminDoc = await db.collection("users").doc(uid).get();
+      if (adminDoc.data()?.role !== "admin")
+        return res.status(403).json({ error: "Denied" });
+
+      const { requestId, email, name, password } = req.body;
+
+      // Create Auth User
+      const newUser = await getAuth().createUser({
+        email,
+        password,
+        displayName: name,
+      });
+
+      // Create DB Document
+      await db.collection("users").doc(newUser.uid).set({
+        name,
+        email,
+        role: "user",
+        createdAt: new Date().toISOString(),
+        isLicenseVerified: false,
+      });
+
+      // Mark Request as Approved
+      await db.collection("join_requests").doc(requestId).update({
+        status: "approved",
+        approvedBy: uid,
+        approvedAt: new Date().toISOString(),
+      });
+
+      res.json({
+        success: true,
+        message: "User Created!",
+        userId: newUser.uid,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Add Property
 app.post("/api/admin/add-hotel", checkAuth, async (req: any, res: any) => {
   try {
     const uid = req.user.uid;
@@ -131,9 +299,7 @@ app.post("/api/admin/add-hotel", checkAuth, async (req: any, res: any) => {
       vehicleDetails: hasVehicle
         ? { ...vehicleDetails, pricePerDay: Number(vehicleDetails.pricePerDay) }
         : null,
-
-      // NEW FIELDS
-      status: "pending", // Default to pending so it goes to review
+      status: "pending",
       createdAt: new Date().toISOString(),
     };
 
@@ -144,10 +310,10 @@ app.post("/api/admin/add-hotel", checkAuth, async (req: any, res: any) => {
   }
 });
 
-// 2. NEW: Get Properties by Status (For Admin Dashboard)
+// Get Properties by Status
 app.get("/api/admin/properties", checkAuth, async (req: any, res: any) => {
   try {
-    const status = req.query.status || "pending"; // Default to pending
+    const status = req.query.status || "pending";
     const snapshot = await db
       .collection("hotels")
       .where("status", "==", status)
@@ -162,18 +328,7 @@ app.get("/api/admin/properties", checkAuth, async (req: any, res: any) => {
   }
 });
 
-// 3. NEW: Get Single Property (For Editing)
-app.get("/api/hotels/:id", async (req: any, res: any) => {
-  try {
-    const doc = await db.collection("hotels").doc(req.params.id).get();
-    if (!doc.exists) return res.status(404).json({ error: "Not found" });
-    res.json({ id: doc.id, ...doc.data() });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 4. NEW: Update/Approve Property
+// Update/Approve/Ban Property
 app.put("/api/admin/hotels/:id", checkAuth, async (req: any, res: any) => {
   try {
     const uid = req.user.uid;
@@ -181,7 +336,6 @@ app.put("/api/admin/hotels/:id", checkAuth, async (req: any, res: any) => {
     if (userDoc.data()?.role !== "admin")
       return res.status(403).json({ error: "Denied" });
 
-    // Updates can include changing status to 'approved'
     await db
       .collection("hotels")
       .doc(req.params.id)
@@ -196,225 +350,8 @@ app.put("/api/admin/hotels/:id", checkAuth, async (req: any, res: any) => {
   }
 });
 
-// 5. NEW: Public "Home Page" Route (Approved Only)
-app.get("/api/hotels", async (req: any, res: any) => {
-  try {
-    // Only fetch APPROVED hotels
-    const snapshot = await db
-      .collection("hotels")
-      .where("status", "==", "approved")
-      .get();
-    const hotels = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    res.json({ hotels });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-// Update Profile - Users updating their own data
-app.get("/api/user/me", checkAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const uid = req.user!.uid;
-    const doc = await db.collection("users").doc(uid).get();
-
-    if (!doc.exists) {
-      return res.status(404).json({ error: "Profile not found" });
-    }
-
-    // Return the full profile data (including role)
-    res.json({ user: doc.data() });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-app.post(
-  "/api/user/update",
-  checkAuth, // <--- Bouncer checks ID first
-  async (req: AuthRequest, res: Response) => {
-    try {
-      const uid = req.user!.uid; // We know this exists because of checkAuth
-      const {
-        name,
-        phone,
-        aadharNumber,
-        licenseNumber,
-        aadharUrl,
-        licenseUrl,
-      } = req.body;
-
-      // Save to "users" collection
-      await db.collection("users").doc(uid).set(
-        {
-          name,
-          phone,
-          aadharNumber,
-          licenseNumber,
-          aadharUrl,
-          licenseUrl,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      ); // Merge means "update existing fields, don't delete others"
-
-      res.status(200).json({ success: true, message: "Profile updated" });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
-    }
-  }
-);
-
-// ==================================================================
-// 6. ADMIN ROUTES (Boss Only)
-// ==================================================================
-
-// [NEW] Get All Join Requests (Inbox)
-app.get("/api/admin/requests", checkAuth, async (req: any, res: any) => {
-  try {
-    // Security Check: Is this user actually an Admin?
-    const uid = req.user.uid;
-    const adminDoc = await db.collection("users").doc(uid).get();
-    if (adminDoc.data()?.role !== "admin")
-      return res.status(403).json({ error: "Denied" });
-
-    // Fetch only "pending" requests
-    const snapshot = await db
-      .collection("join_requests")
-      .where("status", "==", "pending")
-      .get();
-    const requests = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    res.json({ requests });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// [NEW] Approve Request (Create the User)
-app.post(
-  "/api/admin/approve-request",
-  checkAuth,
-  async (req: any, res: any) => {
-    try {
-      const uid = req.user.uid;
-      // 1. Verify Admin
-      const adminDoc = await db.collection("users").doc(uid).get();
-      if (adminDoc.data()?.role !== "admin")
-        return res.status(403).json({ error: "Denied" });
-
-      const { requestId, email, name, password } = req.body;
-
-      // 2. Create the Account in Firebase Auth (Login System)
-      // This allows them to actually log in with Email/Password
-      const newUser = await getAuth().createUser({
-        email: email,
-        password: password,
-        displayName: name,
-      });
-
-      // 3. Create the Document in Firestore (Database System)
-      // This stores their profile data
-      await db.collection("users").doc(newUser.uid).set({
-        name,
-        email,
-        role: "user", // They start as a regular partner
-        createdAt: new Date().toISOString(),
-        isLicenseVerified: false,
-      });
-
-      // 4. Mark Request as Approved (Move out of Inbox)
-      await db.collection("join_requests").doc(requestId).update({
-        status: "approved",
-        approvedBy: uid,
-        approvedAt: new Date().toISOString(),
-      });
-
-      res.json({
-        success: true,
-        message: "User Created!",
-        userId: newUser.uid,
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  }
-);
-
-// Add Hotel (With Multi-Image Support)
-app.post("/api/admin/add-hotel", checkAuth, async (req: any, res: any) => {
-  try {
-    const uid = req.user.uid;
-
-    // Verify Admin
-    const userDoc = await db.collection("users").doc(uid).get();
-    if (userDoc.data()?.role !== "admin") {
-      return res.status(403).json({ error: "Access Denied" });
-    }
-
-    const {
-      name,
-      location,
-      pricePerNight,
-      description,
-      imageUrls, // Array of images
-      hasVehicle,
-      vehicleDetails,
-    } = req.body;
-
-    const hotelData = {
-      name,
-      location,
-      pricePerNight: Number(pricePerNight),
-      description,
-      imageUrls: imageUrls || [], // Save the list
-      imageUrl: imageUrls && imageUrls.length > 0 ? imageUrls[0] : "", // Main image
-      hasVehicle: !!hasVehicle,
-      vehicleDetails: hasVehicle
-        ? {
-            name: vehicleDetails.name,
-            type: vehicleDetails.type,
-            pricePerDay: Number(vehicleDetails.pricePerDay),
-            imageUrl: vehicleDetails.imageUrl,
-          }
-        : null,
-      createdAt: new Date().toISOString(),
-    };
-
-    await db.collection("hotels").add(hotelData);
-
-    res.json({ success: true, message: "Hotel added!" });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Get All Users (For Dashboard)
-app.get("/api/admin/users", checkAuth, async (req: any, res: any) => {
-  try {
-    const uid = req.user.uid;
-    const adminDoc = await db.collection("users").doc(uid).get();
-    if (adminDoc.data()?.role !== "admin") {
-      return res.status(403).json({ error: "Access Denied" });
-    }
-
-    const snapshot = await db
-      .collection("users")
-      .orderBy("createdAt", "desc")
-      .get();
-    const users = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    res.json({ success: true, users });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // 7. START SERVER
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Backend running on http://localhost:${PORT}`);
+  console.log(`Backend running on port ${PORT}`);
 });

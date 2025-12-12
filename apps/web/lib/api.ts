@@ -16,8 +16,7 @@ export const apiRequest = async (
     "Content-Type": "application/json",
   };
 
-  // ONLY attach the token if a user is actually logged in.
-  // If no user, we just send a public request (perfect for Home Page).
+ 
   if (user) {
     const token = await user.getIdToken();
     headers["Authorization"] = `Bearer ${token}`;
@@ -34,8 +33,6 @@ export const apiRequest = async (
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
 
-    // If the server explicitly says "Unauthorized" (401/403),
-    // it means this specific route REQUIRED a login, but we didn't have one.
     if (res.status === 401 || res.status === 403) {
       throw new Error("You must be logged in to do this.");
     }

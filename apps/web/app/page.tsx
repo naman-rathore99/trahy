@@ -35,15 +35,15 @@ export default function Home() {
         // 2. MAP BACKEND DATA TO FRONTEND UI FORMAT
         const mappedHotels: Destination[] = data.hotels.map((h: any) => ({
           id: h.id,
-          title: h.name, // Backend 'name' -> UI 'title'
+          title: h.name,
           location: h.location,
-          price: h.pricePerNight, // Backend 'pricePerNight' -> UI 'price'
+          price: h.pricePerNight, 
           image:
             h.imageUrl ||
-            "https://images.unsplash.com/photo-1566073771259-6a8506099945", // Fallback
+            "/home-main.jpg",
           description: h.description,
-          rating: 4.8, // Default rating for now
-          reviews: 12, // Default review count
+          rating: 4.8, 
+          reviews: 12, 
         }));
 
         setHotels(mappedHotels);
@@ -85,7 +85,7 @@ export default function Home() {
     return (
       <main>
         <div className="relative z-50">
-          <Navbar variant="dark" />
+          <Navbar  />
         </div>
         <SearchResults
           results={filteredResults}

@@ -9,7 +9,6 @@ import {
   LogOut,
   LayoutDashboard,
   ShieldCheck,
-  Map,
   CreditCard,
 } from "lucide-react";
 import Link from "next/link";
@@ -19,7 +18,11 @@ import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 
 interface NavbarProps {
-  variant?: "transparent" | "dark";
+  /**
+   * Use 'transparent' if placing over a hero image (requires handling contrast manually via prop if needed),
+   * Use 'default' for standard pages.
+   */
+  variant?: "transparent" | "default";
 }
 
 export default function Navbar({ variant = "transparent" }: NavbarProps) {
@@ -30,21 +33,19 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
 
   // Auth State
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null); // 'admin' | 'user' | null
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const profileRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
   const auth = getAuth(app);
 
-  // 1. Detect Login & Fetch Role from Backend
+  // 1. Detect Login & Fetch Role
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setFirebaseUser(currentUser);
-
       if (currentUser) {
         try {
-          // Fetch the role to decide what menu items to show
           const data = await apiRequest("/api/user/me", "GET");
           if (data?.user?.role) {
             setUserRole(data.user.role);
@@ -60,9 +61,9 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
     return () => unsubscribe();
   }, [auth]);
 
-  // 2. Handle Scroll Effect (Transparent to White)
+  // 2. Handle Scroll Effect
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
+    const handleScroll = () => setIsScrolled(window.scrollY > 20);
     handleScroll();
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
@@ -91,38 +92,37 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
     setIsMobileMenuOpen(false);
   };
 
-  // 5. Dynamic Styles
-  const isDarkState = isScrolled || variant === "dark";
-  const navBackground = isDarkState
-    ? "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-sm py-4"
+  // --- STYLE LOGIC ---
+
+  // Base Text Color: Adapts to Light/Dark mode automatically
+  // Light Mode: Gray-900 | Dark Mode: White
+  const baseTextColor = "text-gray-900 dark:text-white";
+
+  // Background Logic
+  const navBackground = isScrolled
+    ? "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-sm py-4 border-b border-gray-200 dark:border-slate-800"
     : "bg-transparent py-6";
-  const textColor =
-    isDarkState || isMobileMenuOpen
-      ? "text-gray-900 dark:text-white"
-      : "text-white";
-  const buttonBorder = isDarkState
-    ? "border-gray-200 dark:border-slate-700"
-    : "border-white/30";
-  const buttonSolid = isDarkState
-    ? "bg-black text-white"
-    : "bg-white text-black";
+
+  // Button Styles
+  const buttonBorder = "border-gray-300 dark:border-slate-700";
+  const buttonHover = "hover:bg-gray-100 dark:hover:bg-slate-800";
 
   return (
     <nav
-      className={`sticky top-0 left-0 right-0 z-50 transition-all duration-300 ${navBackground}`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${navBackground}`}
     >
       <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex items-center justify-between">
         {/* LOGO */}
         <Link
           href="/"
-          className={`text-2xl font-bold tracking-wide uppercase z-50 relative ${textColor}`}
+          className={`text-2xl font-bold tracking-wide uppercase z-50 relative ${baseTextColor}`}
         >
           Trav & Stay
         </Link>
 
         {/* --- DESKTOP MENU --- */}
         <ul
-          className={`hidden md:flex items-center gap-8 text-sm font-medium ${textColor}`}
+          className={`hidden md:flex items-center gap-8 text-sm font-medium ${baseTextColor}`}
         >
           <li>
             <Link href="/" className="hover:opacity-70 transition-opacity">
@@ -132,7 +132,6 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
           <li className="hover:opacity-70 cursor-pointer">Packages</li>
           <li className="hover:opacity-70 cursor-pointer">Destinations</li>
 
-          {/* Only show "Join" if NOT logged in */}
           {!firebaseUser && (
             <li>
               <Link
@@ -148,28 +147,26 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
         {/* --- DESKTOP ACTIONS --- */}
         <div className="hidden md:flex items-center gap-4">
           <button
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-full hover:bg-black/5 transition-colors ${buttonBorder} ${textColor}`}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-full transition-colors ${baseTextColor} ${buttonBorder} ${buttonHover}`}
           >
             <Globe size={16} /> <span>EN</span>
           </button>
 
           {!loading && (
             <>
-              {/* IF LOGGED OUT: Show Login Button */}
               {!firebaseUser ? (
                 <Link
                   href="/login"
-                  className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 active:scale-95 ${buttonSolid}`}
+                  className="flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 active:scale-95 bg-gray-900 text-white dark:bg-white dark:text-black"
                 >
                   <UserIcon size={18} />
                   <span>Login</span>
                 </Link>
               ) : (
-                /* IF LOGGED IN: Show User Dropdown */
                 <div className="relative" ref={profileRef}>
                   <button
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-full hover:bg-black/5 transition-colors ${buttonBorder} ${textColor}`}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-full transition-colors ${baseTextColor} ${buttonBorder} ${buttonHover}`}
                   >
                     {firebaseUser.photoURL ? (
                       <img
@@ -178,7 +175,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                         className="w-6 h-6 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                      <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center text-gray-500 dark:text-gray-300">
                         <UserIcon size={14} />
                       </div>
                     )}
@@ -189,17 +186,21 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
 
                   {/* Dropdown Menu */}
                   {isProfileOpen && (
-                    <div className="absolute right-0 mt-3 w-64 rounded-xl shadow-xl bg-white ring-1 ring-black/5 py-2 z-50 overflow-hidden text-gray-900">
+                    <div className="absolute right-0 mt-3 w-64 rounded-xl shadow-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 py-2 z-50 overflow-hidden text-gray-900 dark:text-gray-100">
                       {/* User Info Header */}
-                      <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                      <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
                         <p className="text-sm font-bold truncate">
                           {firebaseUser.displayName || "User"}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                           {firebaseUser.email}
                         </p>
                         <span
-                          className={`inline-block mt-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded ${userRole === "admin" ? "bg-black text-white" : "bg-blue-100 text-blue-700"}`}
+                          className={`inline-block mt-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+                            userRole === "admin"
+                              ? "bg-black text-white dark:bg-white dark:text-black"
+                              : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                          }`}
                         >
                           {userRole === "admin"
                             ? "Partner Account"
@@ -212,34 +213,37 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                         <Link
                           href="/profile"
                           onClick={() => setIsProfileOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                         >
-                          <UserIcon size={16} className="text-gray-500" /> My
-                          Profile
+                          <UserIcon
+                            size={16}
+                            className="text-gray-500 dark:text-gray-400"
+                          />{" "}
+                          My Profile
                         </Link>
 
-                        {/* ADMIN / OWNER LINKS */}
+                        {/* ADMIN LINKS */}
                         {userRole === "admin" && (
                           <>
                             <Link
                               href="/admin"
                               onClick={() => setIsProfileOpen(false)}
-                              className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                              className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                             >
                               <LayoutDashboard
                                 size={16}
-                                className="text-gray-500"
+                                className="text-gray-500 dark:text-gray-400"
                               />{" "}
                               Owner Dashboard
                             </Link>
                             <Link
                               href="/admin/requests"
                               onClick={() => setIsProfileOpen(false)}
-                              className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                              className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                             >
                               <ShieldCheck
                                 size={16}
-                                className="text-gray-500"
+                                className="text-gray-500 dark:text-gray-400"
                               />{" "}
                               Join Requests
                             </Link>
@@ -251,19 +255,22 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                           <Link
                             href="/bookings"
                             onClick={() => setIsProfileOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                           >
-                            <CreditCard size={16} className="text-gray-500" />{" "}
+                            <CreditCard
+                              size={16}
+                              className="text-gray-500 dark:text-gray-400"
+                            />{" "}
                             My Bookings
                           </Link>
                         )}
                       </div>
 
                       {/* Logout */}
-                      <div className="border-t border-gray-100 pt-1">
+                      <div className="border-t border-gray-100 dark:border-slate-800 pt-1">
                         <button
                           onClick={handleLogout}
-                          className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                         >
                           <LogOut size={16} /> Log Out
                         </button>
@@ -279,7 +286,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
         {/* --- MOBILE TOGGLE BUTTON --- */}
         <div className="md:hidden flex items-center gap-2">
           <button
-            className={`p-2 ${textColor}`}
+            className={`p-2 ${baseTextColor}`}
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
             {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
@@ -289,17 +296,18 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
 
       {/* --- MOBILE MENU OVERLAY --- */}
       <div
-        className={`fixed inset-0 bg-white z-40 flex flex-col pt-24 px-6 gap-6 transition-transform duration-300 md:hidden ${isMobileMenuOpen ? "translate-y-0" : "-translate-y-full"}`}
+        className={`fixed inset-0 bg-white dark:bg-slate-950 z-40 flex flex-col pt-24 px-6 gap-6 transition-transform duration-300 md:hidden ${
+          isMobileMenuOpen ? "translate-y-0" : "-translate-y-full"
+        }`}
       >
-        <ul className="flex flex-col gap-6 text-xl font-bold text-gray-900">
+        <ul className="flex flex-col gap-6 text-xl font-bold text-gray-900 dark:text-white">
           <li onClick={() => setIsMobileMenuOpen(false)}>
             <Link href="/">Home</Link>
           </li>
 
-          {/* Mobile Links based on Role */}
           {userRole === "admin" && (
             <li onClick={() => setIsMobileMenuOpen(false)}>
-              <Link href="/admin" className="text-blue-600">
+              <Link href="/admin" className="text-blue-600 dark:text-blue-400">
                 Owner Dashboard
               </Link>
             </li>
@@ -320,13 +328,13 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             <Link
               href="/login"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="w-full bg-black text-white py-4 rounded-full font-bold text-center text-lg"
+              className="w-full bg-gray-900 text-white dark:bg-white dark:text-black py-4 rounded-full font-bold text-center text-lg"
             >
               Login / Sign Up
             </Link>
           ) : (
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl">
+              <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-slate-900 rounded-xl">
                 {firebaseUser.photoURL ? (
                   <img
                     src={firebaseUser.photoURL}
@@ -334,15 +342,15 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                     className="w-10 h-10 rounded-full"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-gray-500">
                     <UserIcon size={20} />
                   </div>
                 )}
                 <div className="overflow-hidden">
-                  <p className="font-bold text-gray-900 truncate">
+                  <p className="font-bold text-gray-900 dark:text-white truncate">
                     {firebaseUser.displayName}
                   </p>
-                  <p className="text-sm text-gray-500 truncate">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
                     {firebaseUser.email}
                   </p>
                 </div>
@@ -351,14 +359,14 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
               <Link
                 href="/profile"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="w-full border border-gray-200 py-3 rounded-lg text-center font-semibold"
+                className="w-full border border-gray-200 dark:border-slate-800 text-gray-900 dark:text-white py-3 rounded-lg text-center font-semibold"
               >
                 My Profile
               </Link>
 
               <button
                 onClick={handleLogout}
-                className="w-full bg-red-50 text-red-600 py-3 rounded-lg font-semibold"
+                className="w-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-3 rounded-lg font-semibold"
               >
                 Log Out
               </button>
