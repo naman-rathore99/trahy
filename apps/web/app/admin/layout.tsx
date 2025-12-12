@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app } from "@/lib/firebase";
 import { apiRequest } from "@/lib/api";
-import AdminSidebar from "@/components/AdminSidebar";
+import AdminSidebar from "@/components/AdminSidebar"; // Make sure this component exists!
 
 export default function AdminLayout({
   children,
@@ -51,12 +51,13 @@ export default function AdminLayout({
   if (!authorized) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* 1. THE SIDEBAR */}
       <AdminSidebar />
-      {/* The 'ml-64' creates space for the sidebar so content isn't hidden behind it.
-         On mobile (md:ml-0), we remove the margin so content uses full width.
-      */}
-      <main className="md:ml-64 min-h-screen p-8">{children}</main>
+
+      {/* 2. THE PAGE CONTENT (Dashboard, Properties, etc.) */}
+      {/* 'md:ml-64' pushes content to the right so it isn't hidden behind the sidebar */}
+      <main className="flex-1 md:ml-64 p-8 w-full">{children}</main>
     </div>
   );
 }
