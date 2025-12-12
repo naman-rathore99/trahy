@@ -27,7 +27,7 @@ export default function DestinationPage() {
 
   return (
     <main>
-      <Navbar variant="dark" />
+      <Navbar />
       {/* 2. PASS TO COMPONENT */}
       <DestinationDetails
         destination={destination}
