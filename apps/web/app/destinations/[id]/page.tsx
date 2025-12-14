@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { apiRequest } from "@/lib/api";
+import { getAuth } from "firebase/auth";
+import { app } from "@/lib/firebase";
 import {
   MapPin,
   Wifi,
@@ -11,24 +13,25 @@ import {
   Coffee,
   Utensils,
   Star,
-  Calendar as CalendarIcon,
-  Users,
   Minus,
   Plus,
+  Loader2,
 } from "lucide-react";
 import { format, parseISO, differenceInDays, isValid } from "date-fns";
 import { DayPicker, DateRange } from "react-day-picker";
-import "react-day-picker/dist/style.css"; // Import calendar styles
+import "react-day-picker/dist/style.css";
 
 export default function DestinationDetailsPage() {
+  const router = useRouter();
   const { id } = useParams();
   const searchParams = useSearchParams();
 
   // --- STATE ---
   const [hotel, setHotel] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [bookingLoading, setBookingLoading] = useState(false);
 
-  // Booking State
+  // Booking Data
   const [checkIn, setCheckIn] = useState(searchParams.get("start") || "");
   const [checkOut, setCheckOut] = useState(searchParams.get("end") || "");
   const [adults, setAdults] = useState(Number(searchParams.get("adults") || 2));
@@ -56,7 +59,7 @@ export default function DestinationDetailsPage() {
         const data = await apiRequest(`/api/hotels/${id}`, "GET");
         setHotel(data);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching hotel:", err);
       } finally {
         setLoading(false);
       }
@@ -74,6 +77,7 @@ export default function DestinationDetailsPage() {
         const diff = differenceInDays(end, start);
         if (diff > 0) {
           setNights(diff);
+          // Math: (Price * Nights) + Cleaning Fee (800) + Service Fee (500)
           setTotalPrice(diff * hotel.pricePerNight + 1300);
           return;
         }
@@ -117,10 +121,51 @@ export default function DestinationDetailsPage() {
     else setCheckOut("");
   };
 
+  // 5. RESERVE FUNCTION (Connects to Database)
+  const handleReserve = async () => {
+    // A. Check Login
+    const auth = getAuth(app);
+    const user = auth.currentUser;
+    if (!user) {
+      alert("Please login to book a trip!");
+      router.push("/login");
+      return;
+    }
+
+    // B. Validate Dates
+    if (!checkIn || !checkOut || nights === 0) {
+      setIsCalendarOpen(true); // Open calendar if dates missing
+      return;
+    }
+
+    setBookingLoading(true);
+
+    try {
+      // C. Send to API
+      await apiRequest("/api/bookings", "POST", {
+        listingId: hotel.id,
+        listingName: hotel.name,
+        listingImage: hotel.imageUrl,
+        serviceType: "hotel", // Force type
+        checkIn,
+        checkOut,
+        guests: adults + children,
+        totalAmount: totalPrice,
+      });
+
+      // D. Success
+      router.push("/trips");
+    } catch (err: any) {
+      alert("Booking Failed: " + err.message);
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center">
-        Loading Property...
+        <Loader2 className="animate-spin mr-2" /> Loading Property...
       </div>
     );
   if (!hotel)
@@ -172,6 +217,12 @@ export default function DestinationDetailsPage() {
                   />
                 </div>
               ))}
+            {/* Fallback if no gallery images */}
+            {(!hotel.imageUrls || hotel.imageUrls.length < 2) && (
+              <div className="bg-gray-100 h-full flex items-center justify-center text-gray-400 text-sm col-span-2">
+                More photos coming soon
+              </div>
+            )}
           </div>
         </div>
 
@@ -221,7 +272,7 @@ export default function DestinationDetailsPage() {
                 {/* 1. DATE PICKER TRIGGER */}
                 <div
                   className="grid grid-cols-2 border-b border-gray-400 cursor-pointer"
-                  onClick={() => setIsCalendarOpen(true)}
+                  onClick={() => setIsCalendarOpen(!isCalendarOpen)}
                 >
                   <div className="p-3 border-r border-gray-400 hover:bg-gray-50 transition-colors">
                     <label className="block text-[10px] font-bold uppercase text-gray-800 mb-1">
@@ -275,7 +326,7 @@ export default function DestinationDetailsPage() {
                 {/* 2. GUEST TRIGGER */}
                 <div
                   className="p-3 hover:bg-gray-50 cursor-pointer relative"
-                  onClick={() => setIsGuestOpen(true)}
+                  onClick={() => setIsGuestOpen(!isGuestOpen)}
                 >
                   <label className="block text-[10px] font-bold uppercase text-gray-800 mb-1">
                     Guests
@@ -365,10 +416,24 @@ export default function DestinationDetailsPage() {
                 )}
               </div>
 
-              <button className="w-full bg-gradient-to-r from-rose-500 to-pink-600 text-white font-bold py-3 rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all mb-4">
-                {nights > 0 ? "Reserve Now" : "Check Availability"}
+              {/* ACTION BUTTON */}
+              <button
+                onClick={handleReserve}
+                disabled={bookingLoading}
+                className="w-full bg-gradient-to-r from-rose-500 to-pink-600 text-white font-bold py-3 rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all mb-4 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {bookingLoading ? (
+                  <>
+                    <Loader2 className="animate-spin" size={20} /> Processing...
+                  </>
+                ) : nights > 0 ? (
+                  "Reserve Now"
+                ) : (
+                  "Check Availability"
+                )}
               </button>
 
+              {/* PRICE BREAKDOWN */}
               {nights > 0 ? (
                 <div className="space-y-3 text-gray-600 text-sm animate-in fade-in slide-in-from-top-2">
                   <p className="text-center text-xs text-gray-400 mb-4">
@@ -380,7 +445,18 @@ export default function DestinationDetailsPage() {
                     </span>
                     <span>₹{hotel.pricePerNight * nights}</span>
                   </div>
-                  
+                  <div className="flex justify-between">
+                    <span className="underline">Cleaning fee</span>
+                    <span>₹800</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="underline">Service fee</span>
+                    <span>₹500</span>
+                  </div>
+                  <div className="pt-4 border-t border-gray-200 flex justify-between font-bold text-base text-gray-900">
+                    <span>Total before taxes</span>
+                    <span>₹{totalPrice}</span>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center text-sm text-gray-500 mt-4">

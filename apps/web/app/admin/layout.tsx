@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app } from "@/lib/firebase";
 import { apiRequest } from "@/lib/api";
-import AdminSidebar from "@/components/AdminSidebar"; // Make sure this component exists!
+import AdminSidebar from "@/components/AdminSidebar";
+import { ThemeProvider } from "@/context/AdminThemeContext";
 
 export default function AdminLayout({
   children,
@@ -22,15 +23,13 @@ export default function AdminLayout({
       if (!user) {
         router.push("/login");
       } else {
-        // Double Check: Is this user actually an Admin?
         try {
-        const data = await apiRequest("/api/user/me", "GET");
-
-        if (data.user.role === "admin" || data.user.role === "partner") {
-          setAuthorized(true);
-        } else {
-          router.push("/"); // Kick normal travelers back to home
-        }
+          const data = await apiRequest("/api/user/me", "GET");
+          if (data.user.role === "admin" || data.user.role === "partner") {
+            setAuthorized(true);
+          } else {
+            router.push("/");
+          }
         } catch (error) {
           console.error("Auth check failed", error);
           router.push("/login");
@@ -43,8 +42,8 @@ export default function AdminLayout({
 
   if (loading) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black" />
+      <div className="h-screen w-full flex items-center justify-center bg-gray-50 dark:bg-black">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black dark:border-white" />
       </div>
     );
   }
@@ -52,13 +51,23 @@ export default function AdminLayout({
   if (!authorized) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* 1. THE SIDEBAR */}
-      <AdminSidebar />
+    // 1. WRAP EVERYTHING HERE so Sidebar gets the theme too
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      {/* 2. Add dark:bg-black so the background changes */}
+      <div className="min-h-screen bg-gray-50 dark:bg-black flex transition-colors duration-300">
+        {/* 3. SIDEBAR */}
+        <AdminSidebar />
 
-      {/* 2. THE PAGE CONTENT (Dashboard, Properties, etc.) */}
-      {/* 'md:ml-64' pushes content to the right so it isn't hidden behind the sidebar */}
-      <main className="flex-1 md:ml-64 p-8 w-full">{children}</main>
-    </div>
+        {/* 4. MAIN CONTENT */}
+        <main className="flex-1 md:ml-72 p-8 w-full text-gray-900 dark:text-white">
+          {children}
+        </main>
+      </div>
+    </ThemeProvider>
   );
 }

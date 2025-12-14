@@ -178,6 +178,35 @@ app.post(
   }
 );
 
+
+
+// REGISTER NEW USER (Sync Auth with DB)
+app.post('/api/auth/register', async (req: any, res: any) => {
+  try {
+    const { uid, email, name, role } = req.body;
+
+    if (!uid || !email) {
+      return res.status(400).json({ error: "Missing user data" });
+    }
+
+    // Save to Firestore 'users' collection
+    await db.collection('users').doc(uid).set({
+      uid,
+      email,
+      name: name || "User",
+      role: role || 'user',
+      createdAt: new Date().toISOString(),
+      isLicenseVerified: false,
+      emailVerified: false,
+      phoneVerified: false,
+      totalSpend: 0
+    });
+
+    res.json({ success: true, message: "User registered" });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 // ==========================================
 // 6. ADMIN ROUTES (Admin Role Required)
 // ==========================================
@@ -313,6 +342,84 @@ app.post('/api/admin/add-hotel', checkAuth, async (req: any, res: any) => {
     res.json({ success: true, message: `${type === 'vehicle' ? 'Vehicle' : 'Property'} submitted for review!` });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+
+// GET ALL BOOKINGS (Admin Only)
+app.get('/api/admin/bookings', checkAuth, async (req: any, res: any) => {
+  try {
+    const uid = req.user.uid;
+    const userDoc = await db.collection('users').doc(uid).get();
+    
+    // 1. Security Check
+    if (userDoc.data()?.role !== 'admin' && userDoc.data()?.role !== 'partner') {
+      return res.status(403).json({ error: "Denied" });
+    }
+
+    // 2. Fetch Bookings
+    // (If user is Partner, we could filter only THEIR bookings here later)
+    const snapshot = await db.collection('bookings')
+      .orderBy('createdAt', 'desc') // Show newest first
+      .get();
+
+    const bookings = snapshot.docs.map((doc: any) => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json({ bookings });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ==========================================
+// BOOKING ROUTES
+// ==========================================
+
+// Create a New Booking
+app.post('/api/bookings', checkAuth, async (req: any, res: any) => {
+  try {
+    const { 
+      listingId, listingName, listingImage, serviceType,
+      checkIn, checkOut, guests, totalAmount 
+    } = req.body;
+
+    // Validation
+    if (!listingId || !checkIn || !checkOut || !totalAmount) {
+      return res.status(400).json({ error: "Missing required booking details" });
+    }
+
+    const bookingData = {
+      userId: req.user.uid,
+      customerName: req.user.name || "Valued Guest",
+      customerEmail: req.user.email,
+      listingId,
+      serviceName: listingName || "Unknown Service",
+      imageUrl: listingImage || "",
+      serviceType: serviceType || 'hotel',
+      checkIn,
+      checkOut,
+      guests: Number(guests),
+      totalAmount: Number(totalAmount),
+      status: 'confirmed',       // Default to confirmed for MVP
+      paymentStatus: 'pending',  // Until you add Razorpay
+      invoiceSent: false,
+      createdAt: new Date().toISOString()
+    };
+
+    // Save to Firestore
+    const docRef = await db.collection('bookings').add(bookingData);
+    
+    console.log(`Booking Created: ${docRef.id}`); // Log it so you can see in Render logs
+    res.json({ success: true, bookingId: docRef.id });
+
+  } catch (error: any) {
+    console.error("Booking Error:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 // Verify User License (Admin Only)
