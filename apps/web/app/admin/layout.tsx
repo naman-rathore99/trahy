@@ -24,12 +24,13 @@ export default function AdminLayout({
       } else {
         // Double Check: Is this user actually an Admin?
         try {
-          const data = await apiRequest("/api/user/me", "GET");
-          if (data.user.role === "admin") {
-            setAuthorized(true);
-          } else {
-            router.push("/"); // Kick non-admins to home
-          }
+        const data = await apiRequest("/api/user/me", "GET");
+
+        if (data.user.role === "admin" || data.user.role === "partner") {
+          setAuthorized(true);
+        } else {
+          router.push("/"); // Kick normal travelers back to home
+        }
         } catch (error) {
           console.error("Auth check failed", error);
           router.push("/login");

@@ -3,13 +3,12 @@ import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import {
   FileText,
-  Home as HomeIcon,
-  User,
   Activity,
-  Ban,
   Clock,
   Shield,
   CheckCircle,
+  User,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -21,32 +20,49 @@ export default function AdminDashboard() {
   const [bannedPropCount, setBannedPropCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch all data in parallel for speed
-        const [userData, reqData, pendingData, activeData, bannedData] =
-          await Promise.all([
-            apiRequest("/api/admin/users", "GET"),
-            apiRequest("/api/admin/requests", "GET"),
-            apiRequest("/api/admin/properties?status=pending", "GET"),
-            apiRequest("/api/admin/properties?status=approved", "GET"),
-            apiRequest("/api/admin/properties?status=banned", "GET"),
-          ]);
+  // FETCH DATA
+  const fetchData = async () => {
+    try {
+      const [userData, reqData, pendingData, activeData, bannedData] =
+        await Promise.all([
+          apiRequest("/api/admin/users", "GET"),
+          apiRequest("/api/admin/requests", "GET"),
+          apiRequest("/api/admin/properties?status=pending", "GET"),
+          apiRequest("/api/admin/properties?status=approved", "GET"),
+          apiRequest("/api/admin/properties?status=banned", "GET"),
+        ]);
 
-        setUsers(userData.users || []);
-        setRequestCount(reqData.requests?.length || 0);
-        setPendingPropCount(pendingData.properties?.length || 0);
-        setActivePropCount(activeData.properties?.length || 0);
-        setBannedPropCount(bannedData.properties?.length || 0);
-      } catch (err) {
-        console.error("Dashboard error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+      setUsers(userData.users || []);
+      setRequestCount(reqData.requests?.length || 0);
+      setPendingPropCount(pendingData.properties?.length || 0);
+      setActivePropCount(activeData.properties?.length || 0);
+      setBannedPropCount(bannedData.properties?.length || 0);
+    } catch (err) {
+      console.error("Dashboard error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
+
+  // --- NEW: VERIFY USER FUNCTION ---
+  const handleVerifyUser = async (userId: string) => {
+    const confirm = window.confirm(
+      "Are you sure you want to verify this partner's documents?"
+    );
+    if (!confirm) return;
+
+    try {
+      await apiRequest("/api/admin/verify-user", "POST", { userId });
+      alert("User Verified!");
+      fetchData(); // Refresh list
+    } catch (err) {
+      alert("Failed to verify user");
+    }
+  };
 
   if (loading)
     return (
@@ -59,9 +75,8 @@ export default function AdminDashboard() {
         Dashboard Overview
       </h1>
 
-      {/* --- STATS GRID --- */}
+      {/* STATS GRID */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {/* Card 1: Requests */}
         <Link
           href="/admin/requests"
           className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-blue-500 hover:shadow-md transition-all group"
@@ -78,7 +93,6 @@ export default function AdminDashboard() {
           <p className="text-xs text-gray-400 mt-2">New partners waiting</p>
         </Link>
 
-        {/* Card 2: Property Reviews */}
         <Link
           href="/admin/properties"
           className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-yellow-500 hover:shadow-md transition-all group"
@@ -95,7 +109,6 @@ export default function AdminDashboard() {
           <p className="text-xs text-gray-400 mt-2">Properties to approve</p>
         </Link>
 
-        {/* Card 3: Health Stats */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500">
           <div className="flex justify-between">
             <span className="text-gray-500 font-bold text-sm uppercase">
@@ -113,7 +126,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* --- RESTORED: USERS TABLE --- */}
+      {/* USERS TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
           <h3 className="font-bold text-gray-800">Recent Partners</h3>
@@ -130,6 +143,7 @@ export default function AdminDashboard() {
                 <th className="px-6 py-4">Email</th>
                 <th className="px-6 py-4">Role</th>
                 <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -169,8 +183,20 @@ export default function AdminDashboard() {
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 text-orange-600 text-xs font-bold bg-orange-50 px-2.5 py-1 rounded-lg border border-orange-100">
-                        <Clock size={12} /> Pending
+                        <AlertCircle size={12} /> Pending
                       </span>
+                    )}
+                  </td>
+
+                  {/* --- NEW ACTION BUTTON --- */}
+                  <td className="px-6 py-4">
+                    {!user.isLicenseVerified && user.role !== "admin" && (
+                      <button
+                        onClick={() => handleVerifyUser(user.id)}
+                        className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-md font-bold hover:bg-blue-700 transition-colors shadow-sm"
+                      >
+                        Verify
+                      </button>
                     )}
                   </td>
                 </tr>

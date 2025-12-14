@@ -1,309 +1,261 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { app } from "@/lib/firebase";
-import ImageUpload from "@/components/ImageUpload"; // Single Image (For Vehicle)
-import MultiImageUpload from "@/components/MultiImageUpload"; // Multi Image (For Hotel)
-import { apiRequest } from "@/lib/api";
 
-export default function AddHotelPage() {
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { apiRequest } from "@/lib/api";
+import { Building2, Car, UploadCloud, Loader2 } from "lucide-react";
+
+export default function AddListingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
-  // --- FORM STATE ---
-  const [hotel, setHotel] = useState({
+  // 1. TOGGLE STATE: 'hotel' or 'vehicle'
+  const [listingType, setListingType] = useState<"hotel" | "vehicle">("hotel");
+
+  // FORM STATE
+  const [formData, setFormData] = useState({
     name: "",
     location: "",
-    pricePerNight: "",
+    price: "",
     description: "",
-    imageUrls: [] as string[], // Array for Hotel Gallery
+    imageUrl: "",
+    // Vehicle Specifics
+    vehicleType: "Sedan",
+    seats: "4",
+    transmission: "Manual",
+    fuelType: "Petrol",
   });
 
-  // --- VEHICLE STATE ---
-  const [hasVehicle, setHasVehicle] = useState(false);
-  const [vehicle, setVehicle] = useState({
-    name: "",
-    type: "Sedan",
-    pricePerDay: "",
-    imageUrl: "", // Single string for Vehicle
-  });
-
-  // --- 1. AUTH PROTECTION ---
-  useEffect(() => {
-    const auth = getAuth(app);
-    // Listen for the definitive auth state (logged in vs logged out)
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        console.log("User not found, redirecting...");
-        router.push("/login");
-      } else {
-        console.log("Admin verified:", user.email);
-        setIsAuthChecking(false); // Stop loading, show form
-      }
-    });
-    return () => unsubscribe();
-  }, [router]);
-
-  // --- 2. SUBMIT HANDLER ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Validation
-    if (hotel.imageUrls.length === 0) {
-      alert("Please upload at least one hotel image");
-      return;
-    }
-    if (hasVehicle && !vehicle.imageUrl) {
-      alert("Please upload a vehicle image");
-      return;
-    }
-
     setLoading(true);
 
     try {
-      // Construct the payload matching backend expectations
-      const payload = {
-        ...hotel,
-        pricePerNight: Number(hotel.pricePerNight), // Ensure number format
+      await apiRequest("/api/admin/add-hotel", "POST", {
+        ...formData,
+        type: listingType,
+        imageUrls: [formData.imageUrl], // Sending as array for compatibility
+      });
 
-        hasVehicle,
-        vehicleDetails: hasVehicle
-          ? {
-              ...vehicle,
-              pricePerDay: Number(vehicle.pricePerDay), // Ensure number format
-            }
-          : null,
-      };
-
-      // Send to Backend
-      await apiRequest("/api/admin/add-hotel", "POST", payload);
-
-      alert("Success! Property & Vehicle added.");
-      router.push("/admin"); // Redirect to Admin Dashboard
-    } catch (error: any) {
-      console.error(error);
-      alert("Failed to add property: " + error.message);
+      alert(
+        `${listingType === "vehicle" ? "Vehicle" : "Property"} submitted successfully!`
+      );
+      router.push("/admin/properties");
+    } catch (err: any) {
+      alert(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- 3. LOADING SCREEN (While checking Auth) ---
-  if (isAuthChecking) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
-          <p className="text-gray-500 font-medium">Verifying Admin Access...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // --- 4. MAIN UI ---
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
-        {/* Header */}
-        <div className="bg-black px-8 py-6">
-          <h1 className="text-2xl font-bold text-white">
-            Admin: Add New Property
-          </h1>
-          <p className="text-gray-400 mt-1">
-            Add hotel details, gallery, and optional vehicle services.
+    <div className="max-w-2xl mx-auto py-10">
+      <h1 className="text-3xl font-bold mb-8">Add New Listing</h1>
+
+      {/* --- 1. TYPE SELECTOR TABS --- */}
+      <div className="grid grid-cols-2 gap-4 mb-8 p-1 bg-gray-100 rounded-xl">
+        <button
+          onClick={() => setListingType("hotel")}
+          className={`flex items-center justify-center gap-2 py-3 rounded-lg font-bold transition-all ${
+            listingType === "hotel"
+              ? "bg-white shadow-md text-black"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Building2 size={20} /> Add Property
+        </button>
+        <button
+          onClick={() => setListingType("vehicle")}
+          className={`flex items-center justify-center gap-2 py-3 rounded-lg font-bold transition-all ${
+            listingType === "vehicle"
+              ? "bg-white shadow-md text-black"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Car size={20} /> Add Vehicle
+        </button>
+      </div>
+
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-6 bg-white p-8 rounded-2xl border border-gray-100 shadow-sm"
+      >
+        {/* COMMON FIELDS */}
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-1">
+            {listingType === "hotel" ? "Property Name" : "Vehicle Model Name"}
+          </label>
+          <input
+            required
+            className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-black/5"
+            placeholder={
+              listingType === "hotel"
+                ? "e.g. Ocean View Villa"
+                : "e.g. Toyota Innova Crysta"
+            }
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-1">
+            Location / Pickup City
+          </label>
+          <input
+            required
+            className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-black/5"
+            placeholder="e.g. Mumbai, Goa"
+            value={formData.location}
+            onChange={(e) =>
+              setFormData({ ...formData, location: e.target.value })
+            }
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-1">
+            {listingType === "hotel"
+              ? "Price per Night (₹)"
+              : "Price per Day (₹)"}
+          </label>
+          <input
+            required
+            type="number"
+            className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-black/5"
+            placeholder="e.g. 2500"
+            value={formData.price}
+            onChange={(e) =>
+              setFormData({ ...formData, price: e.target.value })
+            }
+          />
+        </div>
+
+        {/* --- VEHICLE SPECIFIC FIELDS --- */}
+        {listingType === "vehicle" && (
+          <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Type
+              </label>
+              <select
+                className="w-full p-3 border rounded-lg bg-white"
+                value={formData.vehicleType}
+                onChange={(e) =>
+                  setFormData({ ...formData, vehicleType: e.target.value })
+                }
+              >
+                <option>Sedan</option>
+                <option>SUV</option>
+                <option>Hatchback</option>
+                <option>Luxury</option>
+                <option>Bike</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Seats
+              </label>
+              <select
+                className="w-full p-3 border rounded-lg bg-white"
+                value={formData.seats}
+                onChange={(e) =>
+                  setFormData({ ...formData, seats: e.target.value })
+                }
+              >
+                <option>2</option>
+                <option>4</option>
+                <option>5</option>
+                <option>7</option>
+                <option>10+</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Fuel
+              </label>
+              <select
+                className="w-full p-3 border rounded-lg bg-white"
+                value={formData.fuelType}
+                onChange={(e) =>
+                  setFormData({ ...formData, fuelType: e.target.value })
+                }
+              >
+                <option>Petrol</option>
+                <option>Diesel</option>
+                <option>Electric</option>
+                <option>Hybrid</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Transmission
+              </label>
+              <select
+                className="w-full p-3 border rounded-lg bg-white"
+                value={formData.transmission}
+                onChange={(e) =>
+                  setFormData({ ...formData, transmission: e.target.value })
+                }
+              >
+                <option>Manual</option>
+                <option>Automatic</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* IMAGE URL (Simplified for now) */}
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-1">
+            Main Image URL
+          </label>
+          <div className="flex gap-2">
+            <input
+              required
+              className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-black/5"
+              placeholder="https://..."
+              value={formData.imageUrl}
+              onChange={(e) =>
+                setFormData({ ...formData, imageUrl: e.target.value })
+              }
+            />
+            <div className="p-3 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500">
+              <UploadCloud size={20} />
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            Paste a link from Unsplash for testing.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-8">
-          {/* SECTION 1: HOTEL DETAILS */}
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 border-b pb-2 mb-4">
-              1. Hotel Details
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Property Name
-                </label>
-                <input
-                  required
-                  value={hotel.name}
-                  onChange={(e) => setHotel({ ...hotel, name: e.target.value })}
-                  className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-black focus:border-black"
-                  placeholder="e.g. The Grand Palace"
-                />
-              </div>
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-1">
+            Description
+          </label>
+          <textarea
+            required
+            rows={4}
+            className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-black/5"
+            placeholder={
+              listingType === "hotel"
+                ? "Tell us about the property..."
+                : "Tell us about the car condition & rules..."
+            }
+            value={formData.description}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
+          />
+        </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Location
-                </label>
-                <input
-                  required
-                  value={hotel.location}
-                  onChange={(e) =>
-                    setHotel({ ...hotel, location: e.target.value })
-                  }
-                  className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                  placeholder="e.g. Mumbai, India"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Price per Night (₹)
-                </label>
-                <input
-                  required
-                  type="number"
-                  value={hotel.pricePerNight}
-                  onChange={(e) =>
-                    setHotel({ ...hotel, pricePerNight: e.target.value })
-                  }
-                  className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                  placeholder="4500"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Description
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  value={hotel.description}
-                  onChange={(e) =>
-                    setHotel({ ...hotel, description: e.target.value })
-                  }
-                  className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                  placeholder="Tell us about the property..."
-                />
-              </div>
-
-              {/* HOTEL GALLERY (Multi Image) */}
-              <div className="md:col-span-2">
-                <MultiImageUpload
-                  label="Property Gallery (Max 5)"
-                  urls={hotel.imageUrls}
-                  onChange={(urls) => setHotel({ ...hotel, imageUrls: urls })}
-                  maxFiles={5}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* SECTION 2: VEHICLE TOGGLE */}
-          <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 transition-all duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">
-                  2. Vehicle Service
-                </h3>
-                <p className="text-sm text-gray-500">
-                  Does this hotel provide transport?
-                </p>
-              </div>
-
-              {/* Custom Toggle Switch */}
-              <button
-                type="button"
-                onClick={() => setHasVehicle(!hasVehicle)}
-                className={`
-                  relative inline-flex h-6 w-11  cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none
-                  ${hasVehicle ? "bg-black" : "bg-gray-300"}
-                `}
-              >
-                <span
-                  className={` 
-                    pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out
-                    ${hasVehicle ? "translate-x-5" : "translate-x-0"}
-                  `}
-                />
-              </button>
-            </div>
-
-            {/* VEHICLE FORM (Conditional) */}
-            {hasVehicle && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Vehicle Name
-                  </label>
-                  <input
-                    required={hasVehicle}
-                    value={vehicle.name}
-                    onChange={(e) =>
-                      setVehicle({ ...vehicle, name: e.target.value })
-                    }
-                    className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                    placeholder="e.g. Toyota Innova"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Vehicle Type
-                  </label>
-                  <select
-                    value={vehicle.type}
-                    onChange={(e) =>
-                      setVehicle({ ...vehicle, type: e.target.value })
-                    }
-                    className="mt-1 block w-full border border-gray-300 rounded-md p-2 bg-white"
-                  >
-                    <option>Sedan</option>
-                    <option>SUV</option>
-                    <option>Hatchback</option>
-                    <option>Luxury</option>
-                    <option>Bike</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Price per Day (₹)
-                  </label>
-                  <input
-                    required={hasVehicle}
-                    type="number"
-                    value={vehicle.pricePerDay}
-                    onChange={(e) =>
-                      setVehicle({ ...vehicle, pricePerDay: e.target.value })
-                    }
-                    className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                    placeholder="2000"
-                  />
-                </div>
-
-                {/* VEHICLE IMAGE (Single Image) */}
-                <div className="md:col-span-2">
-                  <ImageUpload
-                    label="Vehicle Image"
-                    currentUrl={vehicle.imageUrl}
-                    onUpload={(url) =>
-                      setVehicle({ ...vehicle, imageUrl: url })
-                    }
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* SUBMIT BUTTON */}
-          <div className="flex justify-end pt-4 border-t border-gray-100">
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-black text-white px-8 py-3 rounded-lg font-bold hover:bg-gray-800 transition-colors disabled:bg-gray-400 shadow-lg"
-            >
-              {loading ? "Publishing..." : "Publish Property"}
-            </button>
-          </div>
-        </form>
-      </div>
+        <button
+          disabled={loading}
+          className="w-full bg-black text-white py-4 rounded-xl font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {loading ? <Loader2 className="animate-spin" /> : "Submit for Review"}
+        </button>
+      </form>
     </div>
   );
 }

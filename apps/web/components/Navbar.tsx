@@ -43,9 +43,18 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
       if (currentUser) {
         try {
           const data = await apiRequest("/api/user/me", "GET");
-          if (data?.user?.role) setUserRole(data.user.role);
-        } catch (err) {
-          console.error("Failed to fetch user role", err);
+          // Only set role if we actually got a user profile back
+          if (data?.user?.role) {
+            setUserRole(data.user.role);
+          }
+        } catch (err: any) {
+        
+          if (err.message.includes("Profile not found")) {
+            console.warn("User logged in, but has no database profile yet.");
+            setUserRole(null);
+          } else {
+            console.error("Failed to fetch user role", err);
+          }
         }
       } else {
         setUserRole(null);
@@ -205,20 +214,34 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                           >
                             <UserIcon size={16} /> My Profile
                           </Link>
-                          {userRole === "admin" ? (
-                            <Link
-                              href="/admin"
-                              className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50"
-                            >
-                              <LayoutDashboard size={16} /> Dashboard
-                            </Link>
-                          ) : (
-                            <Link
-                              href="/bookings"
-                              className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50"
-                            >
-                              <CreditCard size={16} /> My Bookings
-                            </Link>
+                          {/* OWNER LINKS (Admin OR Partner) */}
+                          {(userRole === "admin" || userRole === "partner") && (
+                            <>
+                              <Link
+                                href="/admin"
+                                onClick={() => setIsProfileOpen(false)}
+                                className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                              >
+                                <LayoutDashboard
+                                  size={16}
+                                  className="text-gray-500 dark:text-gray-400"
+                                />{" "}
+                                Owner Dashboard
+                              </Link>
+                              {userRole === "admin" && (
+                                <Link
+                                  href="/admin/requests"
+                                  onClick={() => setIsProfileOpen(false)}
+                                  className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                  <ShieldCheck
+                                    size={16}
+                                    className="text-gray-500 dark:text-gray-400"
+                                  />{" "}
+                                  Join Requests
+                                </Link>
+                              )}
+                            </>
                           )}
                         </div>
                         <div className="border-t border-gray-100 pt-1">

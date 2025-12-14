@@ -242,15 +242,14 @@ app.post(
         password,
         displayName: name,
       });
-
-      // Create DB Document
-      await db.collection("users").doc(newUser.uid).set({
-        name,
-        email,
-        role: "user",
-        createdAt: new Date().toISOString(),
-        isLicenseVerified: false,
-      });
+// create doc dB
+    await db.collection("users").doc(newUser.uid).set({
+     name,
+     email,
+     role: "partner", // <--- CHANGE THIS (Was 'user', must be 'partner')
+     createdAt: new Date().toISOString(),
+     isLicenseVerified: false,
+   });
 
       // Mark Request as Approved
       await db.collection("join_requests").doc(requestId).update({
@@ -269,6 +268,73 @@ app.post(
     }
   }
 );
+// Add Listing (Hotel OR Vehicle)
+app.post('/api/admin/add-hotel', checkAuth, async (req: any, res: any) => {
+  try {
+    const uid = req.user.uid;
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (userDoc.data()?.role !== 'admin') return res.status(403).json({ error: "Denied" });
+
+    // 1. Destructure Common & Specific Fields
+    const { 
+      type, // 'hotel' | 'vehicle'
+      name, location, price, description, imageUrls,
+      // Hotel Specific
+      amenities, 
+      // Vehicle Specific
+      vehicleType, seats, transmission, fuelType 
+    } = req.body;
+
+    // 2. Build the Object based on Type
+    const listingData = {
+      type: type || 'hotel', // Default to hotel for backward compatibility
+      name,
+      location,
+      price: Number(price),
+      description,
+      imageUrls: imageUrls || [],
+      imageUrl: (imageUrls && imageUrls.length > 0) ? imageUrls[0] : "",
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      ownerId: uid,
+      
+      // Store specific details in a clean way
+      details: type === 'vehicle' ? {
+        vehicleType, // e.g., SUV, Sedan
+        seats: Number(seats),
+        transmission, // Manual/Auto
+        fuelType // Petrol/Diesel/EV
+      } : {
+        amenities: amenities || [] // Wifi, Pool, etc.
+      }
+    };
+
+    await db.collection('hotels').add(listingData);
+    res.json({ success: true, message: `${type === 'vehicle' ? 'Vehicle' : 'Property'} submitted for review!` });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+// Verify User License (Admin Only)
+app.post('/api/admin/verify-user', checkAuth, async (req: any, res: any) => {
+  try {
+    const uid = req.user.uid;
+    const adminDoc = await db.collection('users').doc(uid).get();
+    if (adminDoc.data()?.role !== 'admin') return res.status(403).json({ error: "Denied" });
+
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: "User ID required" });
+
+    await db.collection('users').doc(userId).update({
+      isLicenseVerified: true,
+      verifiedAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: "User verified successfully!" });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Add Property
 app.post("/api/admin/add-hotel", checkAuth, async (req: any, res: any) => {
