@@ -178,18 +178,18 @@ app.post(
   }
 );
 // PUBLIC ROUTE (No Login Required)
-app.get('/api/properties', async (req: any, res: any) => {
+app.get('/api/hotels', async (req: any, res: any) => {
   try {
     const snapshot = await db.collection('hotels')
      
       .get();
 
-    const properties = snapshot.docs.map((doc: any) => ({
+    const hotels = snapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data()
     }));
 
-    res.json({ properties });
+    res.json({ hotels });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -500,18 +500,18 @@ app.post("/api/admin/add-hotel", checkAuth, async (req: any, res: any) => {
 });
 
 // Get Properties by Status
-app.get("/api/admin/properties", checkAuth, async (req: any, res: any) => {
+app.get("/api/admin/hotels", checkAuth, async (req: any, res: any) => {
   try {
     const status = req.query.status || "pending";
     const snapshot = await db
       .collection("hotels")
       .where("status", "==", status)
       .get();
-    const properties = snapshot.docs.map((doc) => ({
+    const hotels = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
-    res.json({ properties });
+    res.json({ hotels });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

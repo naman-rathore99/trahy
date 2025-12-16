@@ -9,7 +9,7 @@ export async function GET() {
 
   try {
     // 1. Fetch all properties
-    const propertiesSnap = await db.collection("properties").get();
+    const propertiesSnap = await db.collection("hotels").get();
 
     // 2. Loop through properties and find the Owner's Name
     const properties = await Promise.all(

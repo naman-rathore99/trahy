@@ -19,10 +19,10 @@ function SearchResults() {
     const fetchResults = async () => {
       try {
         // Use the PUBLIC route now
-        const data = await apiRequest("/api/properties", "GET");
+        const data = await apiRequest("/api/hotels", "GET");
 
         // Filter Logic
-        const filtered = (data.properties || []).filter(
+        const filtered = (data.hotels || []).filter(
           (p: any) =>
             // p.status === 'approved' && // Uncomment if you want strict filtering
             p.location?.toLowerCase().includes(query.toLowerCase()) ||

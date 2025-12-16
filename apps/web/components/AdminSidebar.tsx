@@ -40,7 +40,7 @@ const menuGroups = [
     label: "Supply (Partners)",
     items: [
       { name: "All Partners", href: "/admin/partners", icon: Briefcase },
-      { name: "Properties", href: "/admin/properties", icon: Building2 },
+      { name: "Hotels", href: "/admin/hotels", icon: Building2 },
       { name: "Vehicles", href: "/admin/vehicles", icon: Car },
     ],
   },
@@ -190,7 +190,7 @@ export default function AdminSidebar() {
                       }
 
                       // B. PROPERTY SPECIFIC
-                      if (item.name === "Properties") {
+                      if (item.name === "Hotels") {
                         if (!isAdmin && !hasProperty) isDisabled = true;
                       }
 

@@ -8,7 +8,7 @@ export async function GET() {
 
   try {
     // Fetch ALL properties for the homepage
-    const propertiesSnap = await db.collection("properties").get();
+    const propertiesSnap = await db.collection("hotels").get();
 
     const properties = propertiesSnap.docs.map((doc: any) => ({
       id: doc.id,

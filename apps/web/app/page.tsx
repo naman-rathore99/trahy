@@ -48,8 +48,8 @@ export default function HomePage() {
   useEffect(() => {
     const fetchHotels = async () => {
       try {
-        const data = await apiRequest("/api/properties", "GET");
-        setHotels(data.properties || []);
+        const data = await apiRequest("/api/hotels", "GET");
+        setHotels(data.hotels || []);
       } catch (err) {
         console.error("Failed to load hotels", err);
       } finally {
