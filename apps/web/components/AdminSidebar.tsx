@@ -5,13 +5,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getAuth, signOut } from "firebase/auth";
 import { app } from "@/lib/firebase";
-import { useTheme } from "next-themes"; // <--- SHADCN THEME HOOK
+import { apiRequest } from "@/lib/api";
+import { useTheme } from "next-themes";
 import {
   LayoutDashboard,
   FileText,
   Building2,
   Car,
-  PlusSquare,
   LogOut,
   Menu,
   X,
@@ -24,6 +24,7 @@ import {
   Settings,
   Moon,
   Sun,
+  Lock, // Used for disabled items
 } from "lucide-react";
 
 // --- MENU STRUCTURE ---
@@ -65,13 +66,52 @@ export default function AdminSidebar() {
   const router = useRouter();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  // --- PERMISSIONS STATE ---
+  const [permissions, setPermissions] = useState({
+    role: "admin",
+    hasProperty: false,
+    hasVehicle: false,
+    loading: true, // Starts true to prevent flashing locks
+  });
+
   // --- SHADCN THEME LOGIC ---
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
-  // Avoid hydration mismatch by waiting for mount
+  // 1. AUTH & PERMISSIONS LOGIC
   useEffect(() => {
     setMounted(true);
+    const auth = getAuth(app);
+
+    // FIX: Listen for Auth State Change instead of running once
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        try {
+          // fetch permissions from backend
+          const data = await apiRequest("/api/user/me", "GET");
+
+          setPermissions({
+            role: data.user?.role || "user",
+            hasProperty: data.user?.hasProperty || false,
+            hasVehicle: data.user?.hasVehicle || false,
+            loading: false,
+          });
+        } catch (error) {
+          console.error("Permissions Error:", error);
+          setPermissions((prev) => ({ ...prev, loading: false }));
+        }
+      } else {
+        // User logged out
+        setPermissions({
+          role: "user",
+          hasProperty: false,
+          hasVehicle: false,
+          loading: false,
+        });
+      }
+    });
+
+    return () => unsubscribe(); // Cleanup listener on unmount
   }, []);
 
   const handleLogout = async () => {
@@ -79,7 +119,6 @@ export default function AdminSidebar() {
     router.push("/login");
   };
 
-  // Toggle Function
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };
@@ -129,23 +168,76 @@ export default function AdminSidebar() {
                 <ul className="space-y-1">
                   {group.items.map((item) => {
                     const isActive = pathname === item.href;
+
+                    // --- 2. DISABLE LOGIC START ---
+                    let isDisabled = false;
+
+                    // Only check logic if we are done loading
+                    if (!permissions.loading) {
+                      const { role, hasProperty, hasVehicle } = permissions;
+                      const isAdmin = role === "admin";
+
+                      // A. ADMIN ONLY PAGES
+                      if (
+                        [
+                          "Join Requests",
+                          "All Partners",
+                          "Settings",
+                          "Invoices",
+                        ].includes(item.name)
+                      ) {
+                        if (!isAdmin) isDisabled = true;
+                      }
+
+                      // B. PROPERTY SPECIFIC
+                      if (item.name === "Properties") {
+                        if (!isAdmin && !hasProperty) isDisabled = true;
+                      }
+
+                      // C. VEHICLE SPECIFIC
+                      if (item.name === "Vehicles") {
+                        if (!isAdmin && !hasVehicle) isDisabled = true;
+                      }
+
+                      // D. SHARED BUSINESS OPERATIONS
+                      if (
+                        ["Bookings", "Reviews", "Travelers"].includes(item.name)
+                      ) {
+                        if (!isAdmin && !hasProperty && !hasVehicle)
+                          isDisabled = true;
+                      }
+                    }
+                    // --- DISABLE LOGIC END ---
+
                     return (
                       <li key={item.href}>
-                        <Link
-                          href={item.href}
-                          onClick={() => setIsMobileOpen(false)}
-                          className={`
-                            flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-sm
-                            ${
-                              isActive
-                                ? "bg-black text-white dark:bg-white dark:text-black shadow-md"
-                                : "text-gray-500 hover:text-black hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-900"
-                            }
-                          `}
-                        >
-                          <item.icon size={18} />
-                          <span>{item.name}</span>
-                        </Link>
+                        {isDisabled ? (
+                          // --- DISABLED STATE (Locked) ---
+                          <div className="flex items-center justify-between px-4 py-2.5 rounded-lg text-gray-300 dark:text-gray-700 cursor-not-allowed select-none group relative">
+                            <div className="flex items-center gap-3">
+                              <item.icon size={18} />
+                              <span>{item.name}</span>
+                            </div>
+                            <Lock size={14} />
+                          </div>
+                        ) : (
+                          // --- ENABLED STATE (Active Link) ---
+                          <Link
+                            href={item.href}
+                            onClick={() => setIsMobileOpen(false)}
+                            className={`
+                              flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-sm
+                              ${
+                                isActive
+                                  ? "bg-black text-white dark:bg-white dark:text-black shadow-md"
+                                  : "text-gray-500 hover:text-black hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-900"
+                              }
+                            `}
+                          >
+                            <item.icon size={18} />
+                            <span>{item.name}</span>
+                          </Link>
+                        )}
                       </li>
                     );
                   })}
@@ -156,7 +248,6 @@ export default function AdminSidebar() {
 
           {/* FOOTER ACTIONS */}
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-800 space-y-3">
-            {/* THEME TOGGLE BUTTON */}
             {mounted && (
               <button
                 onClick={toggleTheme}
@@ -170,7 +261,6 @@ export default function AdminSidebar() {
               </button>
             )}
 
-            {/* LOGOUT */}
             <button
               onClick={handleLogout}
               className="flex items-center gap-3 px-4 py-2.5 w-full text-left rounded-lg transition-colors

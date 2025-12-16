@@ -1,47 +1,51 @@
 import { getAuth } from "firebase/auth";
 import { app } from "./firebase";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-
-export const apiRequest = async (
-  endpoint: string,
-  method: string,
-  body?: any
-) => {
+export async function apiRequest(url: string, method: string, body?: any) {
   const auth = getAuth(app);
-  const user = auth.currentUser;
 
-  // Prepare Headers
-  const headers: Record<string, string> = {
+  // 1. Wait for Auth to initialize
+  const user = await new Promise<any>((resolve) => {
+    const unsubscribe = auth.onAuthStateChanged((u) => {
+      unsubscribe();
+      resolve(u);
+    });
+  });
+
+  let token = "";
+  if (user) {
+    token = await user.getIdToken();
+  }
+
+  const headers: any = {
     "Content-Type": "application/json",
   };
 
- 
-  if (user) {
-    const token = await user.getIdToken();
+  if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-
-  // Make the Request
-  const res = await fetch(`${API_URL}${endpoint}`, {
+  const res = await fetch(url, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  // Handle Errors
+  // --- SAFE ERROR HANDLING ---
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-
-    
-    if (res.status === 401 || res.status === 403) {
-      throw new Error("You must be logged in to do this.");
+    // 1. Check if the response is JSON
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const errorData = await res.json();
+      throw new Error(errorData.error || "API Request Failed");
+    } else {
+      // 2. If NOT JSON, log the URL and Status so we know what broke
+      const errorText = await res.text();
+      console.error(`API Error [${res.status}] at ${url}:`, errorText); // <--- UPDATED LOG
+      throw new Error(
+        `Server Error: ${res.status} ${res.statusText} at ${url}`
+      );
     }
-
-    throw new Error(
-      errorData.error || `Request failed with status ${res.status}`
-    );
   }
 
   return res.json();
-};
+}
