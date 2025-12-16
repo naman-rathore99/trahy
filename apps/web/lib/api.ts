@@ -33,6 +33,7 @@ export const apiRequest = async (
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
 
+    
     if (res.status === 401 || res.status === 403) {
       throw new Error("You must be logged in to do this.");
     }

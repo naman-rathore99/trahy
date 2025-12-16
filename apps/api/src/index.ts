@@ -177,7 +177,23 @@ app.post(
     }
   }
 );
+// PUBLIC ROUTE (No Login Required)
+app.get('/api/properties', async (req: any, res: any) => {
+  try {
+    const snapshot = await db.collection('hotels')
+     
+      .get();
 
+    const properties = snapshot.docs.map((doc: any) => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json({ properties });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 
 // REGISTER NEW USER (Sync Auth with DB)
