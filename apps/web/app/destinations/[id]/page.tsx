@@ -22,11 +22,10 @@ import {
   Share,
   Heart,
   ChevronLeft,
-  ChevronRight, // Added for carousel
-  X, // Added for carousel
-  Maximize2, // Added for hover effect
+  ChevronRight,
+  X,
 } from "lucide-react";
-import { format, parseISO, differenceInDays, isValid } from "date-fns";
+import { format, parseISO, differenceInDays, isValid, addDays } from "date-fns";
 import { DayPicker, DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 
@@ -61,10 +60,11 @@ export default function DestinationDetailsPage({
     Number(searchParams.get("children") || 0)
   );
 
-  // UI Toggles
+  // UI Toggles & Modes
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isGuestOpen, setIsGuestOpen] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingMode, setBookingMode] = useState<"range" | "single">("range"); // NEW: Booking Mode
 
   // Lightbox State
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -76,6 +76,11 @@ export default function DestinationDetailsPage({
   // Refs
   const calendarRef = useRef<HTMLDivElement>(null);
   const guestRef = useRef<HTMLDivElement>(null);
+
+  // --- 0. HELPER: Normalize Today ---
+  // We reset time to 00:00:00 so the user can select "Today"
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   // --- 1. FETCH DATA ---
   useEffect(() => {
@@ -133,11 +138,37 @@ export default function DestinationDetailsPage({
   }, [lightboxIndex]);
 
   // --- 4. HANDLERS ---
+
+  // Handle Range Select (Standard 2-click process)
   const handleRangeSelect = (range: DateRange | undefined) => {
     if (range?.from) setCheckIn(format(range.from, "yyyy-MM-dd"));
     else setCheckIn("");
     if (range?.to) setCheckOut(format(range.to, "yyyy-MM-dd"));
     else setCheckOut("");
+  };
+
+  // Handle Date Select (Smart switcher between Range and Single)
+  const handleDateSelect = (val: any) => {
+    if (bookingMode === "single" && val) {
+      // Single Mode: Set Start Date, Auto-set End Date to +1 Day
+      const date = val as Date;
+      setCheckIn(format(date, "yyyy-MM-dd"));
+      setCheckOut(format(addDays(date, 1), "yyyy-MM-dd"));
+      setIsCalendarOpen(false); // Close automatically for speed
+    } else {
+      // Range Mode: Standard Logic
+      const range = val as DateRange;
+      handleRangeSelect(range);
+    }
+  };
+
+  // Quick Button: Select "Tonight"
+  const selectTonight = () => {
+    const now = new Date();
+    setCheckIn(format(now, "yyyy-MM-dd"));
+    setCheckOut(format(addDays(now, 1), "yyyy-MM-dd"));
+    setBookingMode("single");
+    setIsCalendarOpen(false);
   };
 
   // Lightbox Navigation
@@ -157,37 +188,64 @@ export default function DestinationDetailsPage({
     );
   };
 
+  // const handleReserve = async () => {
+  //   const auth = getAuth(app);
+  //   const user = auth.currentUser;
+  //   if (!user) {
+  //     router.push("/login?redirect=/destinations/" + id);
+  //     return;
+  //   }
+  //   if (!checkIn || !checkOut || nights === 0) {
+  //     setIsCalendarOpen(true);
+  //     return;
+  //   }
+  //   setBookingLoading(true);
+  //   try {
+  //     await apiRequest("/api/bookings", "POST", {
+  //       listingId: hotel.id,
+  //       listingName: hotel.name,
+  //       listingImage: hotel.imageUrl,
+  //       serviceType: "hotel",
+  //       checkIn,
+  //       checkOut,
+  //       guests: adults + children,
+  //       totalAmount: totalPrice,
+  //     });
+  //     router.push("/trips");
+  //   } catch (err: any) {
+  //     alert("Booking Failed: " + err.message);
+  //   } finally {
+  //     setBookingLoading(false);
+  //   }
+  // };
+  // Inside your component...
+
   const handleReserve = async () => {
     const auth = getAuth(app);
     const user = auth.currentUser;
+
+    // 1. Check Login
     if (!user) {
       router.push("/login?redirect=/destinations/" + id);
       return;
     }
+
+    // 2. Validate Dates
     if (!checkIn || !checkOut || nights === 0) {
       setIsCalendarOpen(true);
       return;
     }
-    setBookingLoading(true);
-    try {
-      await apiRequest("/api/bookings", "POST", {
-        listingId: hotel.id,
-        listingName: hotel.name,
-        listingImage: hotel.imageUrl,
-        serviceType: "hotel",
-        checkIn,
-        checkOut,
-        guests: adults + children,
-        totalAmount: totalPrice,
-      });
-      router.push("/trips");
-    } catch (err: any) {
-      alert("Booking Failed: " + err.message);
-    } finally {
-      setBookingLoading(false);
-    }
-  };
 
+    // 3. REDIRECT TO SUMMARY PAGE (The Change is Here)
+    // We pass the data via URL parameters
+    const params = new URLSearchParams({
+      start: checkIn,
+      end: checkOut,
+      guests: (adults + children).toString(),
+    });
+
+    router.push(`/book/${hotel.id}?${params.toString()}`);
+  };
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-gray-900 dark:text-white transition-colors">
@@ -254,7 +312,7 @@ export default function DestinationDetailsPage({
           </div>
         </div>
 
-        {/* --- IMAGE GRID (CLICKABLE) --- */}
+        {/* --- IMAGE GRID --- */}
         <div className="relative aspect-[4/3] md:aspect-[3/1] rounded-3xl overflow-hidden mb-12 shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="grid grid-cols-1 md:grid-cols-4 h-full gap-2">
             {/* Main Image */}
@@ -278,7 +336,7 @@ export default function DestinationDetailsPage({
                   <div
                     key={i}
                     className="relative group overflow-hidden cursor-pointer"
-                    onClick={() => setLightboxIndex(i)} // Open lightbox on click
+                    onClick={() => setLightboxIndex(i)}
                   >
                     <img
                       src={url}
@@ -369,33 +427,60 @@ export default function DestinationDetailsPage({
                 </div>
               </div>
 
-              {/* Inputs */}
-              <div className="border border-gray-300 dark:border-gray-700 rounded-2xl mb-6 relative divide-y dark:divide-gray-700">
+              {/* UPDATED: BOOKING INPUTS WITH TABS */}
+              <div className="border border-gray-300 dark:border-gray-700 rounded-2xl mb-6 relative bg-white dark:bg-gray-900 divide-y dark:divide-gray-700">
+                {/* 1. SELECTION TABS */}
+                <div className="flex border-b border-gray-200 dark:border-gray-800">
+                  <button
+                    onClick={() => setBookingMode("range")}
+                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${
+                      bookingMode === "range"
+                        ? "bg-gray-100 dark:bg-gray-800 text-rose-600"
+                        : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    } rounded-tl-2xl`}
+                  >
+                    Select Dates
+                  </button>
+                  <button
+                    onClick={() => setBookingMode("single")}
+                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${
+                      bookingMode === "single"
+                        ? "bg-gray-100 dark:bg-gray-800 text-rose-600"
+                        : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    } rounded-tr-2xl`}
+                  >
+                    1 Night Only
+                  </button>
+                </div>
+
+                {/* 2. DATE DISPLAY */}
                 <div
                   className="grid grid-cols-2 divide-x dark:divide-gray-700 cursor-pointer"
                   onClick={() => setIsCalendarOpen(!isCalendarOpen)}
                 >
-                  <div className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-tl-2xl transition-colors">
+                  <div className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                     <label className="block text-[10px] font-bold uppercase text-gray-800 dark:text-gray-300 tracking-wider">
                       Check-in
                     </label>
                     <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mt-1">
                       {checkIn
                         ? format(parseISO(checkIn), "dd/MM/yyyy")
-                        : "Add date"}
+                        : "Select Date"}
                     </div>
                   </div>
-                  <div className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-tr-2xl transition-colors">
+                  <div className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                     <label className="block text-[10px] font-bold uppercase text-gray-800 dark:text-gray-300 tracking-wider">
                       Check-out
                     </label>
                     <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mt-1">
                       {checkOut
                         ? format(parseISO(checkOut), "dd/MM/yyyy")
-                        : "Add date"}
+                        : "Auto-set"}
                     </div>
                   </div>
                 </div>
+
+                {/* 3. GUEST SELECTOR */}
                 <div
                   className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-b-2xl transition-colors"
                   onClick={() => setIsGuestOpen(!isGuestOpen)}
@@ -408,26 +493,47 @@ export default function DestinationDetailsPage({
                   </div>
                 </div>
 
-                {/* Popups */}
+                {/* POPUPS */}
                 {isCalendarOpen && (
                   <div
                     ref={calendarRef}
-                    className="absolute top-0 right-0 bg-white text-black p-4 rounded-2xl shadow-2xl border border-gray-100 z-50 animate-in fade-in zoom-in-95"
+                    className="absolute top-16 right-0 bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 z-50 animate-in fade-in zoom-in-95"
                   >
-                    <DayPicker
-                      mode="range"
-                      selected={{
-                        from: checkIn ? parseISO(checkIn) : undefined,
-                        to: checkOut ? parseISO(checkOut) : undefined,
-                      }}
-                      onSelect={handleRangeSelect}
-                      min={1}
-                      disabled={{ before: new Date() }}
-                      modifiersClassNames={{
-                        selected: "bg-black text-white hover:bg-black",
-                        today: "text-rose-500 font-bold",
-                      }}
-                    />
+                    {/* Quick Button: Stay Tonight */}
+                    <button
+                      onClick={selectTonight}
+                      className="w-full mb-4 py-2 bg-black dark:bg-white text-white dark:text-black text-sm font-bold rounded-lg hover:opacity-80 transition-opacity flex items-center justify-center gap-2"
+                    >
+                      <span>Stay Tonight (1 Night)</span>
+                    </button>
+
+                    {/* TYPE FIX: Render separate components based on mode */}
+                    {bookingMode === "single" ? (
+                      <DayPicker
+                        mode="single"
+                        selected={checkIn ? parseISO(checkIn) : undefined}
+                        onSelect={handleDateSelect}
+                        disabled={{ before: today }}
+                        modifiersClassNames={{
+                          selected: "bg-rose-600 text-white hover:bg-rose-600",
+                          today: "text-rose-500 font-bold",
+                        }}
+                      />
+                    ) : (
+                      <DayPicker
+                        mode="range"
+                        selected={{
+                          from: checkIn ? parseISO(checkIn) : undefined,
+                          to: checkOut ? parseISO(checkOut) : undefined,
+                        }}
+                        onSelect={handleDateSelect}
+                        disabled={{ before: today }}
+                        modifiersClassNames={{
+                          selected: "bg-rose-600 text-white hover:bg-rose-600",
+                          today: "text-rose-500 font-bold",
+                        }}
+                      />
+                    )}
                   </div>
                 )}
                 {isGuestOpen && (
