@@ -20,9 +20,9 @@ export default function VehiclesPage() {
   // FETCH VEHICLES
   const fetchVehicles = async () => {
     try {
-      // We fetch ALL properties, then filter for 'vehicle'
-      const data = await apiRequest("/api/admin/properties", "GET");
-      const onlyVehicles = (data.properties || []).filter(
+      // We fetch ALL hotels, then filter for 'vehicle'
+      const data = await apiRequest("/api/admin/hotels", "GET");
+      const onlyVehicles = (data.hotels || []).filter(
         (p: any) => p.type === "vehicle"
       );
       setVehicles(onlyVehicles);
@@ -42,7 +42,7 @@ export default function VehiclesPage() {
     if (!confirm("Are you sure you want to approve this vehicle?")) return;
 
     try {
-      await apiRequest("/api/admin/properties/approve", "POST", {
+      await apiRequest("/api/admin/hotels/approve", "POST", {
         propertyId: id,
         status: "approved",
       });

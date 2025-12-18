@@ -35,7 +35,7 @@ export default function AdminDashboard() {
         const [usersData, reqData, propData] = await Promise.all([
           apiRequest("/api/admin/users", "GET"),
           apiRequest("/api/admin/requests", "GET"),
-          apiRequest("/api/admin/properties", "GET"),
+          apiRequest("/api/admin/hotels", "GET"),
         ]);
 
         // 1. Calculate User Stats

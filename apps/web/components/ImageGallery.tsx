@@ -13,7 +13,7 @@ const ImageGallery = ({ images }: ImageGalleryProps) => {
   return (
     <div className="flex flex-col gap-4 mb-12">
       {/* 1. Main Large Viewer */}
-      <div className="relative w-full h-[400px] md:h-[500px] bg-gray-100 rounded-[2rem] overflow-hidden shadow-sm group">
+      <div className="relative w-full h-[400px] md:h-[500px] bg-gray-100 rounded-4xl overflow-hidden shadow-sm group">
         <img
           src={activeImage}
           alt="Active view"
@@ -32,7 +32,7 @@ const ImageGallery = ({ images }: ImageGalleryProps) => {
           <button
             key={index}
             onClick={() => setActiveImage(img)}
-            className={`relative w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all snap-start ${
+            className={`relative w-24 h-24 flex-0 rounded-xl overflow-hidden border-2 transition-all snap-start ${
               activeImage === img
                 ? "border-black ring-2 ring-black/20 scale-95 opacity-100"
                 : "border-transparent opacity-70 hover:opacity-100 hover:border-gray-300"

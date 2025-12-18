@@ -1,101 +1,165 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import Link from "next/link";
-import { Edit, Eye, CheckCircle, Clock, Ban } from "lucide-react";
+import { Edit, CheckCircle, Clock, Ban, MapPin, Loader2 } from "lucide-react";
 
 export default function PropertyManagePage() {
-  const [properties, setProperties] = useState<any[]>([]);
+  const [allProperties, setAllProperties] = useState<any[]>([]); // Store EVERYTHING here
   const [loading, setLoading] = useState(true);
-  // NEW: State to control which tab is active
-  const [filter, setFilter] = useState<"pending" | "approved" | "banned">(
-    "pending"
+
+  // Tab Order: Active -> Pending -> Banned
+  const [activeTab, setActiveTab] = useState<"approved" | "pending" | "banned">(
+    "approved"
   );
 
   useEffect(() => {
     setLoading(true);
-    // Fetch based on the current filter
-    apiRequest(`/api/admin/properties?status=${filter}`, "GET")
-      .then((data) => setProperties(data.properties || []))
+    // ✅ FIX 1: Correct API Endpoint (/properties, not /hotels)
+    apiRequest("/api/admin/properties", "GET")
+      .then((data) => {
+        // ✅ FIX 2: Correct Data Key (data.properties, not data.hotels)
+        setAllProperties(data.properties || []);
+      })
+      .catch((err) => console.error("Failed to load properties:", err))
       .finally(() => setLoading(false));
-  }, [filter]); // Re-run whenever 'filter' changes
+  }, []);
+
+  // ✅ FIX 3: Filter on the frontend for instant tab switching
+  const filteredProperties = allProperties.filter(
+    (p) => (p.status || "pending") === activeTab
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-8 transition-colors">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Manage Properties</h1>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
+              Manage Properties
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+              Review and manage hotel listings.
+            </p>
+          </div>
         </div>
 
-        {/* --- TABS --- */}
-        <div className="flex gap-4 border-b border-gray-200 mb-6">
+        {/* --- RESPONSIVE TABS --- */}
+        <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-800 mb-6 scrollbar-hide">
           <button
-            onClick={() => setFilter("pending")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 ${filter === "pending" ? "border-b-2 border-black text-black" : "text-gray-500"}`}
-          >
-            <Clock size={16} /> Pending Review
-          </button>
-          <button
-            onClick={() => setFilter("approved")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 ${filter === "approved" ? "border-b-2 border-green-600 text-green-600" : "text-gray-500"}`}
+            onClick={() => setActiveTab("approved")}
+            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === "approved"
+                ? "border-b-2 border-green-600 text-green-600 dark:text-green-400"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            }`}
           >
             <CheckCircle size={16} /> Active Listings
           </button>
           <button
-            onClick={() => setFilter("banned")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 ${filter === "banned" ? "border-b-2 border-red-600 text-red-600" : "text-gray-500"}`}
+            onClick={() => setActiveTab("pending")}
+            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === "pending"
+                ? "border-b-2 border-yellow-500 text-yellow-600 dark:text-yellow-400"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            }`}
+          >
+            <Clock size={16} /> Pending Review
+          </button>
+          <button
+            onClick={() => setActiveTab("banned")}
+            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === "banned"
+                ? "border-b-2 border-red-600 text-red-600 dark:text-red-400"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            }`}
           >
             <Ban size={16} /> Banned
           </button>
         </div>
 
+        {/* --- CONTENT AREA --- */}
         {loading ? (
-          <div className="p-10 text-center text-gray-500">Loading...</div>
-        ) : properties.length === 0 ? (
-          <div className="bg-white p-12 text-center rounded-xl shadow-sm text-gray-500">
-            No properties found in this category.
+          <div className="p-20 flex justify-center">
+            <Loader2 className="animate-spin text-gray-400" size={32} />
+          </div>
+        ) : filteredProperties.length === 0 ? (
+          <div className="bg-white dark:bg-gray-900 p-12 text-center rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 mb-4">
+              {activeTab === "approved" && (
+                <CheckCircle className="text-gray-400" />
+              )}
+              {activeTab === "pending" && <Clock className="text-gray-400" />}
+              {activeTab === "banned" && <Ban className="text-gray-400" />}
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+              No properties found
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400">
+              There are no {activeTab} properties right now.
+            </p>
           </div>
         ) : (
           <div className="grid gap-4">
-            {properties.map((prop) => (
+            {filteredProperties.map((prop) => (
               <div
                 key={prop.id}
-                className="bg-white p-6 rounded-xl shadow-sm border flex gap-6 items-center"
+                className="bg-white dark:bg-gray-900 p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row gap-6 items-start md:items-center transition-colors hover:border-gray-300 dark:hover:border-gray-700"
               >
-                <img
-                  src={prop.imageUrl || "/placeholder.jpg"}
-                  className="w-32 h-24 object-cover rounded-lg bg-gray-100"
-                />
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold">{prop.name}</h3>
-                  <p className="text-gray-500">
-                    {prop.location} • ₹{prop.pricePerNight}/night
-                  </p>
+                {/* Image */}
+                <div className="w-full md:w-32 h-48 md:h-24 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 relative">
+                  {prop.imageUrl ? (
+                    <img
+                      src={prop.imageUrl}
+                      alt={prop.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                      No Image
+                    </div>
+                  )}
+                </div>
 
-                  {/* Status Badge */}
-                  <div className="mt-2">
-                    {filter === "pending" && (
-                      <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded font-bold uppercase">
-                        Pending
-                      </span>
-                    )}
-                    {filter === "approved" && (
-                      <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-bold uppercase">
-                        Live
-                      </span>
-                    )}
-                    {filter === "banned" && (
-                      <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold uppercase">
-                        Banned
-                      </span>
-                    )}
+                {/* Details */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate">
+                        {prop.name}
+                      </h3>
+                      <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-sm mt-1">
+                        <MapPin size={14} />
+                        {prop.location}
+                      </div>
+                    </div>
+
+                    {/* Price (Mobile: Hidden, Desktop: Visible) */}
+                    <div className="hidden md:block text-right">
+                      <div className="font-bold text-lg text-gray-900 dark:text-white">
+                        ₹{prop.pricePerNight}
+                      </div>
+                      <div className="text-xs text-gray-500">per night</div>
+                    </div>
+                  </div>
+
+                  {/* Owner Info */}
+                  <div className="mt-3 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
+                    <span className="font-medium text-gray-700 dark:text-gray-300">
+                      Owner:
+                    </span>{" "}
+                    {prop.ownerName || "Unknown"}
+                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                    <span>{prop.ownerEmail || "No Email"}</span>
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                {/* Actions */}
+                <div className="flex w-full md:w-auto gap-3 mt-2 md:mt-0">
                   <Link
-                    href={`/admin/properties/${prop.id}`}
-                    className="bg-black text-white px-5 py-2 rounded-lg font-bold hover:bg-gray-800 flex items-center gap-2"
+                    href={`/admin/hotels/${prop.id}`}
+                    className="flex-1 md:flex-none text-center bg-black dark:bg-white text-white dark:text-black px-5 py-2.5 rounded-lg font-bold hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm"
                   >
                     <Edit size={16} /> Manage
                   </Link>
