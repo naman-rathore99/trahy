@@ -7,29 +7,22 @@ import { apiRequest } from "@/lib/api";
 import { getAuth } from "firebase/auth";
 import { app } from "@/lib/firebase";
 import {
-  MapPin,
-  Wifi,
-  Car,
-  Tv,
-  Snowflake,
-  Droplets,
-  Waves,
-  Star,
-  Minus,
-  Plus,
-  Loader2,
-  Calendar as CalendarIcon,
-  Share,
-  Heart,
-  ChevronLeft,
-  ChevronRight,
-  X,
+  MapPin, Wifi, Car, Tv, Snowflake, Droplets, Waves, Star, Minus, Plus, Loader2,
+  Calendar as CalendarIcon, Share, Heart, ChevronLeft, ChevronRight, X,
+  Bike, Zap, Users, Info
 } from "lucide-react";
 import { format, parseISO, differenceInDays, isValid, addDays } from "date-fns";
 import { DayPicker, DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 
-// --- AMENITY MAPPING ---
+// --- VEHICLE CONFIGURATION ---
+const VEHICLE_OPTIONS = [
+  { id: "bike", label: "2-Wheeler", icon: <Bike size={20} />, price: 400, displayPrice: "400+", desc: "Scooty / Bike" },
+  { id: "auto", label: "Auto / E-Rickshaw", icon: <Zap size={20} />, price: 800, displayPrice: "800+", desc: "City Travel" },
+  { id: "car", label: "Car (Taxi)", icon: <Car size={20} />, price: 2000, displayPrice: "2000+", desc: "AC Cab for 4" },
+  { id: "suv", label: "Large Car (SUV)", icon: <Users size={20} />, price: 3000, displayPrice: "3000+", desc: "Innova / Ertiga" },
+];
+
 const AMENITY_MAP: Record<string, { label: string; icon: React.ReactNode }> = {
   wifi: { label: "Fast Wifi", icon: <Wifi size={20} /> },
   parking: { label: "Free Parking", icon: <Car size={20} /> },
@@ -39,11 +32,7 @@ const AMENITY_MAP: Record<string, { label: string; icon: React.ReactNode }> = {
   pool: { label: "Swimming Pool", icon: <Waves size={20} /> },
 };
 
-export default function DestinationDetailsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function DestinationDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -56,42 +45,40 @@ export default function DestinationDetailsPage({
   const [checkIn, setCheckIn] = useState(searchParams.get("start") || "");
   const [checkOut, setCheckOut] = useState(searchParams.get("end") || "");
   const [adults, setAdults] = useState(Number(searchParams.get("adults") || 2));
-  const [children, setChildren] = useState(
-    Number(searchParams.get("children") || 0)
-  );
+  const [children, setChildren] = useState(Number(searchParams.get("children") || 0));
 
-  // UI Toggles & Modes
+  const [vehicleType, setVehicleType] = useState<string | null>(null);
+
+  // UI Toggles
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isGuestOpen, setIsGuestOpen] = useState(false);
-  const [bookingLoading, setBookingLoading] = useState(false);
-  const [bookingMode, setBookingMode] = useState<"range" | "single">("range"); // NEW: Booking Mode
-
-  // Lightbox State
+  const [bookingMode, setBookingMode] = useState<"range" | "single">("range");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-  // Calculations
+  // Math
   const [nights, setNights] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
 
-  // Refs
   const calendarRef = useRef<HTMLDivElement>(null);
   const guestRef = useRef<HTMLDivElement>(null);
-
-  // --- 0. HELPER: Normalize Today ---
-  // We reset time to 00:00:00 so the user can select "Today"
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // --- 1. FETCH DATA ---
+  // --- FETCH DATA ---
   useEffect(() => {
     if (!id) return;
     apiRequest(`/api/hotels/${id}`, "GET")
-      .then((data) => setHotel(data.hotel))
+      .then((data) => {
+        // --- 🔴 DEV: FORCE VEHICLE TRUE ---
+        // Remove this line once your DB is updated to hasVehicle: true
+        const modifiedHotel = { ...data.hotel, hasVehicle: true };
+        setHotel(modifiedHotel);
+      })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
   }, [id]);
 
-  // --- 2. CALCULATE PRICE ---
+  // --- CALCULATE PRICE ---
   useEffect(() => {
     if (checkIn && checkOut && hotel) {
       const start = parseISO(checkIn);
@@ -100,46 +87,29 @@ export default function DestinationDetailsPage({
         const diff = differenceInDays(end, start);
         if (diff > 0) {
           setNights(diff);
-          setTotalPrice(diff * hotel.pricePerNight + 1300); // Base + Fees
+
+          // 1. Room Cost
+          const roomTotal = diff * hotel.pricePerNight;
+
+          // 2. Vehicle Cost
+          let vehicleTotal = 0;
+          if (vehicleType) {
+            const vehicle = VEHICLE_OPTIONS.find(v => v.id === vehicleType);
+            if (vehicle) {
+              vehicleTotal = vehicle.price * diff;
+            }
+          }
+
+          setTotalPrice(roomTotal + vehicleTotal);
         }
       }
     } else {
       setNights(0);
       setTotalPrice(0);
     }
-  }, [checkIn, checkOut, hotel]);
+  }, [checkIn, checkOut, hotel, vehicleType]);
 
-  // --- 3. EVENT LISTENERS (Click Outside & Keyboard) ---
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        calendarRef.current &&
-        !calendarRef.current.contains(event.target as Node)
-      )
-        setIsCalendarOpen(false);
-      if (guestRef.current && !guestRef.current.contains(event.target as Node))
-        setIsGuestOpen(false);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (lightboxIndex !== null) {
-        if (event.key === "Escape") setLightboxIndex(null);
-        if (event.key === "ArrowRight") nextImage();
-        if (event.key === "ArrowLeft") prevImage();
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [lightboxIndex]);
-
-  // --- 4. HANDLERS ---
-
-  // Handle Range Select (Standard 2-click process)
+  // --- HANDLERS ---
   const handleRangeSelect = (range: DateRange | undefined) => {
     if (range?.from) setCheckIn(format(range.from, "yyyy-MM-dd"));
     else setCheckIn("");
@@ -147,22 +117,18 @@ export default function DestinationDetailsPage({
     else setCheckOut("");
   };
 
-  // Handle Date Select (Smart switcher between Range and Single)
   const handleDateSelect = (val: any) => {
     if (bookingMode === "single" && val) {
-      // Single Mode: Set Start Date, Auto-set End Date to +1 Day
       const date = val as Date;
       setCheckIn(format(date, "yyyy-MM-dd"));
       setCheckOut(format(addDays(date, 1), "yyyy-MM-dd"));
-      setIsCalendarOpen(false); // Close automatically for speed
+      setIsCalendarOpen(false);
     } else {
-      // Range Mode: Standard Logic
       const range = val as DateRange;
       handleRangeSelect(range);
     }
   };
 
-  // Quick Button: Select "Tonight"
   const selectTonight = () => {
     const now = new Date();
     setCheckIn(format(now, "yyyy-MM-dd"));
@@ -171,112 +137,67 @@ export default function DestinationDetailsPage({
     setIsCalendarOpen(false);
   };
 
-  // Lightbox Navigation
   const nextImage = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (lightboxIndex === null || !hotel?.imageUrls) return;
-    setLightboxIndex((prev) =>
-      prev === hotel.imageUrls.length - 1 ? 0 : (prev as number) + 1
-    );
+    setLightboxIndex((prev) => prev === hotel.imageUrls.length - 1 ? 0 : (prev as number) + 1);
   };
 
   const prevImage = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (lightboxIndex === null || !hotel?.imageUrls) return;
-    setLightboxIndex((prev) =>
-      prev === 0 ? hotel.imageUrls.length - 1 : (prev as number) - 1
-    );
+    setLightboxIndex((prev) => prev === 0 ? hotel.imageUrls.length - 1 : (prev as number) - 1);
   };
 
-  // const handleReserve = async () => {
-  //   const auth = getAuth(app);
-  //   const user = auth.currentUser;
-  //   if (!user) {
-  //     router.push("/login?redirect=/destinations/" + id);
-  //     return;
-  //   }
-  //   if (!checkIn || !checkOut || nights === 0) {
-  //     setIsCalendarOpen(true);
-  //     return;
-  //   }
-  //   setBookingLoading(true);
-  //   try {
-  //     await apiRequest("/api/bookings", "POST", {
-  //       listingId: hotel.id,
-  //       listingName: hotel.name,
-  //       listingImage: hotel.imageUrl,
-  //       serviceType: "hotel",
-  //       checkIn,
-  //       checkOut,
-  //       guests: adults + children,
-  //       totalAmount: totalPrice,
-  //     });
-  //     router.push("/trips");
-  //   } catch (err: any) {
-  //     alert("Booking Failed: " + err.message);
-  //   } finally {
-  //     setBookingLoading(false);
-  //   }
-  // };
-  // Inside your component...
-
-  const handleReserve = async () => {
-    const auth = getAuth(app);
-    const user = auth.currentUser;
-
-    // 1. Check Login
-    if (!user) {
-      router.push("/login?redirect=/destinations/" + id);
-      return;
-    }
-
-    // 2. Validate Dates
+  // --- 🔴 FIXED: NAVIGATION HANDLER ---
+  const handleReserve = () => {
+    // 1. Validate inputs
     if (!checkIn || !checkOut || nights === 0) {
       setIsCalendarOpen(true);
       return;
     }
 
-    // 3. REDIRECT TO SUMMARY PAGE (The Change is Here)
-    // We pass the data via URL parameters
-    const params = new URLSearchParams({
-      start: checkIn,
-      end: checkOut,
-      guests: (adults + children).toString(),
-    });
+    const auth = getAuth(app);
+    const user = auth.currentUser;
+    if (!user) {
+      // Pass current selection to login redirect so they don't lose progress
+      router.push(`/login?redirect=/destinations/${id}`);
+      return;
+    }
 
-    router.push(`/book/${hotel.id}?${params.toString()}`);
+    // 2. Build Query Params safely
+    const queryParams = new URLSearchParams();
+    queryParams.set("start", checkIn);
+    queryParams.set("end", checkOut);
+    queryParams.set("adults", adults.toString());
+    queryParams.set("children", children.toString());
+    queryParams.set("guests", (adults + children).toString());
+
+    // 3. Add Vehicle Data if selected
+    if (vehicleType) {
+      const v = VEHICLE_OPTIONS.find(opt => opt.id === vehicleType);
+      if (v) {
+        queryParams.set("vehicleId", v.id);
+        queryParams.set("vehicleName", v.label);
+        queryParams.set("vehiclePrice", v.price.toString());
+      }
+    }
+
+    // 4. Navigate to Summary Page
+    // We do NOT call the API here. The Summary page will handle the actual booking/payment.
+    router.push(`/book/${hotel.id}?${queryParams.toString()}`);
   };
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-gray-900 dark:text-white transition-colors">
-        <Loader2 className="animate-spin mr-3 text-rose-600" size={32} />{" "}
-        Loading...
-      </div>
-    );
 
-  if (!hotel)
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-black text-gray-900 dark:text-white transition-colors">
-        <h1 className="text-2xl font-bold mb-4">Property Not Found</h1>
-        <button
-          onClick={() => router.push("/")}
-          className="text-rose-600 hover:underline"
-        >
-          Go Home
-        </button>
-      </div>
-    );
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
+  if (!hotel) return <div>Not Found</div>;
 
   return (
-    <main className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 pb-20 transition-colors duration-300">
+    <main className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 pb-20">
       <Navbar variant="default" />
 
       {/* MOBILE BACK BUTTON */}
       <div className="md:hidden fixed top-4 left-4 z-50">
-        <button
-          onClick={() => router.back()}
-          className="p-2 bg-white/80 dark:bg-black/60 backdrop-blur-md rounded-full shadow-lg border border-gray-200 dark:border-gray-800"
-        >
+        <button onClick={() => router.back()} className="p-2 bg-white/80 dark:bg-black/60 backdrop-blur-md rounded-full shadow-lg border border-gray-200 dark:border-gray-800">
           <ChevronLeft size={20} />
         </button>
       </div>
@@ -284,230 +205,75 @@ export default function DestinationDetailsPage({
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 pt-24 md:pt-32">
         {/* HEADER */}
         <div className="flex flex-col gap-4 mb-8">
-          <h1 className="text-2xl md:text-4xl font-extrabold text-gray-900 dark:text-white leading-tight">
-            {hotel.name}
-          </h1>
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex flex-wrap items-center gap-4">
-              <span className="flex items-center gap-1 font-bold text-black dark:text-white">
-                <Star size={16} fill="currentColor" /> 4.8
-              </span>
-              <span className="hidden sm:inline">•</span>
-              <span className="underline font-medium cursor-pointer hover:text-rose-600 transition-colors">
-                12 reviews
-              </span>
-              <span className="hidden sm:inline">•</span>
-              <span className="flex items-center gap-1 font-medium text-gray-800 dark:text-gray-300">
-                <MapPin size={16} /> {hotel.location}
-              </span>
-            </div>
-            <div className="flex gap-4">
-              <button className="flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-900 px-3 py-2 rounded-lg transition-colors">
-                <Share size={16} /> <span className="underline">Share</span>
-              </button>
-              <button className="flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-900 px-3 py-2 rounded-lg transition-colors">
-                <Heart size={16} /> <span className="underline">Save</span>
-              </button>
-            </div>
+          <h1 className="text-2xl md:text-4xl font-extrabold text-gray-900 dark:text-white leading-tight">{hotel.name}</h1>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+            <span className="flex items-center gap-1 font-bold text-black dark:text-white"><Star size={16} fill="currentColor" /> 4.8</span>
+            <span className="flex items-center gap-1 font-medium"><MapPin size={16} /> {hotel.location}</span>
           </div>
         </div>
 
-        {/* --- IMAGE GRID --- */}
+        {/* IMAGE GRID */}
         <div className="relative aspect-[4/3] md:aspect-[3/1] rounded-3xl overflow-hidden mb-12 shadow-sm border border-gray-100 dark:border-gray-800">
-          <div className="grid grid-cols-1 md:grid-cols-4 h-full gap-2">
-            {/* Main Image */}
-            <div
-              className="md:col-span-2 h-full relative group cursor-pointer"
-              onClick={() => setLightboxIndex(0)}
-            >
-              <img
-                src={hotel.imageUrl}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                alt="Main"
-              />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-            </div>
-
-            {/* Side Grid */}
-            <div className="hidden md:grid grid-cols-2 col-span-2 gap-2 h-full">
-              {(hotel.imageUrls || [])
-                .slice(0, 4)
-                .map((url: string, i: number) => (
-                  <div
-                    key={i}
-                    className="relative group overflow-hidden cursor-pointer"
-                    onClick={() => setLightboxIndex(i)}
-                  >
-                    <img
-                      src={url}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                      alt={`Gallery ${i}`}
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                  </div>
-                ))}
-
-              {/* Fallback if empty */}
-              {(!hotel.imageUrls || hotel.imageUrls.length === 0) && (
-                <div className="col-span-2 h-full bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center text-gray-400">
-                  <CalendarIcon size={32} className="opacity-20 mb-2" />
-                  <span className="text-xs uppercase tracking-wider font-bold opacity-40">
-                    Gallery Empty
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <button
-            onClick={() => setLightboxIndex(0)}
-            className="absolute bottom-4 right-4 bg-white/90 dark:bg-black/80 backdrop-blur-md px-4 py-2 rounded-lg text-sm font-bold shadow-lg border border-gray-200 dark:border-gray-700 hover:scale-105 transition-transform"
-          >
-            Show all photos
-          </button>
+          <img src={hotel.imageUrl} className="w-full h-full object-cover" alt="Main" onClick={() => setLightboxIndex(0)} />
+          <button onClick={() => setLightboxIndex(0)} className="absolute bottom-4 right-4 bg-white/90 dark:bg-black/80 backdrop-blur-md px-4 py-2 rounded-lg text-sm font-bold shadow-lg">Show photos</button>
         </div>
 
-        {/* --- MAIN CONTENT --- */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 lg:gap-24 relative">
+        {/* MAIN CONTENT */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 lg:gap-24 relative mt-12">
           {/* LEFT: INFO */}
           <div className="lg:col-span-2 space-y-12">
             <div className="border-b border-gray-200 dark:border-gray-800 pb-12">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-                About this place
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 text-lg leading-relaxed whitespace-pre-line font-light">
-                {hotel.description}
-              </p>
+              <h2 className="text-2xl font-bold mb-4">About this place</h2>
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-line">{hotel.description}</p>
             </div>
-
             <div className="border-b border-gray-200 dark:border-gray-800 pb-12">
-              <h2 className="text-2xl font-bold mb-8 text-gray-900 dark:text-white">
-                What this place offers
-              </h2>
-              {hotel.amenities && hotel.amenities.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-4">
-                  {hotel.amenities.map((amenityId: string) => {
-                    const amenity = AMENITY_MAP[amenityId];
-                    if (!amenity) return null;
-                    return (
-                      <div
-                        key={amenityId}
-                        className="flex items-center gap-4 text-gray-700 dark:text-gray-300 group"
-                      >
-                        <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-lg group-hover:bg-gray-200 dark:group-hover:bg-gray-800 transition-colors">
-                          {amenity.icon}
-                        </div>
-                        <span className="text-lg font-light">
-                          {amenity.label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-xl text-gray-500 text-center border border-dashed border-gray-200 dark:border-gray-800">
-                  No amenities specified.
-                </div>
-              )}
+              <h2 className="text-2xl font-bold mb-8">What this place offers</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6">
+                {hotel.amenities?.map((id: string) => {
+                  const a = AMENITY_MAP[id];
+                  return a ? <div key={id} className="flex gap-4 items-center">{a.icon} <span>{a.label}</span></div> : null;
+                })}
+              </div>
             </div>
           </div>
 
           {/* RIGHT: BOOKING CARD */}
           <div className="relative">
-            <div className="sticky top-28 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6 md:p-8 rounded-3xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] dark:shadow-none">
-              <div className="flex justify-between items-end mb-8">
+            <div className="sticky top-28  dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6 rounded-3xl shadow-xl">
+
+              <div className="flex justify-between items-end mb-6">
                 <div>
-                  <span className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-                    ₹{Number(hotel.pricePerNight).toLocaleString("en-IN")}
-                  </span>
-                  <span className="text-gray-500 dark:text-gray-400 font-light">
-                    {" "}
-                    / night
-                  </span>
+                  <span className="text-2xl font-bold">₹{hotel.pricePerNight}</span>
+                  <span className="text-sm text-gray-500"> / night</span>
                 </div>
               </div>
 
-              {/* UPDATED: BOOKING INPUTS WITH TABS */}
-              <div className="border border-gray-300 dark:border-gray-700 rounded-2xl mb-6 relative bg-white dark:bg-gray-900 divide-y dark:divide-gray-700">
-                {/* 1. SELECTION TABS */}
+              {/* DATES & GUESTS */}
+              <div className="border border-gray-300 dark:border-gray-700 rounded-2xl mb-6  dark:bg-gray-900">
                 <div className="flex border-b border-gray-200 dark:border-gray-800">
-                  <button
-                    onClick={() => setBookingMode("range")}
-                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${
-                      bookingMode === "range"
-                        ? "bg-gray-100 dark:bg-gray-800 text-rose-600"
-                        : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    } rounded-tl-2xl`}
-                  >
-                    Select Dates
-                  </button>
-                  <button
-                    onClick={() => setBookingMode("single")}
-                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${
-                      bookingMode === "single"
-                        ? "bg-gray-100 dark:bg-gray-800 text-rose-600"
-                        : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    } rounded-tr-2xl`}
-                  >
-                    1 Night Only
-                  </button>
+                  <button onClick={() => setBookingMode("range")} className={`flex-1 py-3 text-xs font-bold uppercase ${bookingMode === "range" ? "text-rose-600 bg-gray-50 dark:bg-gray-800" : "text-gray-500"}`}>Select Dates</button>
+                  <button onClick={() => setBookingMode("single")} className={`flex-1 py-3 text-xs font-bold uppercase ${bookingMode === "single" ? "text-rose-600 bg-gray-50 dark:bg-gray-800" : "text-gray-500"}`}>1 Night Only</button>
                 </div>
 
-                {/* 2. DATE DISPLAY */}
-                <div
-                  className="grid grid-cols-2 divide-x dark:divide-gray-700 cursor-pointer"
-                  onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                >
-                  <div className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                    <label className="block text-[10px] font-bold uppercase text-gray-800 dark:text-gray-300 tracking-wider">
-                      Check-in
-                    </label>
-                    <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mt-1">
-                      {checkIn
-                        ? format(parseISO(checkIn), "dd/MM/yyyy")
-                        : "Select Date"}
-                    </div>
-                  </div>
-                  <div className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                    <label className="block text-[10px] font-bold uppercase text-gray-800 dark:text-gray-300 tracking-wider">
-                      Check-out
-                    </label>
-                    <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mt-1">
-                      {checkOut
-                        ? format(parseISO(checkOut), "dd/MM/yyyy")
-                        : "Auto-set"}
-                    </div>
-                  </div>
+                <div className="grid grid-cols-2 divide-x dark:divide-gray-700 p-3" onClick={() => setIsCalendarOpen(!isCalendarOpen)}>
+                  <div><label className="text-[10px] font-bold uppercase">Check-in</label><div className="text-sm">{checkIn || "Add date"}</div></div>
+                  <div className="pl-3"><label className="text-[10px] font-bold uppercase">Check-out</label><div className="text-sm">{checkOut || "Add date"}</div></div>
                 </div>
 
-                {/* 3. GUEST SELECTOR */}
-                <div
-                  className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-b-2xl transition-colors"
-                  onClick={() => setIsGuestOpen(!isGuestOpen)}
-                >
-                  <label className="block text-[10px] font-bold uppercase text-gray-800 dark:text-gray-300 tracking-wider">
-                    Guests
-                  </label>
-                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mt-1">
-                    {adults + children} guests
-                  </div>
-                </div>
-
-                {/* POPUPS */}
+                {/* --- FIXED CALENDAR POPUP --- */}
                 {isCalendarOpen && (
                   <div
                     ref={calendarRef}
-                    className="absolute top-16 right-0 bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 z-50 animate-in fade-in zoom-in-95"
+                    className="absolute top-16 right-0 bg-white dark:bg-gray-900 p-4 rounded-xl shadow-2xl z-50 border border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-100"
                   >
-                    {/* Quick Button: Stay Tonight */}
+                    {/* Quick Button: Inverts color in Dark Mode */}
                     <button
                       onClick={selectTonight}
-                      className="w-full mb-4 py-2 bg-black dark:bg-white text-white dark:text-black text-sm font-bold rounded-lg hover:opacity-80 transition-opacity flex items-center justify-center gap-2"
+                      className="w-full mb-3 bg-black dark:bg-white text-white dark:text-black py-2 rounded-lg text-sm font-bold hover:opacity-80 transition-opacity"
                     >
-                      <span>Stay Tonight (1 Night)</span>
+                      Stay Tonight
                     </button>
 
-                    {/* TYPE FIX: Render separate components based on mode */}
                     {bookingMode === "single" ? (
                       <DayPicker
                         mode="single"
@@ -517,6 +283,8 @@ export default function DestinationDetailsPage({
                         modifiersClassNames={{
                           selected: "bg-rose-600 text-white hover:bg-rose-600",
                           today: "text-rose-500 font-bold",
+                          // Ensure standard days are visible in dark mode
+                          day: "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md",
                         }}
                       />
                     ) : (
@@ -531,164 +299,109 @@ export default function DestinationDetailsPage({
                         modifiersClassNames={{
                           selected: "bg-rose-600 text-white hover:bg-rose-600",
                           today: "text-rose-500 font-bold",
+                          day: "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md",
                         }}
                       />
                     )}
                   </div>
                 )}
+
+                <div className="p-3 border-t border-gray-200 dark:border-gray-700" onClick={() => setIsGuestOpen(!isGuestOpen)}>
+                  <label className="text-[10px] font-bold uppercase">Guests</label>
+                  <div className="text-sm">{adults + children} guests</div>
+                </div>
+
                 {isGuestOpen && (
-                  <div
-                    ref={guestRef}
-                    className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 animate-in fade-in slide-in-from-top-2"
-                  >
-                    <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-bold text-gray-900 dark:text-white">
-                            Adults
-                          </p>
-                          <p className="text-xs text-gray-500">Age 13+</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAdults(Math.max(1, adults - 1));
-                            }}
-                            className="w-8 h-8 rounded-full border border-gray-300 dark:border-gray-600 flex items-center justify-center hover:border-black dark:hover:border-white disabled:opacity-30"
-                          >
-                            <Minus size={14} />
-                          </button>
-                          <span className="w-4 text-center dark:text-white">
-                            {adults}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAdults(adults + 1);
-                            }}
-                            className="w-8 h-8 rounded-full border border-gray-300 dark:border-gray-600 flex items-center justify-center hover:border-black dark:hover:border-white"
-                          >
-                            <Plus size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-bold text-gray-900 dark:text-white">
-                            Children
-                          </p>
-                          <p className="text-xs text-gray-500">Ages 2-12</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setChildren(Math.max(0, children - 1));
-                            }}
-                            className="w-8 h-8 rounded-full border border-gray-300 dark:border-gray-600 flex items-center justify-center hover:border-black dark:hover:border-white disabled:opacity-30"
-                          >
-                            <Minus size={14} />
-                          </button>
-                          <span className="w-4 text-center dark:text-white">
-                            {children}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setChildren(children + 1);
-                            }}
-                            className="w-8 h-8 rounded-full border border-gray-300 dark:border-gray-600 flex items-center justify-center hover:border-black dark:hover:border-white"
-                          >
-                            <Plus size={14} />
-                          </button>
-                        </div>
-                      </div>
+                  <div ref={guestRef} className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-gray-900 p-4 rounded-xl shadow-xl border z-50">
+                    <div className="flex justify-between mb-4">
+                      <span>Adults</span>
+                      <div className="flex gap-3"><button onClick={() => setAdults(Math.max(1, adults - 1))}>-</button><span>{adults}</span><button onClick={() => setAdults(adults + 1)}>+</button></div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Children</span>
+                      <div className="flex gap-3"><button onClick={() => setChildren(Math.max(0, children - 1))}>-</button><span>{children}</span><button onClick={() => setChildren(children + 1)}>+</button></div>
                     </div>
                   </div>
                 )}
               </div>
 
-              <button
-                onClick={handleReserve}
-                disabled={bookingLoading}
-                className="w-full bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all disabled:opacity-70 flex items-center justify-center gap-2"
-              >
-                {bookingLoading ? (
-                  <Loader2 className="animate-spin" />
-                ) : nights > 0 ? (
-                  "Reserve"
-                ) : (
-                  "Check availability"
-                )}
+              {/* --- VEHICLE TYPE SELECTOR --- */}
+              {hotel.hasVehicle && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Car className="text-rose-600" size={18} />
+                    <span className="font-bold text-sm uppercase tracking-wide">Need a Vehicle?</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div
+                      onClick={() => setVehicleType(null)}
+                      className={`p-3 rounded-xl border text-center cursor-pointer transition-all ${!vehicleType ? "border-rose-600 bg-rose-50 dark:bg-rose-900/20" : "border-gray-200 hover:border-rose-300"}`}
+                    >
+                      <span className="text-xs font-bold block">No Vehicle</span>
+                    </div>
+
+                    {VEHICLE_OPTIONS.map((v) => (
+                      <div
+                        key={v.id}
+                        onClick={() => setVehicleType(v.id)}
+                        className={`p-3 rounded-xl border text-left cursor-pointer transition-all relative ${vehicleType === v.id ? "border-rose-600 bg-rose-50 dark:bg-rose-900/20" : "border-gray-200 hover:border-rose-300"}`}
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <div className="text-rose-600">{v.icon}</div>
+                          <span className="text-[10px] font-bold bg-white dark:bg-black px-1 rounded border">~₹{v.displayPrice}</span>
+                        </div>
+                        <span className="text-xs font-bold block">{v.label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {vehicleType && (
+                    <p className="text-[10px] text-gray-500 mt-2 flex gap-1 items-start">
+                      <Info size={12} className="mt-0.5 shrink-0" />
+                      Vehicle prices are estimated. Final fare depends on vehicle.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <button onClick={handleReserve} className="w-full bg-gradient-to-r from-rose-600 to-pink-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl flex justify-center">
+                Reserve
               </button>
 
+              {/* --- PLAIN FARE BREAKDOWN (No Service Fee) --- */}
               {nights > 0 && (
-                <div className="mt-6 space-y-4 text-gray-600 dark:text-gray-400 text-sm animate-in fade-in">
+                <div className="mt-6 space-y-3 text-sm text-gray-600 dark:text-gray-400">
                   <div className="flex justify-between">
-                    <span className="underline">
-                      ₹{Number(hotel.pricePerNight).toLocaleString("en-IN")} x{" "}
-                      {nights} nights
-                    </span>
-                    <span>
-                      ₹{(hotel.pricePerNight * nights).toLocaleString("en-IN")}
-                    </span>
+                    <span className="underline">₹{hotel.pricePerNight} x {nights} nights</span>
+                    <span>₹{hotel.pricePerNight * nights}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="underline">Cleaning & Service fee</span>
-                    <span>₹1,300</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-800 pt-4 text-lg">
-                    <span>Total</span>
-                    <span>₹{totalPrice.toLocaleString("en-IN")}</span>
+
+                  {vehicleType && (
+                    <div className="flex justify-between text-emerald-600 font-medium">
+                      <span>Est. {VEHICLE_OPTIONS.find(v => v.id === vehicleType)?.label}</span>
+                      <span>~ ₹{(VEHICLE_OPTIONS.find(v => v.id === vehicleType)?.price || 0) * nights}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between font-bold text-lg text-gray-900 dark:text-white border-t pt-4">
+                    <span>Est. Total</span>
+                    <span>~ ₹{totalPrice.toLocaleString("en-IN")}</span>
                   </div>
                 </div>
               )}
+
             </div>
           </div>
         </div>
       </div>
 
-      {/* --- IMAGE LIGHTBOX (CAROUSEL) --- */}
       {lightboxIndex !== null && hotel?.imageUrls && (
-        <div className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-md flex items-center justify-center">
-          {/* Close Button */}
-          <button
-            onClick={() => setLightboxIndex(null)}
-            className="absolute top-6 right-6 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors z-20"
-          >
-            <X size={32} />
-          </button>
-
-          {/* Previous Arrow */}
-          <button
-            onClick={prevImage}
-            className="absolute left-4 md:left-8 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-20"
-          >
-            <ChevronLeft size={48} />
-          </button>
-
-          {/* Main Image */}
-          <div className="relative w-full h-full max-w-7xl mx-auto flex items-center justify-center p-4">
-            <img
-              src={hotel.imageUrls[lightboxIndex]}
-              className="max-w-full max-h-[85vh] object-contain rounded-md shadow-2xl animate-in fade-in zoom-in-95 duration-300"
-              alt={`Full screen view ${lightboxIndex}`}
-            />
-          </div>
-
-          {/* Next Arrow */}
-          <button
-            onClick={nextImage}
-            className="absolute right-4 md:right-8 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-20"
-          >
-            <ChevronRight size={48} />
-          </button>
-
-          {/* Counter */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/80 font-mono text-sm">
-            {lightboxIndex + 1} / {hotel.imageUrls.length}
-          </div>
+        <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center">
+          <button onClick={() => setLightboxIndex(null)} className="absolute top-6 right-6 text-white"><X size={32} /></button>
+          <button onClick={prevImage} className="absolute left-4 text-white"><ChevronLeft size={48} /></button>
+          <img src={hotel.imageUrls[lightboxIndex]} className="max-h-[85vh] max-w-full object-contain" />
+          <button onClick={nextImage} className="absolute right-4 text-white"><ChevronRight size={48} /></button>
         </div>
       )}
     </main>
