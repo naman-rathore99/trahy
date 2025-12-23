@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const decodedToken = await auth.verifyIdToken(token);
     const userId = decodedToken.uid;
 
-    // 2. Get Data
+    // 2. Get Data (Updated to capture Vehicle Fields)
     const body = await request.json();
     const {
       listingId,
@@ -34,9 +34,14 @@ export async function POST(request: Request) {
       guests,
       totalAmount,
       serviceType,
+      // --- NEW FIELDS ---
+      vehicleIncluded,
+      vehicleType,
+      vehiclePricePerDay,
+      vehicleTotalAmount
     } = body;
 
-    // 3. Save Pending Booking
+    // 3. Save Pending Booking (Now includes Vehicle Data)
     const bookingRef = await db.collection("bookings").add({
       userId,
       listingId,
@@ -47,7 +52,15 @@ export async function POST(request: Request) {
       checkOut,
       guests,
       totalAmount,
+
+      // --- CRITICAL UPDATE: Saving Vehicle Info ---
+      vehicleIncluded: vehicleIncluded || false,
+      vehicleType: vehicleType || null,
+      vehiclePrice: vehiclePricePerDay || 0,
+      vehicleTotalAmount: vehicleTotalAmount || 0,
+
       status: "pending",
+      paymentStatus: "pending",
       createdAt: new Date().toISOString(),
     });
 
@@ -74,7 +87,7 @@ export async function POST(request: Request) {
     const payRequest = StandardCheckoutPayRequest.builder()
       .merchantOrderId(merchantTransactionId)
       .amount(amountInPaise)
-      .redirectUrl(callbackRoute) // <--- PhonePe will POST the result here
+      .redirectUrl(callbackRoute)
       .build();
 
     // 6. Execute

@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   ShieldCheck,
   CreditCard,
+  Briefcase, // Added for Trips icon
 } from "lucide-react";
 import Link from "next/link";
 import { getAuth, onAuthStateChanged, signOut, User } from "firebase/auth";
@@ -43,12 +44,10 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
       if (currentUser) {
         try {
           const data = await apiRequest("/api/user/me", "GET");
-          // Only set role if we actually got a user profile back
           if (data?.user?.role) {
             setUserRole(data.user.role);
           }
         } catch (err: any) {
-        
           if (err.message.includes("Profile not found")) {
             console.warn("User logged in, but has no database profile yet.");
             setUserRole(null);
@@ -95,19 +94,16 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
   };
 
   // --- STYLE LOGIC ---
-
-  // Is the navbar solid white? (Scrolled OR Menu Open OR Default Variant)
   const isSolidState = isScrolled || isMobileMenuOpen || variant === "default";
 
-  // Navbar Background
   const navBackground = isSolidState
-    ? "bg-white dark:bg-slate-900 shadow-sm py-4" // Removed transparency for better visibility
+    ? "bg-white dark:bg-slate-900 shadow-sm py-4"
     : "bg-transparent py-6";
 
-  // Text Colors
   const textColor = isSolidState
     ? "text-gray-900 dark:text-white"
     : "text-white";
+
   const buttonBorder = isSolidState
     ? "border-gray-200 dark:border-slate-700"
     : "border-white/30";
@@ -138,6 +134,16 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             </li>
             <li className="hover:opacity-70 cursor-pointer">Packages</li>
             <li className="hover:opacity-70 cursor-pointer">Destinations</li>
+
+            {/* Added Trips Link to Main Nav for Quick Access */}
+            {firebaseUser && (
+              <li>
+                <Link href="/trips" className="hover:opacity-70 transition-opacity">
+                  My Trips
+                </Link>
+              </li>
+            )}
+
             {!firebaseUser && (
               <li>
                 <Link
@@ -153,7 +159,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
           {/* --- DESKTOP ACTIONS --- */}
           <div className="hidden md:flex items-center gap-4">
             <button
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-full transition-colors ${textColor} ${buttonBorder} hover:bg-black/5`}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-full transition-colors ${textColor} ${buttonBorder} hover:bg-black/5 dark:hover:bg-white/10`}
             >
               <Globe size={16} /> <span>EN</span>
             </button>
@@ -163,11 +169,10 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                 {!firebaseUser ? (
                   <Link
                     href="/login"
-                    className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 active:scale-95 ${
-                      isSolidState
+                    className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 active:scale-95 ${isSolidState
                         ? "bg-black text-white"
                         : "bg-white text-black"
-                    }`}
+                      }`}
                   >
                     <UserIcon size={18} /> <span>Login</span>
                   </Link>
@@ -175,7 +180,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                   <div className="relative" ref={profileRef}>
                     <button
                       onClick={() => setIsProfileOpen(!isProfileOpen)}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-full transition-colors ${textColor} ${buttonBorder} hover:bg-black/5`}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-full transition-colors ${textColor} ${buttonBorder} hover:bg-black/5 dark:hover:bg-white/10`}
                     >
                       {firebaseUser.photoURL ? (
                         <img
@@ -185,7 +190,10 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                         />
                       ) : (
                         <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center ${isSolidState ? "bg-gray-200 text-gray-500" : "bg-white/20 text-white"}`}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center ${isSolidState
+                              ? "bg-gray-200 text-gray-500"
+                              : "bg-white/20 text-white"
+                            }`}
                         >
                           <UserIcon size={14} />
                         </div>
@@ -197,9 +205,8 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
 
                     {/* Desktop Dropdown */}
                     {isProfileOpen && (
-                      <div className="absolute right-0 mt-3 w-64 rounded-xl shadow-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 py-2 z-[70]">
-                        {/* ... (Keep existing desktop dropdown content) ... */}
-                        <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
+                      <div className="absolute right-0 mt-3 w-64 rounded-xl shadow-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 py-2 z-[70] animate-in fade-in zoom-in-95 duration-200">
+                        <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50 rounded-t-xl">
                           <p className="text-sm font-bold truncate text-gray-900 dark:text-white">
                             {firebaseUser.displayName}
                           </p>
@@ -207,47 +214,52 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                             {firebaseUser.email}
                           </p>
                         </div>
+
                         <div className="py-2">
                           <Link
+                            href="/trips"
+                            onClick={() => setIsProfileOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            <Briefcase size={16} className="text-rose-600" /> My Trips
+                          </Link>
+
+                          <Link
                             href="/profile"
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50"
+                            onClick={() => setIsProfileOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                           >
                             <UserIcon size={16} /> My Profile
                           </Link>
-                          {/* OWNER LINKS (Admin OR Partner) */}
+
+                          {/* OWNER LINKS */}
                           {(userRole === "admin" || userRole === "partner") && (
                             <>
+                              <div className="border-t border-gray-100 dark:border-slate-800 my-1"></div>
                               <Link
                                 href="/admin"
                                 onClick={() => setIsProfileOpen(false)}
-                                className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                                className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-gray-700 dark:text-gray-200"
                               >
-                                <LayoutDashboard
-                                  size={16}
-                                  className="text-gray-500 dark:text-gray-400"
-                                />{" "}
-                                Owner Dashboard
+                                <LayoutDashboard size={16} /> Owner Dashboard
                               </Link>
                               {userRole === "admin" && (
                                 <Link
                                   href="/admin/requests"
                                   onClick={() => setIsProfileOpen(false)}
-                                  className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                                  className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-gray-700 dark:text-gray-200"
                                 >
-                                  <ShieldCheck
-                                    size={16}
-                                    className="text-gray-500 dark:text-gray-400"
-                                  />{" "}
-                                  Join Requests
+                                  <ShieldCheck size={16} /> Join Requests
                                 </Link>
                               )}
                             </>
                           )}
                         </div>
-                        <div className="border-t border-gray-100 pt-1">
+
+                        <div className="border-t border-gray-100 dark:border-slate-800 pt-1">
                           <button
                             onClick={handleLogout}
-                            className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50"
+                            className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-b-xl transition-colors"
                           >
                             <LogOut size={16} /> Log Out
                           </button>
@@ -260,18 +272,17 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             )}
           </div>
 
-          {/* --- MOBILE TOGGLE BUTTON (FIXED) --- */}
+          {/* --- MOBILE TOGGLE BUTTON --- */}
           <div className="md:hidden flex items-center gap-2 relative z-[60]">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className={`
                 p-2 rounded-full transition-all duration-200 shadow-sm
-                ${
-                  isMobileMenuOpen
-                    ? "bg-gray-100 text-black" // Active: Light Gray Background, Black Icon
-                    : isSolidState
-                      ? "bg-transparent text-black" // Scrolled: Transparent BG, Black Icon
-                      : "bg-white text-black" // Hero: White Background, Black Icon (High Visibility)
+                ${isMobileMenuOpen
+                  ? "bg-gray-100 text-black"
+                  : isSolidState
+                    ? "bg-transparent text-black dark:text-white"
+                    : "bg-white text-black"
                 }
               `}
             >
@@ -292,6 +303,15 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
           <li onClick={() => setIsMobileMenuOpen(false)}>
             <Link href="/">Home</Link>
           </li>
+
+          {firebaseUser && (
+            <li onClick={() => setIsMobileMenuOpen(false)}>
+              <Link href="/trips" className="flex items-center gap-2 text-rose-600">
+                <Briefcase size={20} /> My Trips
+              </Link>
+            </li>
+          )}
+
           <li onClick={() => setIsMobileMenuOpen(false)}>
             <Link href="/packages">Packages</Link>
           </li>
@@ -323,7 +343,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             </Link>
           ) : (
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl">
+              <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-slate-900 rounded-xl">
                 {firebaseUser.photoURL ? (
                   <img
                     src={firebaseUser.photoURL}
@@ -331,12 +351,12 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                     className="w-10 h-10 rounded-full"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center text-gray-500 dark:text-gray-300">
                     <UserIcon size={20} />
                   </div>
                 )}
                 <div className="overflow-hidden">
-                  <p className="font-bold text-gray-900 truncate">
+                  <p className="font-bold text-gray-900 dark:text-white truncate">
                     {firebaseUser.displayName}
                   </p>
                   <p className="text-sm text-gray-500 truncate">
@@ -348,14 +368,14 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
               <Link
                 href="/profile"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="w-full border border-gray-200 text-gray-900 py-3 rounded-lg text-center font-semibold"
+                className="w-full border border-gray-200 dark:border-slate-800 text-gray-900 dark:text-white py-3 rounded-lg text-center font-semibold"
               >
                 My Profile
               </Link>
 
               <button
                 onClick={handleLogout}
-                className="w-full bg-red-50 text-red-600 py-3 rounded-lg font-semibold"
+                className="w-full bg-red-50 dark:bg-red-900/10 text-red-600 py-3 rounded-lg font-semibold"
               >
                 Log Out
               </button>

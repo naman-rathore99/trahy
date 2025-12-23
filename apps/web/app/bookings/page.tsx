@@ -1,260 +1,160 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { apiRequest } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { getAuth } from "firebase/auth";
+import { getFirestore, collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { app } from "@/lib/firebase";
 import Navbar from "@/components/Navbar";
 import {
-  Loader2,
-  Calendar,
-  MapPin,
-  Users,
-  CheckCircle,
-  Clock,
-  ChevronRight,
-  AlertCircle,
-  XCircle,
+  Loader2, Calendar, MapPin, Car, Phone, User, CheckCircle, XCircle, Filter, MessageSquare
 } from "lucide-react";
-import Link from "next/link";
 import { format, parseISO } from "date-fns";
 
-function BookingsContent() {
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("all"); // Default to 'all'
+interface Booking {
+  id: string;
+  listingName: string;
+  listingImage: string;
+  checkIn: string;
+  checkOut: string;
+  totalAmount: number;
+  status: "confirmed" | "pending" | "cancelled" | "failed";
+  vehicleIncluded?: boolean;
+  vehicleType?: string;
+  createdAt: string;
+  // Support Tickets Array
+  supportTickets?: { message: string; type: string; createdAt: string }[];
+  hasOpenTicket?: boolean;
+}
 
-  const searchParams = useSearchParams();
-  const success = searchParams.get("success");
+export default function AdminBookingsPage() {
+  const router = useRouter();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "vehicle" | "queries" | "confirmed">("all");
 
   useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const data = await apiRequest("/api/admin/bookings", "GET");
-        setBookings(data.bookings || []);
-      } catch (err) {
-        console.error("Failed to load bookings", err);
-      } finally {
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      if (!user) { router.push("/login"); return; }
+      const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
+      const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
+        setBookings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)));
         setLoading(false);
-      }
-    };
-    fetchBookings();
-  }, []);
+      });
+      return () => unsubscribeSnapshot();
+    });
+    return () => unsubscribeAuth();
+  }, [router]);
 
-  // --- FILTERING LOGIC ---
-  const filteredBookings = bookings.filter((booking) => {
-    if (activeTab === "all") return true;
-    if (activeTab === "confirmed") return booking.status === "confirmed";
-    if (activeTab === "pending") return booking.status === "pending";
-    if (activeTab === "failed")
-      return booking.status === "failed" || booking.status === "cancelled";
+  // Filter Logic
+  const filteredBookings = bookings.filter((b) => {
+    if (filter === "vehicle") return b.vehicleIncluded && b.status !== 'cancelled';
+    if (filter === "queries") return b.supportTickets && b.supportTickets.length > 0;
+    if (filter === "confirmed") return b.status === "confirmed";
     return true;
   });
 
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="animate-spin text-rose-600" size={32} />
-      </div>
-    );
+  const queryCount = bookings.filter(b => b.hasOpenTicket).length;
+
+  if (loading) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-28 md:pt-32">
-      {/* --- STATUS BANNERS --- */}
-      {success === "true" && (
-        <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-4 animate-in slide-in-from-top-4">
-          <div className="bg-green-100 p-2 rounded-full text-green-600">
-            <CheckCircle size={24} />
-          </div>
+    <main className="min-h-screen bg-gray-50 pb-20">
+      <Navbar variant="default" />
+      <div className="max-w-6xl mx-auto px-4 pt-32">
+
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
           <div>
-            <h3 className="font-bold text-green-800">Payment Successful!</h3>
-            <p className="text-sm text-green-700">
-              Your booking has been confirmed.
-            </p>
+            <h1 className="text-3xl font-extrabold text-gray-900">Booking Manager</h1>
+            <p className="text-gray-500 text-sm">Monitor bookings, vehicles, and user requests.</p>
           </div>
-          <button
-            onClick={() => window.history.replaceState({}, "", "/bookings")}
-            className="ml-auto text-green-600 font-bold text-sm"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {success === "false" && (
-        <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-4 animate-in slide-in-from-top-4">
-          <div className="bg-red-100 p-2 rounded-full text-red-600">
-            <AlertCircle size={24} />
+          <div className="bg-white px-4 py-2 rounded-xl border flex gap-4 text-sm font-bold">
+            <span className="flex items-center gap-2 text-emerald-600">
+              <div className="w-2 h-2 rounded-full bg-emerald-500"></div> {bookings.filter(b => b.status === 'confirmed').length} Confirmed
+            </span>
+            <span className="flex items-center gap-2 text-blue-600">
+              <div className="w-2 h-2 rounded-full bg-blue-500"></div> {queryCount} Queries
+            </span>
           </div>
-          <div>
-            <h3 className="font-bold text-red-800">Payment Failed</h3>
-            <p className="text-sm text-red-700">
-              The transaction failed or was cancelled.
-            </p>
-          </div>
-          <button
-            onClick={() => window.history.replaceState({}, "", "/bookings")}
-            className="ml-auto text-red-600 font-bold text-sm"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* --- HEADER & FILTER TABS --- */}
-      <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">My Bookings</h1>
-          <p className="text-gray-500 mt-1">Manage your trips and payments</p>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-          {["all", "confirmed", "pending", "failed"].map((tab) => (
+        {/* TABS */}
+        <div className="flex gap-2 overflow-x-auto pb-4 mb-4">
+          {[
+            { id: "all", label: "All" },
+            { id: "vehicle", label: "Vehicle Needs", icon: <Car size={16} /> },
+            { id: "queries", label: "User Queries", icon: <MessageSquare size={16} />, alert: queryCount > 0 },
+            { id: "confirmed", label: "Confirmed" },
+          ].map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-all ${
-                activeTab === tab
-                  ? "bg-black text-white shadow-md"
-                  : "text-gray-500 hover:bg-gray-50 hover:text-black"
-              }`}
+              key={tab.id}
+              onClick={() => setFilter(tab.id as any)}
+              className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all ${filter === tab.id ? "bg-black text-white" : "bg-white border text-gray-600"}`}
             >
-              {tab}
+              {tab.icon} {tab.label}
+              {tab.alert && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* --- EMPTY STATE --- */}
-      {filteredBookings.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 bg-white rounded-3xl border border-dashed border-gray-300 text-center">
-          <div className="bg-gray-50 p-4 rounded-full mb-4">
-            <Calendar size={48} className="text-gray-300" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">
-            No {activeTab === "all" ? "" : activeTab} bookings
-          </h2>
-          <p className="text-gray-500 mb-6 max-w-sm">
-            You don't have any {activeTab === "all" ? "" : activeTab} bookings
-            right now.
-          </p>
-          {activeTab === "all" && (
-            <Link
-              href="/"
-              className="px-8 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-lg mt-4"
-            >
-              Start Exploring
-            </Link>
-          )}
-        </div>
-      ) : (
-        /* --- LIST --- */
-        <div className="space-y-6">
+        {/* LIST */}
+        <div className="space-y-4">
           {filteredBookings.map((booking) => (
-            <div
-              key={booking.id}
-              className="group bg-white rounded-2xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row gap-6 relative overflow-hidden"
-            >
-              {/* Status Bar Color */}
-              <div
-                className={`absolute left-0 top-0 bottom-0 w-1 ${
-                  booking.status === "confirmed"
-                    ? "bg-green-500"
-                    : booking.status === "failed"
-                      ? "bg-red-500"
-                      : "bg-yellow-500"
-                }`}
-              />
+            <div key={booking.id} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
 
-              <div className="w-full md:w-64 h-48 md:h-40 bg-gray-100 rounded-xl overflow-hidden shrink-0 relative">
-                <img
-                  src={booking.listingImage || "/placeholder.jpg"}
-                  alt={booking.listingName}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              <div className="flex-1 flex flex-col justify-between py-1">
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-xl font-bold text-gray-900">
-                      {booking.listingName}
-                    </h3>
-
-                    {/* Badge Logic */}
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1 ${
-                        booking.status === "confirmed"
-                          ? "bg-green-50 text-green-700 border border-green-100"
-                          : booking.status === "failed"
-                            ? "bg-red-50 text-red-700 border border-red-100"
-                            : "bg-yellow-50 text-yellow-700 border border-yellow-100"
-                      }`}
-                    >
-                      {booking.status === "confirmed" && (
-                        <CheckCircle size={12} />
-                      )}
-                      {booking.status === "pending" && <Clock size={12} />}
-                      {booking.status === "failed" && <XCircle size={12} />}
-                      {booking.status}
-                    </span>
-                  </div>
-
-                  <div className="flex gap-4 text-sm text-gray-600 mb-4">
-                    <div className="flex items-center gap-2">
-                      <Calendar size={16} />{" "}
-                      {booking.checkIn
-                        ? format(parseISO(booking.checkIn), "MMM dd")
-                        : "?"}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users size={16} /> {booking.guests} Guests
-                    </div>
+              {/* MAIN INFO */}
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex gap-4">
+                  <img src={booking.listingImage} className="w-16 h-16 rounded-lg object-cover bg-gray-100" />
+                  <div>
+                    <h3 className="font-bold text-gray-900">{booking.listingName}</h3>
+                    <p className="text-xs text-gray-500">ID: #{booking.id.slice(0, 6)} • {format(parseISO(booking.checkIn), "dd MMM")} - {format(parseISO(booking.checkOut), "dd MMM")}</p>
                   </div>
                 </div>
-
-                <div className="flex justify-between items-center border-t border-gray-100 pt-4 mt-2">
-                  <p className="text-xl font-bold">
-                    ₹{Number(booking.totalAmount).toLocaleString("en-IN")}
-                  </p>
-
-                  {/* Action Buttons based on Status */}
-                  {booking.status === "pending" ||
-                  booking.status === "failed" ? (
-                    <Link
-                      href={`/book/${booking.listingId}?start=${booking.checkIn}&end=${booking.checkOut}&guests=${booking.guests}`}
-                      className="flex items-center gap-2 px-5 py-2 bg-rose-600 text-white rounded-lg text-sm font-bold hover:bg-rose-700"
-                    >
-                      Retry Payment <ChevronRight size={16} />
-                    </Link>
-                  ) : (
-                    <button className="flex items-center gap-2 px-5 py-2 bg-black text-white rounded-lg text-sm font-bold">
-                      Details <ChevronRight size={16} />
-                    </button>
-                  )}
-                </div>
+                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${booking.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100'}`}>
+                  {booking.status}
+                </span>
               </div>
+
+              {/* --- 1. VEHICLE ALERT --- */}
+              {booking.vehicleIncluded && booking.status !== 'cancelled' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-center gap-3">
+                  <Car className="text-amber-600" size={20} />
+                  <div>
+                    <p className="text-xs font-bold text-amber-800">NEEDS VEHICLE: {booking.vehicleType}</p>
+                    <p className="text-[10px] text-amber-700">Guest paid for transport package.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* --- 2. USER QUERIES (NEW) --- */}
+              {booking.supportTickets && booking.supportTickets.length > 0 && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 animate-in fade-in">
+                  <div className="flex items-center gap-2 mb-2 text-blue-800 font-bold text-sm">
+                    <MessageSquare size={16} /> User Requests
+                  </div>
+                  <ul className="space-y-2">
+                    {booking.supportTickets.map((ticket, idx) => (
+                      <li key={idx} className="bg-white p-2 rounded border border-blue-100 text-sm text-gray-700">
+                        <p className="font-medium text-blue-600 text-xs mb-1 uppercase">{ticket.type === 'date_change' ? '📅 Date Change' : '💬 General Query'}</p>
+                        "{ticket.message}"
+                        <p className="text-[10px] text-gray-400 mt-1">{new Date(ticket.createdAt).toLocaleString()}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-3 flex gap-2">
+                    <button className="text-xs font-bold bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">Reply to Guest</button>
+                    <button className="text-xs font-bold border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-white">Mark Resolved</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
-      )}
-    </div>
-  );
-}
-
-export default function BookingsPage() {
-  return (
-    <main className="min-h-screen bg-gray-50 pb-20 font-sans">
-      <Navbar variant="default" />
-      <Suspense
-        fallback={
-          <div className="min-h-screen flex items-center justify-center">
-            <Loader2 className="animate-spin" />
-          </div>
-        }
-      >
-        <BookingsContent />
-      </Suspense>
+      </div>
     </main>
   );
 }

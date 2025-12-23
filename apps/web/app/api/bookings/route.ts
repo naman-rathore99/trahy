@@ -1,98 +1,70 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth";
 import { initAdmin } from "@/lib/firebaseAdmin";
+import { getFirestore } from "firebase-admin/firestore";
 
-export async function POST(request: Request) {
-  await initAdmin();
-  const db = getFirestore();
-  const auth = getAuth();
-
-  try {
-    // 1. Security: Get the User ID from the Token
-    // The frontend apiRequest automatically sends the "Authorization: Bearer <token>"
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json(
-        { error: "You must be logged in" },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.split("Bearer ")[1];
-    const decodedToken = await auth.verifyIdToken(token);
-    const userId = decodedToken.uid;
-
-    // 2. Get the Booking Data
-    const body = await request.json();
-    const {
-      listingId,
-      listingName,
-      listingImage,
-      checkIn,
-      checkOut,
-      guests,
-      totalAmount,
-      serviceType,
-    } = body;
-
-    // 3. Save to "bookings" collection in Firestore
-    const bookingRef = await db.collection("bookings").add({
-      userId, // Important: This links the booking to the user!
-      listingId,
-      listingName,
-      listingImage: listingImage || "",
-      serviceType: serviceType || "hotel",
-      checkIn,
-      checkOut,
-      guests,
-      totalAmount,
-      status: "confirmed", // You can change this to 'pending' if you want payment logic later
-      createdAt: new Date().toISOString(),
-    });
-
-    return NextResponse.json({ success: true, bookingId: bookingRef.id });
-  } catch (error) {
-    console.error("Booking Error:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
-  }
-}
-// --- ADD THIS NEW GET FUNCTION ---
 export async function GET(request: Request) {
-  await initAdmin();
-  const db = getFirestore();
-  const auth = getAuth();
+  const { searchParams } = new URL(request.url);
+  const bookingId = searchParams.get("id");
+
+  // --- DEBUGGING LOG ---
+  // This will print exactly what the payment gateway sent to your terminal
+  console.log("--- PAYMENT CALLBACK ---");
+  console.log("ID:", bookingId);
+  searchParams.forEach((value, key) => console.log(`${key}: ${value}`));
+
+  // 1. GET STATUS FLAGS
+  const code = searchParams.get("code");
+  const status = searchParams.get("status");
+  const failureMessage = searchParams.get("message");
+
+  // 2. DETERMINE SUCCESS VS FAILURE
+  // We define FAILURE explicitly. If it's not a known failure, we treat it as success.
+  // This prevents valid payments from failing just because the code string didn't match perfectly.
+  const isExplicitFailure =
+    (code && code !== "PAYMENT_SUCCESS" && code !== "SUCCESS") ||
+    (status && status !== "success" && status !== "paid");
+
+  // If it's not a failure, we assume it's a success.
+  const isSuccess = !isExplicitFailure;
+
+  if (!bookingId) {
+    return NextResponse.json({ error: "No Booking ID" }, { status: 400 });
+  }
 
   try {
-    // 1. Verify User Token (Security Check)
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    await initAdmin();
+    const db = getFirestore();
+    const bookingRef = db.collection("bookings").doc(bookingId);
+
+    if (isSuccess) {
+      // --- CASE: SUCCESS ---
+      console.log(`✅ Payment CONFIRMED for ${bookingId}`);
+
+      await bookingRef.update({
+        status: "confirmed",
+        paymentStatus: "paid",
+        updatedAt: new Date().toISOString(),
+      });
+
+      return NextResponse.redirect(new URL(`/book/success/${bookingId}`, request.url));
+
+    } else {
+      // --- CASE: FAILED ---
+      console.warn(`❌ Payment FAILED for ${bookingId} (Code: ${code})`);
+
+      await bookingRef.update({
+        status: "failed",
+        paymentStatus: "failed",
+        failureReason: failureMessage || code || "unknown",
+        updatedAt: new Date().toISOString(),
+      });
+
+      return NextResponse.redirect(new URL(`/book/failure/${bookingId}`, request.url));
     }
 
-    const token = authHeader.split("Bearer ")[1];
-    const decodedToken = await auth.verifyIdToken(token);
-    const userId = decodedToken.uid; // <--- This is the logged-in user's ID
-
-    // 2. Query ONLY this user's bookings
-    const bookingsSnapshot = await db
-      .collection("bookings")
-      .where("userId", "==", userId) // <--- The Filter Magic
-      .orderBy("createdAt", "desc") // Show newest first
-      .get();
-
-    const bookings = bookingsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    return NextResponse.json({ bookings });
-
   } catch (error) {
-    console.error("Fetch Bookings Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error("Callback Error:", error);
+    // If server error, still try to show the user their trips page
+    return NextResponse.redirect(new URL(`/trips?error=server_error`, request.url));
   }
 }

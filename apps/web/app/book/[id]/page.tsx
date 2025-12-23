@@ -88,7 +88,23 @@ export default function BookingSummaryPage({
     }
 
     setPaymentLoading(true);
+    // inside handlePayment() in app/book/[id]/page.tsx
+    const response = await apiRequest("/api/payment", "POST", {
+      listingId: hotel.id,
+      listingName: hotel.name,
+      listingImage: hotel.imageUrl,
+      serviceType: vehicleId ? "package" : "hotel",
+      checkIn,
+      checkOut,
+      guests: Number(adults) + Number(children),
+      totalAmount: totalPrice,
 
+      // --- MAKE SURE THESE ARE EXACTLY HERE ---
+      vehicleIncluded: !!vehicleId,
+      vehicleType: vehicleName,
+      vehiclePricePerDay: vehiclePrice, // Ensure this variable exists from URL params
+      vehicleTotalAmount: vehiclePrice * nights
+    });
     try {
       // Call Payment API
       const response = await apiRequest("/api/payment", "POST", {
