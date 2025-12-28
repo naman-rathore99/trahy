@@ -120,16 +120,12 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             className={`text-2xl font-bold tracking-wide uppercase relative z-[60] ${textColor}`}
             onClick={() => setIsMobileMenuOpen(false)}
           >
-<<<<<<< HEAD
             shubyatra
             <span className="text-xl font-bold tracking-wide uppercase relative z-[60] text-indigo-500">
               .
 
             </span>
             world
-=======
-            Trav & Stay
->>>>>>> 594ed647f0dc8031403f84ef2c6e741b0f6d4be4
           </Link>
 
           {/* --- DESKTOP MENU --- */}
@@ -141,13 +137,8 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                 Home
               </Link>
             </li>
-<<<<<<< HEAD
             {/* <li className="hover:opacity-70 cursor-pointer">Packages</li> */}
             {/* <li className="hover:opacity-70 cursor-pointer">Destinations</li> */}
-=======
-            <li className="hover:opacity-70 cursor-pointer">Packages</li>
-            <li className="hover:opacity-70 cursor-pointer">Destinations</li>
->>>>>>> 594ed647f0dc8031403f84ef2c6e741b0f6d4be4
 
             {/* Added Trips Link to Main Nav for Quick Access */}
             {firebaseUser && (
@@ -184,13 +175,8 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                   <Link
                     href="/login"
                     className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 active:scale-95 ${isSolidState
-<<<<<<< HEAD
                       ? "bg-black text-white"
                       : "bg-white text-black"
-=======
-                        ? "bg-black text-white"
-                        : "bg-white text-black"
->>>>>>> 594ed647f0dc8031403f84ef2c6e741b0f6d4be4
                       }`}
                   >
                     <UserIcon size={18} /> <span>Login</span>
@@ -210,13 +196,8 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                       ) : (
                         <div
                           className={`w-6 h-6 rounded-full flex items-center justify-center ${isSolidState
-<<<<<<< HEAD
                             ? "bg-gray-200 text-gray-500"
                             : "bg-white/20 text-white"
-=======
-                              ? "bg-gray-200 text-gray-500"
-                              : "bg-white/20 text-white"
->>>>>>> 594ed647f0dc8031403f84ef2c6e741b0f6d4be4
                             }`}
                         >
                           <UserIcon size={14} />
@@ -336,15 +317,9 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             </li>
           )}
 
-<<<<<<< HEAD
           {/* <li onClick={() => setIsMobileMenuOpen(false)}>
             <Link href="/packages">Packages</Link>
           </li> */}
-=======
-          <li onClick={() => setIsMobileMenuOpen(false)}>
-            <Link href="/packages">Packages</Link>
-          </li>
->>>>>>> 594ed647f0dc8031403f84ef2c6e741b0f6d4be4
 
           {userRole === "admin" && (
             <li onClick={() => setIsMobileMenuOpen(false)}>

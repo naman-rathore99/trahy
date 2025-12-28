@@ -437,16 +437,33 @@ export default function HotelDetailsPage({ params }: { params: Promise<{ id: str
                           <button onClick={selectTonight} className="text-xs bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 px-3 py-1 rounded-full font-bold">Stay Tonight</button>
                           <button onClick={() => setIsCalendarOpen(false)} className="text-xs text-rose-600 dark:text-rose-500 font-bold">Close</button>
                         </div>
-                        <DayPicker
-                          mode={bookingMode === "single" ? "single" : "range"}
-                          selected={bookingMode === "single" ? (checkIn ? parseISO(checkIn) : undefined) : { from: checkIn ? parseISO(checkIn) : undefined, to: checkOut ? parseISO(checkOut) : undefined }}
-                          onSelect={handleDateSelect}
-                          disabled={{ before: today }}
-                          modifiersClassNames={{
-                            selected: "bg-rose-600 text-white",
-                            day: "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md"
-                          }}
-                        />
+                        {bookingMode === "single" ? (
+                          <DayPicker
+                            mode="single"
+                            selected={checkIn ? parseISO(checkIn) : undefined}
+                            onSelect={handleDateSelect}
+                            disabled={{ before: today }}
+                            modifiersClassNames={{
+                              selected: "bg-rose-600 text-white",
+                              day: "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md",
+                            }}
+                          />
+                        ) : (
+                          <DayPicker
+                            mode="range"
+                            selected={{
+                              from: checkIn ? parseISO(checkIn) : undefined,
+                              to: checkOut ? parseISO(checkOut) : undefined,
+                            }}
+                            onSelect={handleDateSelect}
+                            disabled={{ before: today }}
+                            modifiersClassNames={{
+                              selected: "bg-rose-600 text-white",
+                              day: "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md",
+                            }}
+                          />
+                        )}
+
                       </div>
                     )}
 
