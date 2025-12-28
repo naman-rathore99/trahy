@@ -159,12 +159,12 @@ export default function HomePage() {
                                 </button>
                             </div>
                         </div>
-                    </div >
-                </div >
-            </div >
+                    </div>
+                </div>
+            </div>
 
             {/* --- TRENDING LISTINGS (WITH BORDER CARDS) --- */}
-            < div className="max-w-[1400px] mx-auto px-4 md:px-8 py-16 md:py-24" >
+            <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-16 md:py-24">
                 <h2 className="text-2xl md:text-3xl font-extrabold text-gray-900 mb-8 tracking-tight">
                     Trending Destinations
                 </h2>
