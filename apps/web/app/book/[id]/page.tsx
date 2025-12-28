@@ -9,12 +9,10 @@ import Navbar from "@/components/Navbar";
 import {
   Loader2,
   ChevronLeft,
-  Calendar,
-  Users,
   ShieldCheck,
   Star,
   MapPin,
-  Car, // Added Car icon
+  Car,
 } from "lucide-react";
 import { format, parseISO, differenceInDays } from "date-fns";
 
@@ -30,11 +28,10 @@ export default function BookingSummaryPage({
   // 1. Get Booking Data from URL
   const checkIn = searchParams.get("start") || "";
   const checkOut = searchParams.get("end") || "";
-  const guests = Number(searchParams.get("guests") || 1);
   const adults = searchParams.get("adults") || "1";
   const children = searchParams.get("children") || "0";
 
-  // 2. Get Vehicle Data from URL (New)
+  // 2. Get Vehicle Data from URL
   const vehicleId = searchParams.get("vehicleId");
   const vehicleName = searchParams.get("vehicleName");
   const vehiclePriceStr = searchParams.get("vehiclePrice");
@@ -66,11 +63,9 @@ export default function BookingSummaryPage({
 
       if (diff > 0) {
         setNights(diff);
-
         // Math: (Room * Nights) + (Vehicle * Nights)
         const roomTotal = diff * hotel.pricePerNight;
         const vehicleTotal = vehiclePrice * diff;
-
         setTotalPrice(roomTotal + vehicleTotal);
       }
     }
@@ -81,59 +76,46 @@ export default function BookingSummaryPage({
     const auth = getAuth(app);
     const user = auth.currentUser;
 
+    // 1. Redirect if not logged in
     if (!user) {
-      alert("Please login to continue");
-      router.push(`/login?redirect=${window.location.pathname}${window.location.search}`);
+      const currentPath = `${window.location.pathname}${window.location.search}`;
+      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
       return;
     }
 
     setPaymentLoading(true);
-    // inside handlePayment() in app/book/[id]/page.tsx
-    const response = await apiRequest("/api/payment", "POST", {
-      listingId: hotel.id,
-      listingName: hotel.name,
-      listingImage: hotel.imageUrl,
-      serviceType: vehicleId ? "package" : "hotel",
-      checkIn,
-      checkOut,
-      guests: Number(adults) + Number(children),
-      totalAmount: totalPrice,
 
-      // --- MAKE SURE THESE ARE EXACTLY HERE ---
-      vehicleIncluded: !!vehicleId,
-      vehicleType: vehicleName,
-      vehiclePricePerDay: vehiclePrice, // Ensure this variable exists from URL params
-      vehicleTotalAmount: vehiclePrice * nights
-    });
     try {
-      // Call Payment API
+      // 2. Call Payment API (Only ONCE)
       const response = await apiRequest("/api/payment", "POST", {
         listingId: hotel.id,
         listingName: hotel.name,
         listingImage: hotel.imageUrl,
-        serviceType: vehicleId ? "package" : "hotel", // Mark as package if vehicle included
+        serviceType: vehicleId ? "package" : "hotel", // Tag as package if vehicle exists
         checkIn,
         checkOut,
         guests: Number(adults) + Number(children),
         totalAmount: totalPrice,
 
-        // Pass Vehicle Data to Backend
+        // --- VEHICLE DATA ---
         vehicleIncluded: !!vehicleId,
         vehicleType: vehicleName,
         vehiclePricePerDay: vehiclePrice,
-        vehicleTotalAmount: vehiclePrice * nights
+        vehicleTotalAmount: vehiclePrice * nights,
+
+        userId: user.uid,
       });
 
-      // Redirect to PhonePe or Confirmation
+      // 3. Handle Success
       if (response.url) {
-        window.location.href = response.url;
+        window.location.href = response.url; // Redirect to Gateway
       } else {
-        // Fallback for demo/testing if no gateway
-        router.push("/trips");
+        router.push("/trips"); // Fallback for testing
       }
     } catch (err: any) {
-      console.error(err);
-      alert("Payment Failed: " + err.message);
+      console.error("Payment Error:", err);
+      alert("Payment Failed: " + (err.message || "Unknown Error"));
+    } finally {
       setPaymentLoading(false);
     }
   };
@@ -167,18 +149,18 @@ export default function BookingSummaryPage({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24">
           {/* --- LEFT: TRIP DETAILS --- */}
           <div className="space-y-8">
-            {/* Dates & Guests */}
             <div className="bg-white text-black p-6 rounded-2xl border border-gray-200 shadow-sm">
               <h2 className="text-xl font-bold mb-4">Your Trip</h2>
 
-              {/* DATES */}
+              {/* Dates */}
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <p className="font-bold text-gray-900">Dates</p>
                   <p className="text-gray-600 text-sm">
                     {checkIn && checkOut ? (
                       <>
-                        {format(parseISO(checkIn), "MMM dd")} – {format(parseISO(checkOut), "MMM dd")}
+                        {format(parseISO(checkIn), "MMM dd")} –{" "}
+                        {format(parseISO(checkOut), "MMM dd")}
                       </>
                     ) : (
                       <span className="text-red-500">Select dates</span>
@@ -193,7 +175,7 @@ export default function BookingSummaryPage({
                 </button>
               </div>
 
-              {/* GUESTS */}
+              {/* Guests */}
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <p className="font-bold text-gray-900">Guests</p>
@@ -209,23 +191,23 @@ export default function BookingSummaryPage({
                 </button>
               </div>
 
-              {/* VEHICLE ADD-ON (Show only if selected) */}
+              {/* Vehicle */}
               {vehicleName && (
                 <div className="flex justify-between items-center border-t border-dashed border-gray-200 pt-4 mt-4">
                   <div>
                     <p className="font-bold text-gray-900 flex items-center gap-2">
                       <Car size={16} className="text-rose-600" /> Vehicle Added
                     </p>
-                    <p className="text-gray-600 text-sm">
-                      {vehicleName}
-                    </p>
+                    <p className="text-gray-600 text-sm">{vehicleName}</p>
                   </div>
-                  <span className="text-sm font-bold text-emerald-600">Included</span>
+                  <span className="text-sm font-bold text-emerald-600">
+                    Included
+                  </span>
                 </div>
               )}
             </div>
 
-            {/* Payment Method (Visual Only) */}
+            {/* Payment Visuals */}
             <div className="bg-white text-black p-6 rounded-2xl border border-gray-200 shadow-sm">
               <h2 className="text-xl font-bold mb-4">Payment Method</h2>
               <div className="flex items-center gap-3 p-3 border border-green-200 bg-green-50 rounded-lg">
@@ -276,7 +258,6 @@ export default function BookingSummaryPage({
 
             <h3 className="font-bold text-lg mb-4">Price Details</h3>
             <div className="space-y-3 text-gray-600 text-sm">
-              {/* Room Cost */}
               <div className="flex justify-between">
                 <span className="underline">
                   ₹{Number(hotel.pricePerNight).toLocaleString("en-IN")} x{" "}
@@ -287,7 +268,6 @@ export default function BookingSummaryPage({
                 </span>
               </div>
 
-              {/* Vehicle Cost (Conditional) */}
               {vehicleName && vehiclePrice > 0 && (
                 <div className="flex justify-between text-emerald-700 font-medium">
                   <span className="flex items-center gap-1">
