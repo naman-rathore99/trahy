@@ -3,10 +3,18 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import Link from "next/link";
-import { Edit, CheckCircle, Clock, Ban, MapPin, Loader2 } from "lucide-react";
+import {
+  Edit,
+  CheckCircle,
+  Clock,
+  Ban,
+  MapPin,
+  Loader2,
+  Hotel,
+} from "lucide-react";
 
-export default function PropertyManagePage() {
-  const [allProperties, setAllProperties] = useState<any[]>([]); // Store EVERYTHING here
+export default function AdminDashboard() {
+  const [allHotels, setAllHotels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Tab Order: Active -> Pending -> Banned
@@ -16,19 +24,19 @@ export default function PropertyManagePage() {
 
   useEffect(() => {
     setLoading(true);
-    // ✅ FIX 1: Correct API Endpoint (/properties, not /hotels)
-    apiRequest("/api/admin/properties", "GET")
+    // ✅ FIX 1: Use the correct API endpoint for HOTELS
+    apiRequest("/api/admin/hotels", "GET")
       .then((data) => {
-        // ✅ FIX 2: Correct Data Key (data.properties, not data.hotels)
-        setAllProperties(data.properties || []);
+        // ✅ FIX 2: Read from 'data.hotels'
+        setAllHotels(data.hotels || []);
       })
-      .catch((err) => console.error("Failed to load properties:", err))
+      .catch((err) => console.error("Failed to load hotels:", err))
       .finally(() => setLoading(false));
   }, []);
 
-  // ✅ FIX 3: Filter on the frontend for instant tab switching
-  const filteredProperties = allProperties.filter(
-    (p) => (p.status || "pending") === activeTab
+  // Filter logic
+  const filteredHotels = allHotels.filter(
+    (h) => (h.status || "pending") === activeTab
   );
 
   return (
@@ -37,15 +45,15 @@ export default function PropertyManagePage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-              Manage Properties
+              Manage Hotels
             </h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-              Review and manage hotel listings.
+              Review and manage hotel listings in Mathura & Vrindavan.
             </p>
           </div>
         </div>
 
-        {/* --- RESPONSIVE TABS --- */}
+        {/* --- TABS --- */}
         <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-800 mb-6 scrollbar-hide">
           <button
             onClick={() => setActiveTab("approved")}
@@ -55,7 +63,7 @@ export default function PropertyManagePage() {
                 : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
             }`}
           >
-            <CheckCircle size={16} /> Active Listings
+            <CheckCircle size={16} /> Active Hotels
           </button>
           <button
             onClick={() => setActiveTab("pending")}
@@ -79,40 +87,36 @@ export default function PropertyManagePage() {
           </button>
         </div>
 
-        {/* --- CONTENT AREA --- */}
+        {/* --- LIST AREA --- */}
         {loading ? (
           <div className="p-20 flex justify-center">
             <Loader2 className="animate-spin text-gray-400" size={32} />
           </div>
-        ) : filteredProperties.length === 0 ? (
+        ) : filteredHotels.length === 0 ? (
           <div className="bg-white dark:bg-gray-900 p-12 text-center rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 mb-4">
-              {activeTab === "approved" && (
-                <CheckCircle className="text-gray-400" />
-              )}
-              {activeTab === "pending" && <Clock className="text-gray-400" />}
-              {activeTab === "banned" && <Ban className="text-gray-400" />}
+              <Hotel className="text-gray-400" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-              No properties found
+              No hotels found
             </h3>
             <p className="text-gray-500 dark:text-gray-400">
-              There are no {activeTab} properties right now.
+              There are no {activeTab} hotels right now.
             </p>
           </div>
         ) : (
           <div className="grid gap-4">
-            {filteredProperties.map((prop) => (
+            {filteredHotels.map((hotel) => (
               <div
-                key={prop.id}
+                key={hotel.id}
                 className="bg-white dark:bg-gray-900 p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row gap-6 items-start md:items-center transition-colors hover:border-gray-300 dark:hover:border-gray-700"
               >
                 {/* Image */}
                 <div className="w-full md:w-32 h-48 md:h-24 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 relative">
-                  {prop.imageUrl ? (
+                  {hotel.imageUrl ? (
                     <img
-                      src={prop.imageUrl}
-                      alt={prop.name}
+                      src={hotel.imageUrl}
+                      alt={hotel.name}
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -127,18 +131,18 @@ export default function PropertyManagePage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate">
-                        {prop.name}
+                        {hotel.name}
                       </h3>
                       <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-sm mt-1">
                         <MapPin size={14} />
-                        {prop.location}
+                        {hotel.location || "Mathura"}
                       </div>
                     </div>
 
-                    {/* Price (Mobile: Hidden, Desktop: Visible) */}
+                    {/* Price */}
                     <div className="hidden md:block text-right">
                       <div className="font-bold text-lg text-gray-900 dark:text-white">
-                        ₹{prop.pricePerNight}
+                        ₹{hotel.pricePerNight}
                       </div>
                       <div className="text-xs text-gray-500">per night</div>
                     </div>
@@ -149,16 +153,17 @@ export default function PropertyManagePage() {
                     <span className="font-medium text-gray-700 dark:text-gray-300">
                       Owner:
                     </span>{" "}
-                    {prop.ownerName || "Unknown"}
+                    {hotel.ownerName || "Unknown"}
                     <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                    <span>{prop.ownerEmail || "No Email"}</span>
+                    <span>{hotel.ownerEmail || "No Email"}</span>
                   </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex w-full md:w-auto gap-3 mt-2 md:mt-0">
+                  {/* ✅ FIX 3: Link points to /admin/hotels/[id] */}
                   <Link
-                    href={`/admin/hotels/${prop.id}`}
+                    href={`/admin/hotels/${hotel.id}`}
                     className="flex-1 md:flex-none text-center bg-black dark:bg-white text-white dark:text-black px-5 py-2.5 rounded-lg font-bold hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm"
                   >
                     <Edit size={16} /> Manage

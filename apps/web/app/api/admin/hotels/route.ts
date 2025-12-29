@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { initAdmin } from "@/lib/firebaseAdmin";
 import { getFirestore } from "firebase-admin/firestore";
 
-// GET: Fetch ALL hotels for the Admin list
 export async function GET() {
   try {
     await initAdmin();
     const db = getFirestore();
+
+    // Fetch all hotels
     const snapshot = await db.collection("hotels").get();
 
     const hotels = snapshot.docs.map((doc) => ({
@@ -16,25 +17,7 @@ export async function GET() {
 
     return NextResponse.json({ hotels });
   } catch (error) {
+    console.error("Admin Hotels API Error:", error);
     return NextResponse.json({ error: "Server Error" }, { status: 500 });
-  }
-}
-
-// POST: Create a NEW hotel
-export async function POST(request: Request) {
-  try {
-    await initAdmin();
-    const db = getFirestore();
-    const body = await request.json();
-
-    const docRef = await db.collection("hotels").add({
-      ...body,
-      createdAt: new Date(),
-      status: "pending", // Default status
-    });
-
-    return NextResponse.json({ success: true, id: docRef.id });
-  } catch (error) {
-    return NextResponse.json({ error: "Creation failed" }, { status: 500 });
   }
 }
