@@ -245,11 +245,10 @@ export default function EditHotelPage({
               <select
                 value={hotel.status || "pending"}
                 onChange={(e) => setHotel({ ...hotel, status: e.target.value })}
-                className={`w-full p-4 appearance-none rounded-xl font-bold outline-none border cursor-pointer transition-all ${
-                  hotel.status === "approved"
-                    ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900"
-                    : "bg-gray-50 text-gray-700 border-gray-200 dark:bg-black dark:text-white dark:border-gray-800"
-                }`}
+                className={`w-full p-4 appearance-none rounded-xl font-bold outline-none border cursor-pointer transition-all ${hotel.status === "approved"
+                  ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900"
+                  : "bg-gray-50 text-gray-700 border-gray-200 dark:bg-black dark:text-white dark:border-gray-800"
+                  }`}
               >
                 <option value="pending">⚠️ Pending Review</option>
                 <option value="approved">✅ Active & Public</option>
@@ -312,11 +311,10 @@ export default function EditHotelPage({
                   <div
                     key={item.id}
                     onClick={() => toggleAmenity(item.id)}
-                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all select-none ${
-                      isSelected
-                        ? "bg-black text-white border-black dark:bg-white dark:text-black shadow-md transform scale-[1.02]"
-                        : "border-transparent hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-                    }`}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all select-none ${isSelected
+                      ? "bg-black text-white border-black dark:bg-white dark:text-black shadow-md transform scale-[1.02]"
+                      : "border-transparent hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                      }`}
                   >
                     {item.icon}
                     <span className="text-sm font-medium">{item.label}</span>
