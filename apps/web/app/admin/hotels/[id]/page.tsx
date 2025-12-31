@@ -19,8 +19,9 @@ import {
   IndianRupee,
   ImageIcon,
 } from "lucide-react";
+import RoomManager from "@/components/RoomManager";
 
-// --- AMENITIES CONFIG ---
+// Amenities Config
 const AMENITIES_LIST = [
   { id: "wifi", label: "Fast Wifi", icon: <Wifi size={20} /> },
   { id: "parking", label: "Free Parking", icon: <Car size={20} /> },
@@ -44,19 +45,41 @@ export default function EditHotelPage({
 
   // --- FETCH DATA ---
   useEffect(() => {
+    console.log("Fetching hotel ID:", id); // 🔍 Debug Log 1
+
     apiRequest(`/api/admin/hotels/${id}`, "GET")
       .then((data) => {
-        setHotel({
-          ...data.hotel,
-          amenities: data.hotel.amenities || [],
-          imageUrls: data.hotel.imageUrls || [],
-        });
+        console.log("API Response:", data); // 🔍 Debug Log 2
+
+        // ✅ Check if data.hotel exists
+        if (data && data.hotel) {
+          setHotel({
+            ...data.hotel,
+            amenities: data.hotel.amenities || [],
+            imageUrls: data.hotel.imageUrls || [],
+          });
+        } else {
+          console.error("Structure Mismatch! Got:", data);
+        }
       })
-      .catch((err) => console.error(err))
+      .catch((err) => console.error("Fetch Error:", err))
       .finally(() => setLoading(false));
   }, [id]);
 
   // --- HANDLERS ---
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await apiRequest(`/api/admin/hotels/${id}`, "PUT", hotel);
+      alert("Saved Successfully!");
+      router.refresh(); // Refresh data
+    } catch (err) {
+      alert("Failed to save changes.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const toggleAmenity = (amenityId: string) => {
     const currentList = hotel.amenities || [];
     if (currentList.includes(amenityId)) {
@@ -69,25 +92,11 @@ export default function EditHotelPage({
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await apiRequest(`/api/admin/hotels/${id}`, "PUT", hotel);
-      router.push(`/admin/hotels/${id}`);
-    } catch (err) {
-      alert("Failed to save changes.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Helper to add gallery image
   const addGalleryImage = (url: string) => {
     if (!url) return;
-    setHotel({ ...hotel, imageUrls: [...hotel.imageUrls, url] });
+    setHotel({ ...hotel, imageUrls: [...(hotel.imageUrls || []), url] });
   };
 
-  // Helper to remove gallery image
   const removeGalleryImage = (indexToRemove: number) => {
     setHotel({
       ...hotel,
@@ -99,16 +108,20 @@ export default function EditHotelPage({
 
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-black">
+      <div className="h-screen flex items-center justify-center">
         <Loader2 className="animate-spin text-rose-600" size={32} />
       </div>
     );
-
-  if (!hotel) return null;
+  if (!hotel)
+    return (
+      <div className="p-10 text-center">
+        Hotel not found. Check console for details.
+      </div>
+    );
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 pb-32 transition-colors">
-      {/* --- STICKY HEADER --- */}
+      {/* HEADER */}
       <div className="sticky top-0 z-20 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -120,16 +133,15 @@ export default function EditHotelPage({
             </button>
             <div>
               <h1 className="text-xl font-bold hidden md:block">
-                {hotel.name || "Untitled Property"}
+                {hotel.name || "Hotel Name"}
               </h1>
               <p className="text-xs text-gray-500 font-mono">ID: {id}</p>
             </div>
           </div>
-
           <button
             onClick={handleSave}
             disabled={saving}
-            className="bg-black dark:bg-white text-white dark:text-black px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/20 dark:shadow-white/10 disabled:opacity-50 disabled:scale-100"
+            className="bg-black dark:bg-white text-white dark:text-black px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-50"
           >
             {saving ? (
               <Loader2 className="animate-spin" size={16} />
@@ -142,19 +154,15 @@ export default function EditHotelPage({
       </div>
 
       <div className="max-w-6xl mx-auto px-6 pt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* --- LEFT COLUMN (2/3 width) --- */}
+        {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-8">
-          {/* 1. COVER IMAGE (Large Preview) */}
+          {/* Cover Photo */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-2 shadow-sm border border-gray-200 dark:border-gray-800">
             <div className="p-4 pb-0">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <ImageIcon size={20} className="text-rose-500" /> Cover Photo
               </h3>
-              <p className="text-sm text-gray-500 mb-4">
-                This is the main image guests will see.
-              </p>
             </div>
-            {/* Custom Uploader Component */}
             <div className="p-2">
               <ImageUpload
                 label=""
@@ -164,11 +172,40 @@ export default function EditHotelPage({
             </div>
           </div>
 
-          {/* 2. GALLERY GRID */}
+          {/* Details Form */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-sm border border-gray-200 dark:border-gray-800 space-y-5">
+            <h3 className="font-bold text-lg">Property Details</h3>
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-500 mb-1.5">
+                Property Name
+              </label>
+              <input
+                value={hotel.name || ""}
+                onChange={(e) => setHotel({ ...hotel, name: e.target.value })}
+                className="w-full p-4 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-black dark:focus:ring-white outline-none font-medium text-lg transition-all"
+                placeholder="e.g. Sunset Villa"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-500 mb-1.5">
+                Description
+              </label>
+              <textarea
+                rows={6}
+                value={hotel.description || ""}
+                onChange={(e) =>
+                  setHotel({ ...hotel, description: e.target.value })
+                }
+                className="w-full p-4 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-black dark:focus:ring-white outline-none leading-relaxed transition-all"
+                placeholder="Description..."
+              />
+            </div>
+          </div>
+
+          {/* Gallery */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">
             <h3 className="font-bold text-lg mb-4">Gallery</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Existing Images */}
               {hotel.imageUrls.map((url: string, index: number) => (
                 <div
                   key={index}
@@ -181,84 +218,41 @@ export default function EditHotelPage({
                   />
                   <button
                     onClick={() => removeGalleryImage(index)}
-                    className="absolute top-2 right-2 bg-red-500/90 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                    className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all"
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
               ))}
-
-              {/* Add New Image Button - FIXED */}
               <div className="aspect-square">
                 <ImageUpload
-                  label="" // No label needed inside the grid
+                  label=""
                   onUpload={addGalleryImage}
-                  className="h-full" // Forces it to fill the square perfectly
+                  className="h-full"
                   clearOnSuccess={true}
                 />
               </div>
             </div>
           </div>
-
-          {/* 3. BASIC INFO */}
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-sm border border-gray-200 dark:border-gray-800 space-y-5">
-            <h3 className="font-bold text-lg">Property Details</h3>
-
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-500 mb-1.5">
-                Property Name
-              </label>
-              <input
-                value={hotel.name || ""}
-                onChange={(e) => setHotel({ ...hotel, name: e.target.value })}
-                className="w-full p-4 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-black dark:focus:ring-white outline-none font-medium text-lg transition-all"
-                placeholder="e.g. Sunset Villa"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-500 mb-1.5">
-                Description
-              </label>
-              <textarea
-                rows={6}
-                value={hotel.description || ""}
-                onChange={(e) =>
-                  setHotel({ ...hotel, description: e.target.value })
-                }
-                className="w-full p-4 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-black dark:focus:ring-white outline-none leading-relaxed transition-all"
-                placeholder="Tell guests what makes your place special..."
-              />
-            </div>
-          </div>
         </div>
 
-        {/* --- RIGHT COLUMN (1/3 width) --- */}
+        {/* RIGHT COLUMN */}
         <div className="space-y-8">
-          {/* 4. STATUS CARD */}
+          {/* Status */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">
-            <h3 className="font-bold text-lg mb-4">Availability</h3>
-            <label className="block text-xs font-bold uppercase text-gray-500 mb-1.5">
-              Status
-            </label>
-            <div className="relative">
-              <select
-                value={hotel.status || "pending"}
-                onChange={(e) => setHotel({ ...hotel, status: e.target.value })}
-                className={`w-full p-4 appearance-none rounded-xl font-bold outline-none border cursor-pointer transition-all ${
-                  hotel.status === "approved"
-                    ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900"
-                    : "bg-gray-50 text-gray-700 border-gray-200 dark:bg-black dark:text-white dark:border-gray-800"
-                }`}
-              >
-                <option value="pending">⚠️ Pending Review</option>
-                <option value="approved">✅ Active & Public</option>
-                <option value="banned">🚫 Banned / Hidden</option>
-              </select>
-            </div>
+            <h3 className="font-bold text-lg mb-4">Status</h3>
+            <select
+              value={hotel.status || "pending"}
+              onChange={(e) => setHotel({ ...hotel, status: e.target.value })}
+              className="w-full p-4 rounded-xl font-bold border bg-gray-50 dark:bg-black border-gray-200 dark:border-gray-800"
+            >
+              <option value="pending">⚠️ Pending Review</option>
+              <option value="approved">✅ Active & Public</option>
+              <option value="banned">🚫 Banned / Hidden</option>
+            </select>
           </div>
 
-          {/* 5. PRICING & LOCATION */}
+          {/* Price & Location */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-sm border border-gray-200 dark:border-gray-800 space-y-5">
             <div>
               <label className="block text-xs font-bold uppercase text-gray-500 mb-1.5">
@@ -278,7 +272,7 @@ export default function EditHotelPage({
                       pricePerNight: Number(e.target.value),
                     })
                   }
-                  className="w-full pl-10 p-3.5 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-black dark:focus:ring-white outline-none font-mono text-lg font-bold"
+                  className="w-full pl-10 p-3.5 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl font-mono text-lg font-bold"
                 />
               </div>
             </div>
@@ -296,13 +290,13 @@ export default function EditHotelPage({
                   onChange={(e) =>
                     setHotel({ ...hotel, location: e.target.value })
                   }
-                  className="w-full pl-10 p-3.5 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-black dark:focus:ring-white outline-none"
+                  className="w-full pl-10 p-3.5 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl"
                 />
               </div>
             </div>
           </div>
 
-          {/* 6. AMENITIES */}
+          {/* Amenities */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">
             <h3 className="font-bold text-lg mb-4">Amenities</h3>
             <div className="grid grid-cols-1 gap-2">
@@ -314,8 +308,8 @@ export default function EditHotelPage({
                     onClick={() => toggleAmenity(item.id)}
                     className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all select-none ${
                       isSelected
-                        ? "bg-black text-white border-black dark:bg-white dark:text-black shadow-md transform scale-[1.02]"
-                        : "border-transparent hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                        ? "bg-black text-white dark:bg-white dark:text-black"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-800"
                     }`}
                   >
                     {item.icon}
@@ -327,6 +321,7 @@ export default function EditHotelPage({
           </div>
         </div>
       </div>
+      <RoomManager hotelId={id} />
     </div>
   );
 }
