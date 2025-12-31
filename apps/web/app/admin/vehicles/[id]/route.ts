@@ -16,20 +16,14 @@ export async function PUT(
     // Remove 'id' from body to allow Firestore update
     const { id: _, ...updateData } = body;
 
-    await db
-      .collection("vehicles")
-      .doc(id)
-      .update({
-        ...updateData,
-        updatedAt: new Date(),
-      });
+    await db.collection("vehicles").doc(id).update({
+      ...updateData,
+      updatedAt: new Date(),
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to update vehicle" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to update vehicle" }, { status: 500 });
   }
 }
 
@@ -47,9 +41,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to delete vehicle" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to delete vehicle" }, { status: 500 });
   }
 }

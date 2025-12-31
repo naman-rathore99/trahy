@@ -11,17 +11,11 @@ export async function POST(request: Request) {
     const newVehicle = {
       ...body,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
     const docRef = await db.collection("vehicles").add(newVehicle);
     return NextResponse.json({ success: true, id: docRef.id });
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to add vehicle" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to add" }, { status: 500 });
   }
 }
-
-// Optional: Add DELETE if needed later

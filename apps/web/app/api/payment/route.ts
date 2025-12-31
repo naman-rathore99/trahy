@@ -1,108 +1,76 @@
 import { NextResponse } from "next/server";
-import {
-  StandardCheckoutClient,
-  Env,
-  StandardCheckoutPayRequest,
-} from "pg-sdk-node";
-import { getFirestore } from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth";
 import { initAdmin } from "@/lib/firebaseAdmin";
+import { getFirestore } from "firebase-admin/firestore";
 
-export async function POST(request: Request) {
-  await initAdmin();
-  const db = getFirestore();
-  const auth = getAuth();
-
+// 1. Shared Logic for both GET and POST
+async function handlePayment(request: Request) {
   try {
-    // 1. Verify User
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const url = new URL(request.url);
+
+    // Try to get Booking ID from URL first (GET request)
+    let bookingId = url.searchParams.get("id");
+    let code = url.searchParams.get("code");
+
+    // If not in URL, try Body (POST request)
+    if (!bookingId) {
+      try {
+        const formData = await request.formData();
+        bookingId = formData.get("merchantTransactionId")?.toString() || null;
+        code = formData.get("code")?.toString() || null;
+      } catch (e) {
+        // Body parsing failed, likely a pure GET request
+      }
     }
-    const token = authHeader.split("Bearer ")[1];
-    const decodedToken = await auth.verifyIdToken(token);
-    const userId = decodedToken.uid;
 
-    // 2. Get Data (Updated to capture Vehicle Fields)
-    const body = await request.json();
-    const {
-      listingId,
-      listingName,
-      listingImage,
-      checkIn,
-      checkOut,
-      guests,
-      totalAmount,
-      serviceType,
-      // --- NEW FIELDS ---
-      vehicleIncluded,
-      vehicleType,
-      vehiclePricePerDay,
-      vehicleTotalAmount
-    } = body;
+    console.log(`🔹 Processing Payment - ID: ${bookingId}, Code: ${code}`);
 
-    // 3. Save Pending Booking (Now includes Vehicle Data)
-    const bookingRef = await db.collection("bookings").add({
-      userId,
-      listingId,
-      listingName,
-      listingImage: listingImage || "",
-      serviceType: serviceType || "hotel",
-      checkIn,
-      checkOut,
-      guests,
-      totalAmount,
+    if (!bookingId) {
+      return NextResponse.json({ error: "No Booking ID found" }, { status: 400 });
+    }
 
-      // --- CRITICAL UPDATE: Saving Vehicle Info ---
-      vehicleIncluded: vehicleIncluded || false,
-      vehicleType: vehicleType || null,
-      vehiclePrice: vehiclePricePerDay || 0,
-      vehicleTotalAmount: vehicleTotalAmount || 0,
+    // 2. Update Database
+    await initAdmin();
+    const db = getFirestore();
+    const bookingRef = db.collection("bookings").doc(bookingId);
 
-      status: "pending",
-      paymentStatus: "pending",
-      createdAt: new Date().toISOString(),
-    });
+    // If we have an ID but no code (e.g. forced GET redirect), check if we should default to success 
+    // or fetch status. For this flow, we assume success if redirected here from PhonePe.
+    const isSuccess = code === "PAYMENT_SUCCESS" || !code;
 
-    const merchantTransactionId = bookingRef.id;
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    if (isSuccess) {
+      await bookingRef.update({
+        status: "confirmed",
+        paymentStatus: "paid",
+        updatedAt: new Date().toISOString(),
+      });
 
-    // 4. Initialize SDK
-    const clientId = process.env.PHONEPE_MERCHANT_ID as string;
-    const clientSecret = process.env.PHONEPE_SALT_KEY as string;
-    const clientVersion = 1;
-    const env = Env.SANDBOX;
+      // ✅ CRITICAL: Redirect to the Frontend Success Page
+      return NextResponse.redirect(new URL(`/book/success/${bookingId}`, request.url), 303);
 
-    const client = StandardCheckoutClient.getInstance(
-      clientId,
-      clientSecret,
-      clientVersion,
-      env
-    );
+    } else {
+      await bookingRef.update({
+        status: "failed",
+        paymentStatus: "failed",
+        failureReason: code || "unknown",
+        updatedAt: new Date().toISOString(),
+      });
 
-    // 5. Create Payment Request
-    const amountInPaise = Math.round(totalAmount * 100);
-    const callbackRoute = `${baseUrl}/api/payment/callback?id=${merchantTransactionId}`;
+      // ✅ CRITICAL: Redirect to the Frontend Failure Page
+      return NextResponse.redirect(new URL(`/book/failure/${bookingId}`, request.url), 303);
+    }
 
-    const payRequest = StandardCheckoutPayRequest.builder()
-      .merchantOrderId(merchantTransactionId)
-      .amount(amountInPaise)
-      .redirectUrl(callbackRoute)
-      .build();
-
-    // 6. Execute
-    const response = await client.pay(payRequest);
-    const checkoutPageUrl = response.redirectUrl;
-
-    return NextResponse.json({ url: checkoutPageUrl });
-  } catch (error: any) {
-    console.error("❌ SDK Payment Error:", error);
-    return NextResponse.json(
-      {
-        error: "Payment initiation failed",
-        details: error.message,
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Callback Error:", error);
+    // On crash, go to My Trips with error
+    return NextResponse.redirect(new URL("/trips?error=server_error", request.url), 303);
   }
+}
+
+// 3. Export handlers for both methods
+export async function POST(request: Request) {
+  return handlePayment(request);
+}
+
+export async function GET(request: Request) {
+  return handlePayment(request);
 }

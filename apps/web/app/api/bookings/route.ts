@@ -1,70 +1,88 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import {
+  StandardCheckoutClient,
+  Env,
+  StandardCheckoutPayRequest,
+} from "pg-sdk-node";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
+import { initAdmin } from "@/lib/firebaseAdmin";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const bookingId = searchParams.get("id");
-
-  // --- DEBUGGING LOG ---
-  // This will print exactly what the payment gateway sent to your terminal
-  console.log("--- PAYMENT CALLBACK ---");
-  console.log("ID:", bookingId);
-  searchParams.forEach((value, key) => console.log(`${key}: ${value}`));
-
-  // 1. GET STATUS FLAGS
-  const code = searchParams.get("code");
-  const status = searchParams.get("status");
-  const failureMessage = searchParams.get("message");
-
-  // 2. DETERMINE SUCCESS VS FAILURE
-  // We define FAILURE explicitly. If it's not a known failure, we treat it as success.
-  // This prevents valid payments from failing just because the code string didn't match perfectly.
-  const isExplicitFailure =
-    (code && code !== "PAYMENT_SUCCESS" && code !== "SUCCESS") ||
-    (status && status !== "success" && status !== "paid");
-
-  // If it's not a failure, we assume it's a success.
-  const isSuccess = !isExplicitFailure;
-
-  if (!bookingId) {
-    return NextResponse.json({ error: "No Booking ID" }, { status: 400 });
-  }
+export async function POST(request: Request) {
+  await initAdmin();
+  const db = getFirestore();
+  const auth = getAuth();
 
   try {
-    await initAdmin();
-    const db = getFirestore();
-    const bookingRef = db.collection("bookings").doc(bookingId);
-
-    if (isSuccess) {
-      // --- CASE: SUCCESS ---
-      console.log(`✅ Payment CONFIRMED for ${bookingId}`);
-
-      await bookingRef.update({
-        status: "confirmed",
-        paymentStatus: "paid",
-        updatedAt: new Date().toISOString(),
-      });
-
-      return NextResponse.redirect(new URL(`/book/success/${bookingId}`, request.url));
-
-    } else {
-      // --- CASE: FAILED ---
-      console.warn(`❌ Payment FAILED for ${bookingId} (Code: ${code})`);
-
-      await bookingRef.update({
-        status: "failed",
-        paymentStatus: "failed",
-        failureReason: failureMessage || code || "unknown",
-        updatedAt: new Date().toISOString(),
-      });
-
-      return NextResponse.redirect(new URL(`/book/failure/${bookingId}`, request.url));
+    // 1. Verify User
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const token = authHeader.split("Bearer ")[1];
+    const decodedToken = await auth.verifyIdToken(token);
+    const userId = decodedToken.uid;
 
-  } catch (error) {
-    console.error("Callback Error:", error);
-    // If server error, still try to show the user their trips page
-    return NextResponse.redirect(new URL(`/trips?error=server_error`, request.url));
+    // 2. Get Data
+    const body = await request.json();
+    const {
+      listingId, listingName, listingImage, checkIn, checkOut,
+      guests, totalAmount, serviceType,
+      vehicleIncluded, vehicleType, vehiclePricePerDay, vehicleTotalAmount
+    } = body;
+
+    // 3. Save Pending Booking
+    const bookingRef = await db.collection("bookings").add({
+      userId,
+      listingId,
+      listingName,
+      listingImage: listingImage || "",
+      serviceType: serviceType || "hotel",
+      checkIn,
+      checkOut,
+      guests,
+      totalAmount,
+      vehicleIncluded: vehicleIncluded || false,
+      vehicleType: vehicleType || null,
+      vehiclePrice: vehiclePricePerDay || 0,
+      vehicleTotalAmount: vehicleTotalAmount || 0,
+      status: "pending",
+      paymentStatus: "pending",
+      createdAt: new Date().toISOString(),
+    });
+
+    const merchantTransactionId = bookingRef.id;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+
+    // 4. Initialize SDK
+    const clientId = process.env.PHONEPE_MERCHANT_ID || "PGTESTPAYUAT";
+    const clientSecret = process.env.PHONEPE_SALT_KEY || "099eb0cd-02cf-4e2a-8aca-3e6c6aff0399";
+    const clientVersion = 1;
+    const env = Env.SANDBOX;
+
+    const client = StandardCheckoutClient.getInstance(clientId, clientSecret, clientVersion, env);
+
+    // 5. Create Payment Request
+    const amountInPaise = Math.round(totalAmount * 100);
+
+    // ✅ CORRECTION: Point to the file we created: /api/payment/status
+    // We do NOT need '?id=' because PhonePe sends the ID in the body automatically.
+    const callbackRoute = `${baseUrl}/api/payment/status`;
+
+    const payRequest = StandardCheckoutPayRequest.builder()
+      .merchantOrderId(merchantTransactionId)
+      .amount(amountInPaise)
+      .redirectUrl(callbackRoute) // This ensures we hit our status handler
+      .build();
+
+    // 6. Execute
+    const response = await client.pay(payRequest);
+    const checkoutPageUrl = response.redirectUrl;
+
+    return NextResponse.json({ url: checkoutPageUrl });
+
+  } catch (error: any) {
+    console.error("❌ SDK Payment Error:", error);
+    return NextResponse.json({ error: "Payment initiation failed", details: error.message }, { status: 500 });
   }
 }

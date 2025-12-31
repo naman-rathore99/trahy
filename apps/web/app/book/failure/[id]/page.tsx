@@ -17,29 +17,34 @@ export default function PaymentFailurePage({ params }: { params: Promise<{ id: s
         setLoading(true);
         try {
             const db = getFirestore(app);
-
-            // 1. Fetch the FAILED booking to get the details
             const docRef = doc(db, "bookings", id);
             const docSnap = await getDoc(docRef);
 
             if (docSnap.exists()) {
                 const data = docSnap.data();
 
-                // 2. Reconstruct the Booking URL using the Listing ID (Hotel ID)
                 const params = new URLSearchParams();
                 params.set("start", data.checkIn);
                 params.set("end", data.checkOut);
                 params.set("guests", data.guests);
 
-                // If vehicle was selected, pass that too
-                if (data.vehicleIncluded) {
-                    params.set("vehicleName", data.vehicleType);
-                    // We assume you store vehicle price, if not, it might reset to 0 unless re-selected
-                    // params.set("vehiclePrice", data.vehiclePrice); 
+                // ✅ FIX: DETECT VEHICLE VS HOTEL
+                if (data.serviceType === "vehicle_only") {
+                    // Redirect to Vehicle Checkout
+                    params.set("vehicleId", data.listingId);
+                    params.set("vehicleName", data.listingName);
+                    params.set("price", data.vehiclePrice?.toString() || "0");
+                    params.set("type", "vehicle_only");
+
+                    router.push(`/book/vehicle?${params.toString()}`);
+                } else {
+                    // Redirect to Hotel Checkout
+                    if (data.vehicleIncluded) {
+                        params.set("vehicleName", data.vehicleType);
+                    }
+                    router.push(`/book/${data.listingId}?${params.toString()}`);
                 }
 
-                // 3. Redirect to the Booking Summary Page with the HOTEL ID
-                router.push(`/book/${data.listingId}?${params.toString()}`);
             } else {
                 alert("Booking details not found. Please start over.");
                 router.push("/");

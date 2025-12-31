@@ -1,158 +1,241 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { getAuth } from "firebase/auth";
-import { getFirestore, collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { app } from "@/lib/firebase";
+import { getFirestore, doc, onSnapshot } from "firebase/firestore";
 import Navbar from "@/components/Navbar";
 import {
-  Loader2, Calendar, MapPin, Car, Phone, User, CheckCircle, XCircle, Filter, MessageSquare
+  CheckCircle, Loader2, Calendar, Car, Home,
+  XCircle, HelpCircle, Send, AlertTriangle
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isFuture } from "date-fns";
+import { DayPicker, DateRange } from "react-day-picker";
+import "react-day-picker/dist/style.css";
 
-interface Booking {
-  id: string;
-  listingName: string;
-  listingImage: string;
-  checkIn: string;
-  checkOut: string;
-  totalAmount: number;
-  status: "confirmed" | "pending" | "cancelled" | "failed";
-  vehicleIncluded?: boolean;
-  vehicleType?: string;
-  createdAt: string;
-  // Support Tickets Array
-  supportTickets?: { message: string; type: string; createdAt: string }[];
-  hasOpenTicket?: boolean;
-}
-
-export default function AdminBookingsPage() {
+export default function BookingSuccessPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "vehicle" | "queries" | "confirmed">("all");
 
+  // UI States
+  const [showSupport, setShowSupport] = useState(false);
+  const [supportMessage, setSupportMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [requestType, setRequestType] = useState<"date_change" | "general">("general");
+  const [selectedRange, setSelectedRange] = useState<DateRange | undefined>();
+
+  // --- REAL-TIME FETCH ---
   useEffect(() => {
-    const auth = getAuth(app);
+    if (!id) return;
     const db = getFirestore(app);
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      if (!user) { router.push("/login"); return; }
-      const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
-      const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-        setBookings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)));
-        setLoading(false);
-      });
-      return () => unsubscribeSnapshot();
+    const unsub = onSnapshot(doc(db, "bookings", id), (doc) => {
+      if (doc.exists()) {
+        setBooking({ id: doc.id, ...doc.data() });
+      }
+      setLoading(false);
     });
-    return () => unsubscribeAuth();
-  }, [router]);
+    return () => unsub();
+  }, [id]);
 
-  // Filter Logic
-  const filteredBookings = bookings.filter((b) => {
-    if (filter === "vehicle") return b.vehicleIncluded && b.status !== 'cancelled';
-    if (filter === "queries") return b.supportTickets && b.supportTickets.length > 0;
-    if (filter === "confirmed") return b.status === "confirmed";
-    return true;
-  });
+  // --- HANDLER: DATE SELECTION ---
+  const handleDateSelect = (range: DateRange | undefined) => {
+    setSelectedRange(range);
+    if (range?.from) {
+      const fromStr = format(range.from, "MMM dd, yyyy");
+      const toStr = range.to ? format(range.to, "MMM dd, yyyy") : "...";
+      setSupportMessage(`I would like to request a date change to: ${fromStr} - ${toStr}`);
+    }
+  };
 
-  const queryCount = bookings.filter(b => b.hasOpenTicket).length;
+  // --- HANDLER: CANCEL ---
+  const handleCancel = async () => {
+    if (!confirm("Are you sure you want to cancel? This action cannot be undone.")) return;
 
-  if (loading) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="animate-spin" /></div>;
+    try {
+      await fetch("/api/bookings/cancel", {
+        method: "POST",
+        body: JSON.stringify({ bookingId: id }),
+      });
+    } catch (err) {
+      alert("Error cancelling booking");
+    }
+  };
+
+  // --- HANDLER: SEND QUERY ---
+  const handleSupportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSending(true);
+    try {
+      await fetch("/api/bookings/support", {
+        method: "POST",
+        body: JSON.stringify({
+          bookingId: id,
+          message: supportMessage,
+          type: requestType
+        }),
+      });
+      alert("Request sent! The host will contact you shortly.");
+      setShowSupport(false);
+      setSupportMessage("");
+      setSelectedRange(undefined);
+    } catch (err) {
+      alert("Failed to send message");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black"><Loader2 className="animate-spin text-emerald-600" size={40} /></div>;
+  if (!booking) return <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-gray-900 dark:text-white">Booking not found.</div>;
+
+  const isCancelled = booking.status === 'cancelled';
+  const isUpcoming = booking.checkIn ? isFuture(parseISO(booking.checkIn)) : false;
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-20">
+    <main className="min-h-screen bg-gray-50 dark:bg-black pb-20 transition-colors duration-300">
       <Navbar variant="default" />
-      <div className="max-w-6xl mx-auto px-4 pt-32">
 
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold text-gray-900">Booking Manager</h1>
-            <p className="text-gray-500 text-sm">Monitor bookings, vehicles, and user requests.</p>
-          </div>
-          <div className="bg-white px-4 py-2 rounded-xl border flex gap-4 text-sm font-bold">
-            <span className="flex items-center gap-2 text-emerald-600">
-              <div className="w-2 h-2 rounded-full bg-emerald-500"></div> {bookings.filter(b => b.status === 'confirmed').length} Confirmed
-            </span>
-            <span className="flex items-center gap-2 text-blue-600">
-              <div className="w-2 h-2 rounded-full bg-blue-500"></div> {queryCount} Queries
-            </span>
-          </div>
+      <style jsx global>{`
+                .dark .rdp { --rdp-cell-size: 40px; --rdp-accent-color: #e11d48; --rdp-background-color: #202020; margin: 0; }
+                .dark .rdp-day_selected:not([disabled]) { color: white; background-color: var(--rdp-accent-color); }
+                .dark .rdp-day:hover:not([disabled]) { background-color: #333; }
+                .dark .rdp-caption_label, .dark .rdp-head_cell, .dark .rdp-day { color: #e5e7eb; }
+                .dark .rdp-button:hover:not([disabled]) { color: white; }
+            `}</style>
+
+      <div className="max-w-3xl mx-auto px-4 pt-24 md:pt-32">
+        <div className="text-center mb-8">
+          {isCancelled ? (
+            <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <XCircle size={40} strokeWidth={3} />
+            </div>
+          ) : (
+            <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in">
+              <CheckCircle size={40} strokeWidth={3} />
+            </div>
+          )}
+
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white mb-2">
+            {isCancelled ? "Booking Cancelled" : "Booking Confirmed!"}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base">
+            Reference ID: <span className="font-mono font-bold text-gray-700 dark:text-gray-300">#{booking.id.slice(0, 6).toUpperCase()}</span>
+          </p>
         </div>
 
-        {/* TABS */}
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-4">
-          {[
-            { id: "all", label: "All" },
-            { id: "vehicle", label: "Vehicle Needs", icon: <Car size={16} /> },
-            { id: "queries", label: "User Queries", icon: <MessageSquare size={16} />, alert: queryCount > 0 },
-            { id: "confirmed", label: "Confirmed" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setFilter(tab.id as any)}
-              className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all ${filter === tab.id ? "bg-black text-white" : "bg-white border text-gray-600"}`}
-            >
-              {tab.icon} {tab.label}
-              {tab.alert && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
-            </button>
-          ))}
-        </div>
+        <div className={`bg-white dark:bg-gray-900 rounded-3xl shadow-xl border overflow-hidden relative transition-colors ${isCancelled ? 'border-red-100 dark:border-red-900/50 opacity-90' : 'border-gray-100 dark:border-gray-800'}`}>
+          <div className={`h-2 w-full ${isCancelled ? 'bg-red-500' : 'bg-gradient-to-r from-emerald-400 to-teal-500'}`} />
 
-        {/* LIST */}
-        <div className="space-y-4">
-          {filteredBookings.map((booking) => (
-            <div key={booking.id} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-
-              {/* MAIN INFO */}
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex gap-4">
-                  <img src={booking.listingImage} className="w-16 h-16 rounded-lg object-cover bg-gray-100" />
-                  <div>
-                    <h3 className="font-bold text-gray-900">{booking.listingName}</h3>
-                    <p className="text-xs text-gray-500">ID: #{booking.id.slice(0, 6)} • {format(parseISO(booking.checkIn), "dd MMM")} - {format(parseISO(booking.checkOut), "dd MMM")}</p>
-                  </div>
+          <div className="p-6 md:p-8 space-y-8">
+            {/* 1. MAIN INFO */}
+            <div className="flex flex-col sm:flex-row gap-5 items-start border-b border-gray-100 dark:border-gray-800 pb-8">
+              <img src={booking.listingImage || "/placeholder.jpg"} className={`w-full sm:w-24 h-48 sm:h-24 object-cover rounded-xl shadow-sm ${isCancelled && 'grayscale'}`} alt="Listing" />
+              <div>
+                <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${isCancelled ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  {booking.serviceType === 'vehicle_only' ? 'Vehicle Rental' : 'Hotel Stay'}
+                </p>
+                <h2 className={`text-xl font-bold mb-2 ${isCancelled ? 'text-gray-500 line-through dark:text-gray-500' : 'text-gray-900 dark:text-white'}`}>{booking.listingName}</h2>
+                <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-lg">
+                    <Calendar size={14} />
+                    {booking.checkIn && format(parseISO(booking.checkIn), "dd MMM")} - {booking.checkOut && format(parseISO(booking.checkOut), "dd MMM")}
+                  </span>
                 </div>
-                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${booking.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100'}`}>
+              </div>
+            </div>
+
+            {/* 2. SUMMARY */}
+            <div className="space-y-3">
+              <div className="flex justify-between text-gray-600 dark:text-gray-400 text-sm">
+                <span>Status</span>
+                <span className={`font-bold uppercase text-xs px-2 py-1 rounded ${isCancelled ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'}`}>
                   {booking.status}
                 </span>
               </div>
+              <div className="flex justify-between text-gray-600 dark:text-gray-400 text-sm">
+                <span>Total Paid</span>
+                <span className="font-bold text-gray-900 dark:text-white text-lg">₹{Number(booking.totalAmount).toLocaleString("en-IN")}</span>
+              </div>
+            </div>
 
-              {/* --- 1. VEHICLE ALERT --- */}
-              {booking.vehicleIncluded && booking.status !== 'cancelled' && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-center gap-3">
-                  <Car className="text-amber-600" size={20} />
-                  <div>
-                    <p className="text-xs font-bold text-amber-800">NEEDS VEHICLE: {booking.vehicleType}</p>
-                    <p className="text-[10px] text-amber-700">Guest paid for transport package.</p>
-                  </div>
+            {/* 3. SUPPORT REQUESTS */}
+            {booking.supportTickets && booking.supportTickets.length > 0 && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 text-sm">
+                <p className="font-bold text-blue-800 dark:text-blue-300 flex items-center gap-2 mb-2">
+                  <AlertTriangle size={14} /> Support Requests Sent
+                </p>
+                <ul className="list-disc pl-4 space-y-1 text-blue-700/80 dark:text-blue-200/80">
+                  {booking.supportTickets.map((t: any, i: number) => (
+                    <li key={i}>{t.message} <span className="text-xs opacity-60">({new Date(t.createdAt).toLocaleDateString()})</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* MANAGE BOOKING */}
+          {!isCancelled && isUpcoming && (
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-6 md:p-8 border-t border-gray-100 dark:border-gray-800">
+              <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">Manage Booking</h3>
+
+              {!showSupport ? (
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button onClick={handleCancel} className="flex-1 flex items-center justify-center gap-2 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 py-3 rounded-xl font-bold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                    <XCircle size={18} /> Cancel Booking
+                  </button>
+                  <button onClick={() => { setShowSupport(true); setRequestType("date_change"); }} className="flex-1 flex items-center justify-center gap-2 bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold hover:opacity-80 transition-opacity">
+                    <Calendar size={18} /> Change Dates
+                  </button>
+                  <button onClick={() => { setShowSupport(true); setRequestType("general"); }} className="flex-1 flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-3 rounded-xl font-bold hover:bg-white dark:hover:bg-gray-700 transition-colors">
+                    <HelpCircle size={18} /> Help
+                  </button>
                 </div>
-              )}
-
-              {/* --- 2. USER QUERIES (NEW) --- */}
-              {booking.supportTickets && booking.supportTickets.length > 0 && (
-                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 animate-in fade-in">
-                  <div className="flex items-center gap-2 mb-2 text-blue-800 font-bold text-sm">
-                    <MessageSquare size={16} /> User Requests
+              ) : (
+                <div className="bg-white dark:bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-bottom-2 shadow-lg">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-bold text-sm uppercase text-gray-500 dark:text-gray-400">
+                      {requestType === "date_change" ? "Check Availability" : "How can we help?"}
+                    </h4>
+                    <button onClick={() => setShowSupport(false)}><XCircle size={20} className="text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white" /></button>
                   </div>
-                  <ul className="space-y-2">
-                    {booking.supportTickets.map((ticket, idx) => (
-                      <li key={idx} className="bg-white p-2 rounded border border-blue-100 text-sm text-gray-700">
-                        <p className="font-medium text-blue-600 text-xs mb-1 uppercase">{ticket.type === 'date_change' ? '📅 Date Change' : '💬 General Query'}</p>
-                        "{ticket.message}"
-                        <p className="text-[10px] text-gray-400 mt-1">{new Date(ticket.createdAt).toLocaleString()}</p>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mt-3 flex gap-2">
-                    <button className="text-xs font-bold bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">Reply to Guest</button>
-                    <button className="text-xs font-bold border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-white">Mark Resolved</button>
-                  </div>
+                  {requestType === "date_change" && (
+                    <div className="flex justify-center mb-4 border dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800">
+                      <DayPicker
+                        mode="range"
+                        selected={selectedRange}
+                        onSelect={handleDateSelect}
+                        disabled={{ before: new Date() }}
+                        modifiersClassNames={{ selected: "bg-rose-600 text-white", day: "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md" }}
+                      />
+                    </div>
+                  )}
+                  <form onSubmit={handleSupportSubmit}>
+                    <textarea
+                      className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-black text-gray-900 dark:text-white focus:ring-2 focus:ring-black dark:focus:ring-white outline-none text-sm min-h-[80px]"
+                      placeholder={requestType === "date_change" ? "Select dates above..." : "Describe your issue..."}
+                      value={supportMessage}
+                      onChange={(e) => setSupportMessage(e.target.value)}
+                      required
+                    />
+                    <div className="flex justify-end gap-2 mt-2">
+                      <button type="button" onClick={() => setShowSupport(false)} className="px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white">Close</button>
+                      <button disabled={isSending} type="submit" className="bg-black dark:bg-white text-white dark:text-black px-6 py-2 rounded-lg text-sm font-bold hover:opacity-80 flex items-center gap-2 disabled:opacity-50">
+                        {isSending ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />} Send Request
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
             </div>
-          ))}
+          )}
+
+          <div className="bg-gray-100 dark:bg-gray-800 p-4 flex justify-center border-t border-gray-200 dark:border-gray-700">
+            <button onClick={() => router.push("/trips")} className="text-sm font-bold text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white flex items-center gap-2">
+              <Home size={16} /> Back to My Trips
+            </button>
+          </div>
         </div>
       </div>
     </main>

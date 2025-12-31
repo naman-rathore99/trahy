@@ -5,14 +5,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { apiRequest } from "@/lib/api";
 import {
-  Calendar,
-  ArrowRight,
-  Star,
-  Fuel,
-  Users,
-  Zap,
-  ShieldCheck,
-  Loader2,
+  Calendar, ArrowRight, Star, Fuel, Users, Zap, ShieldCheck, Loader2
 } from "lucide-react";
 import { format, addDays } from "date-fns";
 
@@ -20,7 +13,7 @@ interface Vehicle {
   id: string;
   name: string;
   category: string; // "2-Wheeler", "Car", etc.
-  type: string; // "SUV", "Scooty"
+  type: string;     // "SUV", "Scooty"
   price: number;
   seats: number;
   fuel: string;
@@ -37,7 +30,7 @@ export default function VehiclesPage() {
   // Booking Dates
   const [dates, setDates] = useState({
     start: format(new Date(), "yyyy-MM-dd"),
-    end: format(addDays(new Date(), 1), "yyyy-MM-dd"),
+    end: format(addDays(new Date(), 1), "yyyy-MM-dd")
   });
 
   // 1. Fetch Data from Backend
@@ -56,10 +49,9 @@ export default function VehiclesPage() {
   }, []);
 
   // 2. Filter Logic
-  const filteredVehicles =
-    category === "All"
-      ? vehicles
-      : vehicles.filter((v) => v.category === category);
+  const filteredVehicles = category === "All"
+    ? vehicles
+    : vehicles.filter(v => v.category === category);
 
   const handleBook = (vehicle: Vehicle) => {
     const query = new URLSearchParams({
@@ -68,7 +60,7 @@ export default function VehiclesPage() {
       price: vehicle.price.toString(),
       start: dates.start,
       end: dates.end,
-      type: "vehicle_only",
+      type: "vehicle_only"
     }).toString();
 
     router.push(`/book/vehicle?${query}`);
@@ -92,8 +84,7 @@ export default function VehiclesPage() {
             Explore Mathura Your Way
           </h1>
           <p className="text-gray-200 text-lg mb-8">
-            Rent bikes, cars, or book a full-day taxi for your spiritual
-            journey.
+            Rent bikes, cars, or book a full-day taxi for your spiritual journey.
           </p>
 
           {/* Date Picker Bar */}
@@ -101,15 +92,11 @@ export default function VehiclesPage() {
             <div className="flex-1 flex items-center gap-3 px-6 py-3 w-full">
               <Calendar className="text-rose-600" size={20} />
               <div className="text-left">
-                <label className="text-[10px] uppercase font-bold text-gray-500 block">
-                  Pickup Date
-                </label>
+                <label className="text-[10px] uppercase font-bold text-gray-500 block">Pickup Date</label>
                 <input
                   type="date"
                   value={dates.start}
-                  onChange={(e) =>
-                    setDates({ ...dates, start: e.target.value })
-                  }
+                  onChange={(e) => setDates({ ...dates, start: e.target.value })}
                   className="bg-transparent font-bold text-sm outline-none w-full dark:text-white"
                 />
               </div>
@@ -118,9 +105,7 @@ export default function VehiclesPage() {
             <div className="flex-1 flex items-center gap-3 px-6 py-3 w-full">
               <Calendar className="text-rose-600" size={20} />
               <div className="text-left">
-                <label className="text-[10px] uppercase font-bold text-gray-500 block">
-                  Dropoff Date
-                </label>
+                <label className="text-[10px] uppercase font-bold text-gray-500 block">Dropoff Date</label>
                 <input
                   type="date"
                   value={dates.end}
@@ -145,11 +130,10 @@ export default function VehiclesPage() {
               <button
                 key={tab}
                 onClick={() => setCategory(tab)}
-                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
-                  category === tab
-                    ? "bg-black dark:bg-white text-white dark:text-black shadow-md"
-                    : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
-                }`}
+                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${category === tab
+                  ? "bg-black dark:bg-white text-white dark:text-black shadow-md"
+                  : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  }`}
               >
                 {tab}
               </button>
@@ -159,24 +143,17 @@ export default function VehiclesPage() {
       </div>
 
       {/* --- VEHICLE GRID --- */}
-      <div className="max-w-7xl mx-auto px-4">
+      <div className="max-w-8xl mx-auto px-4">
         {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="animate-spin text-rose-600" size={40} />
-          </div>
+          <div className="flex justify-center py-20"><Loader2 className="animate-spin text-rose-600" size={40} /></div>
         ) : filteredVehicles.length === 0 ? (
           <div className="text-center py-20 bg-gray-100 dark:bg-slate-900 rounded-3xl">
-            <p className="text-gray-500 font-medium">
-              No vehicles found in this category.
-            </p>
+            <p className="text-gray-500 font-medium">No vehicles found in this category.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {filteredVehicles.map((vehicle) => (
-              <div
-                key={vehicle.id}
-                className="bg-white dark:bg-gray-900 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all group"
-              >
+              <div key={vehicle.id} className="bg-white dark:bg-gray-900 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all group">
                 {/* Image Area */}
                 <div className="h-56 overflow-hidden relative">
                   <img
@@ -185,11 +162,7 @@ export default function VehiclesPage() {
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   />
                   <div className="absolute top-4 right-4 bg-white/90 dark:bg-black/80 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                    <Star
-                      size={12}
-                      className="text-yellow-500 fill-yellow-500"
-                    />{" "}
-                    4.9
+                    <Star size={12} className="text-yellow-500 fill-yellow-500" /> 4.9
                   </div>
                 </div>
 
@@ -197,17 +170,11 @@ export default function VehiclesPage() {
                 <div className="p-6">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <span className="text-xs font-bold text-rose-600 uppercase tracking-wider">
-                        {vehicle.type}
-                      </span>
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-1">
-                        {vehicle.name}
-                      </h3>
+                      <span className="text-xs font-bold text-rose-600 uppercase tracking-wider">{vehicle.type}</span>
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-1">{vehicle.name}</h3>
                     </div>
                     <div className="text-right">
-                      <span className="block text-2xl font-bold">
-                        ₹{vehicle.price}
-                      </span>
+                      <span className="block text-2xl font-bold">₹{vehicle.price}</span>
                       <span className="text-xs text-gray-500">/ day</span>
                     </div>
                   </div>
@@ -228,12 +195,8 @@ export default function VehiclesPage() {
                   <div className="border-t border-gray-100 dark:border-gray-800 my-4 pt-4">
                     <ul className="space-y-2">
                       {(vehicle.features || []).map((feature, i) => (
-                        <li
-                          key={i}
-                          className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
-                        >
-                          <ShieldCheck size={14} className="text-green-500" />{" "}
-                          {feature}
+                        <li key={i} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                          <ShieldCheck size={14} className="text-green-500" /> {feature}
                         </li>
                       ))}
                     </ul>
