@@ -10,7 +10,8 @@ import {
   LayoutDashboard,
   ShieldCheck,
   CreditCard,
-  Briefcase, // Added for Trips icon
+  Briefcase,
+  Car, // Added Car Icon for Vehicles link
 } from "lucide-react";
 import Link from "next/link";
 import { getAuth, onAuthStateChanged, signOut, User } from "firebase/auth";
@@ -123,7 +124,6 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             shubyatra
             <span className="text-xl font-bold tracking-wide uppercase relative z-[60] text-indigo-500">
               .
-
             </span>
             world
           </Link>
@@ -137,13 +137,24 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                 Home
               </Link>
             </li>
-            {/* <li className="hover:opacity-70 cursor-pointer">Packages</li> */}
-            {/* <li className="hover:opacity-70 cursor-pointer">Destinations</li> */}
+
+            {/* ✅ ADDED: Vehicles Link */}
+            <li>
+              <Link
+                href="/vehicles"
+                className="hover:opacity-70 transition-opacity flex items-center gap-1"
+              >
+                Vehicles
+              </Link>
+            </li>
 
             {/* Added Trips Link to Main Nav for Quick Access */}
             {firebaseUser && (
               <li>
-                <Link href="/trips" className="hover:opacity-70 transition-opacity">
+                <Link
+                  href="/trips"
+                  className="hover:opacity-70 transition-opacity"
+                >
                   My Trips
                 </Link>
               </li>
@@ -174,10 +185,11 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                 {!firebaseUser ? (
                   <Link
                     href="/login"
-                    className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 active:scale-95 ${isSolidState
-                      ? "bg-black text-white"
-                      : "bg-white text-black"
-                      }`}
+                    className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 active:scale-95 ${
+                      isSolidState
+                        ? "bg-black text-white"
+                        : "bg-white text-black"
+                    }`}
                   >
                     <UserIcon size={18} /> <span>Login</span>
                   </Link>
@@ -195,10 +207,11 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                         />
                       ) : (
                         <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center ${isSolidState
-                            ? "bg-gray-200 text-gray-500"
-                            : "bg-white/20 text-white"
-                            }`}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                            isSolidState
+                              ? "bg-gray-200 text-gray-500"
+                              : "bg-white/20 text-white"
+                          }`}
                         >
                           <UserIcon size={14} />
                         </div>
@@ -226,7 +239,8 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                             onClick={() => setIsProfileOpen(false)}
                             className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                           >
-                            <Briefcase size={16} className="text-rose-600" /> My Trips
+                            <Briefcase size={16} className="text-rose-600" /> My
+                            Trips
                           </Link>
 
                           <Link
@@ -283,11 +297,12 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className={`
                 p-2 rounded-full transition-all duration-200 shadow-sm
-                ${isMobileMenuOpen
-                  ? "bg-gray-100 text-black"
-                  : isSolidState
-                    ? "bg-transparent text-black dark:text-white"
-                    : "bg-white text-black"
+                ${
+                  isMobileMenuOpen
+                    ? "bg-gray-100 text-black"
+                    : isSolidState
+                      ? "bg-transparent text-black dark:text-white"
+                      : "bg-white text-black"
                 }
               `}
             >
@@ -309,17 +324,23 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             <Link href="/">Home</Link>
           </li>
 
+          {/* ✅ ADDED: Vehicles Link (Mobile) */}
+          <li onClick={() => setIsMobileMenuOpen(false)}>
+            <Link href="/vehicles" className="flex items-center gap-2">
+              Vehicles
+            </Link>
+          </li>
+
           {firebaseUser && (
             <li onClick={() => setIsMobileMenuOpen(false)}>
-              <Link href="/trips" className="flex items-center gap-2 text-rose-600">
+              <Link
+                href="/trips"
+                className="flex items-center gap-2 text-rose-600"
+              >
                 <Briefcase size={20} /> My Trips
               </Link>
             </li>
           )}
-
-          {/* <li onClick={() => setIsMobileMenuOpen(false)}>
-            <Link href="/packages">Packages</Link>
-          </li> */}
 
           {userRole === "admin" && (
             <li onClick={() => setIsMobileMenuOpen(false)}>

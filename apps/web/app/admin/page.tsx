@@ -23,9 +23,9 @@ export default function AdminDashboard() {
     travelers: 0,
     partners: 0,
     activeListings: 0,
-    pendingRequests: 0, // Partners waiting to join
-    pendingProperties: 0, // Listings waiting for approval
-    revenue: 124500, // Mock Revenue
+    pendingRequests: 0,
+    pendingProperties: 0,
+    revenue: 124500,
   });
 
   useEffect(() => {
@@ -38,19 +38,22 @@ export default function AdminDashboard() {
           apiRequest("/api/admin/hotels", "GET"),
         ]);
 
-        // 1. Calculate User Stats
-        const travelers = usersData.users.filter(
+        // 1. Calculate User Stats (Safety Check added: || [])
+        const allUsers = usersData.users || [];
+        const travelers = allUsers.filter(
           (u: any) => u.role !== "partner" && u.role !== "admin"
         ).length;
-        const partners = usersData.users.filter(
+        const partners = allUsers.filter(
           (u: any) => u.role === "partner"
         ).length;
 
-        // 2. Calculate Property Stats
-        const activeListings = propData.properties.filter(
+        // 2. Calculate Property Stats (FIXED: Used .hotels instead of .properties)
+        const allProperties = propData.hotels || []; // <--- FIXED HERE
+
+        const activeListings = allProperties.filter(
           (p: any) => p.status === "approved"
         ).length;
-        const pendingProperties = propData.properties.filter(
+        const pendingProperties = allProperties.filter(
           (p: any) => p.status === "pending"
         ).length;
 
@@ -74,7 +77,7 @@ export default function AdminDashboard() {
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="animate-spin" />
+        <Loader2 className="animate-spin text-rose-600" size={40} />
       </div>
     );
 
@@ -100,9 +103,8 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* 2. HIGH LEVEL METRICS (Separated) */}
+      {/* 2. HIGH LEVEL METRICS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        {/* Travelers */}
         <StatCard
           label="Total Travelers"
           value={stats.travelers}
@@ -111,8 +113,6 @@ export default function AdminDashboard() {
           link="/admin/travelers"
           sub="Active Customers"
         />
-
-        {/* Partners */}
         <StatCard
           label="Total Partners"
           value={stats.partners}
@@ -121,18 +121,14 @@ export default function AdminDashboard() {
           link="/admin/partners"
           sub="Supply Providers"
         />
-
-        {/* Listings */}
         <StatCard
           label="Active Listings"
           value={stats.activeListings}
           icon={Building2}
           color="indigo"
-          link="/admin/properties"
+          link="/admin/properties" // Ensure this page exists or change to /admin/hotels
           sub="Properties & Vehicles"
         />
-
-        {/* Pending Actions (Aggregated) */}
         <StatCard
           label="Action Needed"
           value={stats.pendingRequests + stats.pendingProperties}
@@ -153,7 +149,6 @@ export default function AdminDashboard() {
             Requires Attention
           </h3>
 
-          {/* Alert Cards */}
           <div className="space-y-4">
             {stats.pendingRequests > 0 ? (
               <Link
@@ -221,14 +216,12 @@ export default function AdminDashboard() {
               title="Add Listing"
               desc="Manually add Hotel or Vehicle"
             />
-
             <QuickLink
               href="/admin/partners"
               icon={ShieldCheck}
               title="Verify Documents"
               desc="Check partner licenses"
             />
-
             <QuickLink
               href="/admin/travelers"
               icon={Users}

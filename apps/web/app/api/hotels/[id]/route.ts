@@ -1,67 +1,45 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
 import { initAdmin } from "@/lib/firebaseAdmin";
+import { getFirestore } from "firebase-admin/firestore";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     await initAdmin();
     const db = getFirestore();
-    const { id } = await params; // This is "vishal-hotel-mathura"
 
-    console.log(`🔍 API Searching for: ${id}`);
+    let docSnap;
+    let finalId = id;
 
-    // STRATEGY 1: Check if this is a SLUG (The pretty name)
-    // We query the "slug" field to see if it matches "vishal-hotel-mathura"
-    const slugQuery = await db.collection("hotels")
-      .where("slug", "==", id)
-      .limit(1)
-      .get();
-
-    if (!slugQuery.empty) {
-      const doc = slugQuery.docs[0];
-      const hotelData = doc.data();
-
-      // Security Check
-      if (hotelData?.status !== "approved") {
-        return NextResponse.json({ error: "Hotel not found" }, { status: 404 });
-      }
-
-      console.log("✅ Found by Slug");
-      return NextResponse.json({
-        hotel: { id: doc.id, ...hotelData },
-      });
-    }
-
-    // STRATEGY 2: Check if this is a Document ID (The random code)
-    // Fallback for old links or admin tools
+    // 1. Try to fetch directly by ID
     const docRef = db.collection("hotels").doc(id);
-    const docSnap = await docRef.get();
+    docSnap = await docRef.get();
 
-    if (docSnap.exists) {
-      const hotelData = docSnap.data();
-
-      // Security Check
-      if (hotelData?.status !== "approved") {
+    // 2. If not found by ID, try finding by "slug"
+    if (!docSnap.exists) {
+      console.log(`Not a direct ID. Searching for slug: ${id}`);
+      const querySnap = await db.collection("hotels").where("slug", "==", id).limit(1).get();
+      
+      if (!querySnap.empty) {
+        docSnap = querySnap.docs[0];
+        finalId = docSnap.id; // Get the REAL ID
+      } else {
         return NextResponse.json({ error: "Hotel not found" }, { status: 404 });
       }
-
-      console.log("✅ Found by ID");
-      return NextResponse.json({
-        hotel: { id: docSnap.id, ...hotelData },
-      });
     }
 
-    console.log("❌ Not found");
-    return NextResponse.json({ error: "Hotel not found" }, { status: 404 });
-
+    // Return the hotel data + the REAL ID (crucial for fetching rooms later)
+    return NextResponse.json({
+      hotel: {
+        id: finalId, // Always return the real database ID
+        ...docSnap.data(),
+      },
+    });
   } catch (error) {
-    console.error("Error fetching hotel:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    console.error("Get Hotel Error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
