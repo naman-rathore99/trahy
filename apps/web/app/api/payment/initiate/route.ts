@@ -6,11 +6,10 @@ import {
 } from "pg-sdk-node";
 
 // 1. Initialize SDK Config
-// ⚠️ Ensure these are in your .env.local file
 const clientId = process.env.PHONEPE_MERCHANT_ID || "PHONEPE_MERCHANT_ID";
 const clientSecret = process.env.PHONEPE_SALT_KEY || "PHONEPE_SALT_KEY";
 const clientVersion = 1;
-const env = Env.SANDBOX; // Change to Env.PRODUCTION for live
+const env = Env.SANDBOX;
 
 export async function POST(request: Request) {
     try {
@@ -29,19 +28,19 @@ export async function POST(request: Request) {
             env
         );
 
+        // ✅ Uses your preferred variable name
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
-        // ✅ FIX: Calculate amount BEFORE using it
         const amountInPaise = Math.round(Number(amount) * 100);
 
-        // ✅ FIX: Add ID to URL for the GET fallback
-        const callbackRoute = `${baseUrl}/api/payment/status?id=${bookingId}`;
+        // ✅ FIX: Point to 'callback', NOT 'status'
+        const callbackRoute = `${baseUrl}/api/payment/callback?id=${bookingId}`;
 
-        // 3. Build Request (Defined only once)
+        // 3. Build Request
         const payRequest = StandardCheckoutPayRequest.builder()
             .merchantOrderId(bookingId)
             .amount(amountInPaise)
-            .redirectUrl(callbackRoute)
+            .redirectUrl(callbackRoute) // <--- Updated URL used here
             .build();
 
         // 4. Execute Payment
