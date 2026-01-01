@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { initAdmin } from "@/lib/firebaseAdmin";
-// 1. Import FieldValue directly here
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 export async function POST(request: Request) {
     try {
-        const { bookingId, message, type } = await request.json();
+        const body = await request.json();
+        // ✅ Accept collectionName from the frontend
+        const { bookingId, message, type, collectionName } = body;
 
         if (!bookingId || !message) {
             return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -13,9 +14,21 @@ export async function POST(request: Request) {
 
         await initAdmin();
         const db = getFirestore();
-        const bookingRef = db.collection("bookings").doc(bookingId);
 
-        // 2. Use FieldValue.arrayUnion directly (not db.FieldValue)
+        // ✅ SMART TARGETING
+        // If collectionName is sent (new frontend), use it.
+        // If not (backward compatibility), default to "bookings".
+        const targetCollection = collectionName || "bookings";
+
+        const bookingRef = db.collection(targetCollection).doc(bookingId);
+
+        // Verify it exists (Optional but good practice)
+        const docSnap = await bookingRef.get();
+        if (!docSnap.exists) {
+            return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+        }
+
+        // Add ticket
         await bookingRef.update({
             supportTickets: FieldValue.arrayUnion({
                 type: type || 'general',

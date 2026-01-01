@@ -1,19 +1,26 @@
 import { NextResponse } from "next/server";
 import { initAdmin } from "@/lib/firebaseAdmin";
 import { getFirestore } from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth";
 
 export async function POST(request: Request) {
     try {
-        const { bookingId } = await request.json();
+        const body = await request.json();
+        // ✅ NOW ACCEPT collectionName from the frontend
+        const { bookingId, collectionName } = body;
 
-        // 1. Verify User (Security)
-        // In a real app, check headers for auth token. 
-        // For now, we trust the client sends the ID, but we should verify ownership in production.
+        if (!bookingId) {
+            return NextResponse.json({ error: "Missing Booking ID" }, { status: 400 });
+        }
 
         await initAdmin();
         const db = getFirestore();
-        const bookingRef = db.collection("bookings").doc(bookingId);
+
+        // ✅ SMART TARGETING
+        // If collectionName is sent (new frontend), use it.
+        // If not (old requests), default to "bookings" (Hotels).
+        const targetCollection = collectionName || "bookings";
+
+        const bookingRef = db.collection(targetCollection).doc(bookingId);
         const docSnap = await bookingRef.get();
 
         if (!docSnap.exists) {
@@ -28,12 +35,14 @@ export async function POST(request: Request) {
         // 3. Update Status
         await bookingRef.update({
             status: "cancelled",
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            cancelledAt: new Date().toISOString() // Good for analytics
         });
 
         return NextResponse.json({ success: true });
 
     } catch (error) {
+        console.error("Cancellation Error:", error);
         return NextResponse.json({ error: "Server Error" }, { status: 500 });
     }
 }

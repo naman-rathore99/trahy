@@ -3,13 +3,13 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { app } from "@/lib/firebase";
-import { getFirestore, doc, onSnapshot } from "firebase/firestore";
+import { getFirestore, doc, onSnapshot, getDoc } from "firebase/firestore";
 import Navbar from "@/components/Navbar";
 import {
     CheckCircle, Loader2, Calendar, Users, Car, Download, Home,
-    XCircle, HelpCircle, Send, AlertTriangle, ChevronLeft, ChevronRight
+    XCircle, HelpCircle, Send, AlertTriangle, ChevronLeft, ChevronRight, BedDouble
 } from "lucide-react";
-import { format, parseISO, isFuture } from "date-fns";
+import { format, parseISO, isFuture, isValid } from "date-fns";
 import { DayPicker, DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 
@@ -26,17 +26,69 @@ export default function BookingSuccessPage({ params }: { params: Promise<{ id: s
     const [requestType, setRequestType] = useState<"date_change" | "general">("general");
     const [selectedRange, setSelectedRange] = useState<DateRange | undefined>();
 
-    // --- REAL-TIME FETCH ---
+    // --- 1. SMART FETCH (Handles both Collections) ---
     useEffect(() => {
         if (!id) return;
         const db = getFirestore(app);
-        const unsub = onSnapshot(doc(db, "bookings", id), (doc) => {
-            if (doc.exists()) {
-                setBooking({ id: doc.id, ...doc.data() });
+        let unsubscribe = () => { };
+
+        const setupListener = async () => {
+            // Step A: Determine which collection the ID belongs to
+            let collectionName = "bookings";
+            let docRef = doc(db, "bookings", id);
+
+            // Check Hotels first
+            let snapshot = await getDoc(docRef);
+
+            // If not in Hotels, check Vehicles
+            if (!snapshot.exists()) {
+                docRef = doc(db, "vehicle_bookings", id);
+                snapshot = await getDoc(docRef);
+                if (snapshot.exists()) {
+                    collectionName = "vehicle_bookings";
+                } else {
+                    // Not found in either
+                    setLoading(false);
+                    return;
+                }
             }
-            setLoading(false);
-        });
-        return () => unsub();
+
+            // Step B: Attach Real-time Listener to the found document
+            unsubscribe = onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const d = docSnap.data();
+
+                    // --- DATA NORMALIZATION ---
+                    // Map Vehicle fields to Hotel fields so the UI works for both
+                    const rawStart = d.checkIn || d.startDate;
+                    const rawEnd = d.checkOut || d.endDate;
+                    const rawName = d.listingName || d.vehicleName || "Unknown Booking";
+                    const rawImage = d.listingImage || d.vehicleImage || "/placeholder.jpg";
+                    const rawAmount = d.totalAmount || d.totalPrice;
+
+                    // Detect Type
+                    const isVehicle = collectionName === 'vehicle_bookings' || d.type === 'vehicle';
+
+                    setBooking({
+                        id: docSnap.id,
+                        sourceCollection: collectionName, // Important for Cancel/Update actions
+                        ...d,
+                        // Normalized fields
+                        listingName: rawName,
+                        listingImage: rawImage,
+                        checkIn: rawStart,
+                        checkOut: rawEnd,
+                        totalAmount: rawAmount,
+                        serviceType: isVehicle ? 'vehicle_only' : 'hotel'
+                    });
+                }
+                setLoading(false);
+            });
+        };
+
+        setupListener();
+
+        return () => unsubscribe();
     }, [id]);
 
     // --- HANDLER: DATE SELECTION ---
@@ -54,9 +106,15 @@ export default function BookingSuccessPage({ params }: { params: Promise<{ id: s
         if (!confirm("Are you sure you want to cancel? This action cannot be undone.")) return;
 
         try {
+            // Note: You might need to update your /api/bookings/cancel to handle 'sourceCollection'
+            // For now, we pass it in the body so the API knows where to look if updated
             await fetch("/api/bookings/cancel", {
                 method: "POST",
-                body: JSON.stringify({ bookingId: id }),
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    bookingId: id,
+                    collectionName: booking?.sourceCollection // Pass collection info
+                }),
             });
         } catch (err) {
             alert("Error cancelling booking");
@@ -70,8 +128,10 @@ export default function BookingSuccessPage({ params }: { params: Promise<{ id: s
         try {
             await fetch("/api/bookings/support", {
                 method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     bookingId: id,
+                    collectionName: booking?.sourceCollection,
                     message: supportMessage,
                     type: requestType
                 }),
@@ -88,10 +148,39 @@ export default function BookingSuccessPage({ params }: { params: Promise<{ id: s
     };
 
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black"><Loader2 className="animate-spin text-emerald-600" size={40} /></div>;
-    if (!booking) return <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-gray-900 dark:text-white">Booking not found.</div>;
+
+    if (!booking) return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-black text-gray-900 dark:text-white p-4 text-center">
+            <AlertTriangle size={48} className="text-red-500 mb-4" />
+            <h2 className="text-xl font-bold">Booking Not Found</h2>
+            <p className="text-gray-500 mb-6">We couldn't locate this booking ID.</p>
+            <button onClick={() => router.push("/trips")} className="bg-black text-white px-6 py-2 rounded-lg font-bold">Go to My Trips</button>
+        </div>
+    );
 
     const isCancelled = booking.status === 'cancelled';
-    const isUpcoming = booking.checkIn ? isFuture(parseISO(booking.checkIn)) : false;
+
+    // Robust Date Checking
+    let isUpcoming = false;
+    let displayCheckIn = "TBD";
+    let displayCheckOut = "TBD";
+
+    if (booking.checkIn && booking.checkOut) {
+        try {
+            const start = parseISO(booking.checkIn);
+            const end = parseISO(booking.checkOut);
+            if (isValid(start) && isValid(end)) {
+                isUpcoming = isFuture(start);
+                displayCheckIn = format(start, "dd MMM");
+                displayCheckOut = format(end, "dd MMM");
+            }
+        } catch (e) { }
+    }
+
+    // UI Labels based on Type
+    const isVehicle = booking.serviceType === 'vehicle_only';
+    const typeLabel = isVehicle ? "Vehicle Rental" : "Hotel Stay";
+    const dateLabel = isVehicle ? "Pickup - Dropoff" : "Check-in - Check-out";
 
     return (
         <main className="min-h-screen bg-gray-50 dark:bg-black pb-20 transition-colors duration-300">
@@ -133,25 +222,25 @@ export default function BookingSuccessPage({ params }: { params: Promise<{ id: s
                     <div className={`h-2 w-full ${isCancelled ? 'bg-red-500' : 'bg-gradient-to-r from-emerald-400 to-teal-500'}`} />
 
                     <div className="p-6 md:p-8 space-y-8">
-                        {/* 1. HOTEL INFO */}
+                        {/* 1. MAIN INFO (Handles Hotel OR Vehicle) */}
                         <div className="flex flex-col sm:flex-row gap-5 items-start border-b border-gray-100 dark:border-gray-800 pb-8">
-                            <img src={booking.listingImage} className={`w-full sm:w-24 h-48 sm:h-24 object-cover rounded-xl shadow-sm ${isCancelled && 'grayscale'}`} alt="Hotel" />
+                            <img src={booking.listingImage} className={`w-full sm:w-24 h-48 sm:h-24 object-cover rounded-xl shadow-sm ${isCancelled && 'grayscale'}`} alt="Item" />
                             <div>
-                                <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${isCancelled ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                    {booking.serviceType === 'package' ? 'Stay + Vehicle Package' : 'Hotel Stay'}
+                                <p className={`text-xs font-bold uppercase tracking-wide mb-1 flex items-center gap-1 ${isCancelled ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                    {isVehicle ? <Car size={12} /> : <BedDouble size={12} />} {typeLabel}
                                 </p>
                                 <h2 className={`text-xl font-bold mb-2 ${isCancelled ? 'text-gray-500 line-through dark:text-gray-500' : 'text-gray-900 dark:text-white'}`}>{booking.listingName}</h2>
                                 <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
                                     <span className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-lg">
                                         <Calendar size={14} />
-                                        {booking.checkIn && format(parseISO(booking.checkIn), "dd MMM")} - {booking.checkOut && format(parseISO(booking.checkOut), "dd MMM")}
+                                        {displayCheckIn} - {displayCheckOut}
                                     </span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* 2. VEHICLE INFO */}
-                        {booking.vehicleIncluded && (
+                        {/* 2. SUB-INFO (If Hotel has Vehicle) */}
+                        {booking.vehicleIncluded && !isVehicle && (
                             <div className={`border rounded-xl p-4 md:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 ${isCancelled ? 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400' : 'bg-rose-50 dark:bg-rose-900/20 border-rose-100 dark:border-rose-900/50 text-gray-900 dark:text-gray-100'}`}>
                                 <div className={`p-3 rounded-full shadow-sm ${isCancelled ? 'bg-gray-200 dark:bg-gray-700' : 'bg-white dark:bg-rose-800 text-rose-600 dark:text-rose-200'}`}>
                                     <Car size={24} />
@@ -231,7 +320,6 @@ export default function BookingSuccessPage({ params }: { params: Promise<{ id: s
                                         <button onClick={() => setShowSupport(false)}><XCircle size={20} className="text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white" /></button>
                                     </div>
 
-                                    {/* 3. SHOW CALENDAR IF REQUEST IS DATE CHANGE */}
                                     {requestType === "date_change" && (
                                         <div className="flex justify-center mb-4 border dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800">
                                             <DayPicker
@@ -239,6 +327,10 @@ export default function BookingSuccessPage({ params }: { params: Promise<{ id: s
                                                 selected={selectedRange}
                                                 onSelect={handleDateSelect}
                                                 disabled={{ before: new Date() }}
+                                                modifiersClassNames={{
+                                                    selected: "bg-rose-600 text-white",
+                                                    day: "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md"
+                                                }}
                                             />
                                         </div>
                                     )}
