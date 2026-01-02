@@ -14,8 +14,8 @@ export default function RequestsPage() {
 
   const fetchRequests = async () => {
     try {
-      const data = await apiRequest("/api/admin/requests", "GET");
-      // Ensure we always have an array, even if backend sends nothing
+      // ✅ FIX: Use the correct public route we created earlier
+      const data = await apiRequest("/api/public/join-request", "GET");
       setRequests(data.requests || []);
     } catch (err) {
       console.error("Failed to load requests:", err);
@@ -26,7 +26,6 @@ export default function RequestsPage() {
 
   // 2. Handle Approve Logic
   const handleApprove = async (req: any) => {
-    // Admin sets a temporary password for the new partner
     const tempPassword = prompt(
       `Set a temporary password for ${req.email}:`,
       "Password123!"
@@ -35,12 +34,15 @@ export default function RequestsPage() {
 
     try {
       setLoading(true);
+      // ✅ FIX: Send 'status', 'email', and 'password'
       await apiRequest("/api/admin/approve-request", "POST", {
         requestId: req.id,
+        status: "approved", // <--- Added missing status
         email: req.email,
         name: req.name,
         password: tempPassword,
       });
+
       alert(`User Created! \nEmail: ${req.email}\nPassword: ${tempPassword}`);
       fetchRequests(); // Refresh list
     } catch (err: any) {
@@ -50,10 +52,27 @@ export default function RequestsPage() {
     }
   };
 
+  // 3. Handle Reject Logic
+  const handleReject = async (reqId: string) => {
+    if (!confirm("Are you sure you want to reject this request?")) return;
+    try {
+      setLoading(true);
+      await apiRequest("/api/admin/approve-request", "POST", {
+        requestId: reqId,
+        status: "rejected"
+      });
+      fetchRequests();
+    } catch (err: any) {
+      alert("Error rejecting: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (loading)
     return (
       <div className="p-10 flex justify-center">
-        <Loader2 className="animate-spin" />
+        <Loader2 className="animate-spin text-rose-600" />
       </div>
     );
 
@@ -77,8 +96,10 @@ export default function RequestsPage() {
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                     {req.name}
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full uppercase">
-                      {req.serviceType}
+                    <span className={`text-xs px-2 py-1 rounded-full uppercase ${req.status === 'approved' ? 'bg-green-100 text-green-800' :
+                        req.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                      }`}>
+                      {req.status || req.serviceType}
                     </span>
                   </h3>
                   <div className="text-sm text-gray-500 mt-1">
@@ -97,17 +118,22 @@ export default function RequestsPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-3 w-full md:w-auto">
-                  <button className="flex-1 md:flex-none border border-red-200 text-red-600 px-4 py-2 rounded-lg font-medium hover:bg-red-50 transition-colors">
-                    Reject
-                  </button>
-                  <button
-                    onClick={() => handleApprove(req)}
-                    className="flex-1 md:flex-none bg-black text-white px-6 py-2 rounded-lg font-bold hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Check size={18} /> Approve
-                  </button>
-                </div>
+                {req.status === 'pending' && (
+                  <div className="flex gap-3 w-full md:w-auto">
+                    <button
+                      onClick={() => handleReject(req.id)}
+                      className="flex-1 md:flex-none border border-red-200 text-red-600 px-4 py-2 rounded-lg font-medium hover:bg-red-50 transition-colors"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => handleApprove(req)}
+                      className="flex-1 md:flex-none bg-black text-white px-6 py-2 rounded-lg font-bold hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Check size={18} /> Approve
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

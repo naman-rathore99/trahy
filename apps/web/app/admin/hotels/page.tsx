@@ -29,6 +29,7 @@ export default function AdminDashboard() {
       .then((data) => {
         // ✅ FIX 2: Read from 'data.hotels'
         setAllHotels(data.hotels || []);
+        console.log(data, "hotels data");
       })
       .catch((err) => console.error("Failed to load hotels:", err))
       .finally(() => setLoading(false));
@@ -57,31 +58,28 @@ export default function AdminDashboard() {
         <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-800 mb-6 scrollbar-hide">
           <button
             onClick={() => setActiveTab("approved")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === "approved"
-                ? "border-b-2 border-green-600 text-green-600 dark:text-green-400"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-            }`}
+            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === "approved"
+              ? "border-b-2 border-green-600 text-green-600 dark:text-green-400"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
           >
             <CheckCircle size={16} /> Active Hotels
           </button>
           <button
             onClick={() => setActiveTab("pending")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === "pending"
-                ? "border-b-2 border-yellow-500 text-yellow-600 dark:text-yellow-400"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-            }`}
+            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === "pending"
+              ? "border-b-2 border-yellow-500 text-yellow-600 dark:text-yellow-400"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
           >
             <Clock size={16} /> Pending Review
           </button>
           <button
             onClick={() => setActiveTab("banned")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === "banned"
-                ? "border-b-2 border-red-600 text-red-600 dark:text-red-400"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-            }`}
+            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === "banned"
+              ? "border-b-2 border-red-600 text-red-600 dark:text-red-400"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
           >
             <Ban size={16} /> Banned
           </button>
