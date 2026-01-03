@@ -1,11 +1,12 @@
 "use client";
+
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app } from "@/lib/firebase";
-import { apiRequest } from "@/lib/api";
 import AdminSidebar from "@/components/AdminSidebar";
 import { ThemeProvider } from "@/context/AdminThemeContext";
+import { Loader2, ShieldAlert } from "lucide-react";
 
 export default function AdminLayout({
   children,
@@ -24,11 +25,22 @@ export default function AdminLayout({
         router.push("/login");
       } else {
         try {
-          const data = await apiRequest("/api/user/me", "GET");
-          if (data.user.role === "admin" || data.user.role === "partner") {
+          // 🔒 SECURITY UPGRADE: Check token claims directly
+          // This is faster and harder to fake than an API call
+          const token = await user.getIdTokenResult(true);
+          const role = token.claims.role;
+
+          if (role === "admin") {
             setAuthorized(true);
           } else {
-            router.push("/");
+            // ❌ IF NOT ADMIN, KICK THEM OUT
+            console.warn("Unauthorized Access Attempt");
+
+            if (role === "partner") {
+              router.push("/partner/dashboard"); // Send partners to their own home
+            } else {
+              router.push("/login"); // Send users to login
+            }
           }
         } catch (error) {
           console.error("Auth check failed", error);
@@ -42,8 +54,9 @@ export default function AdminLayout({
 
   if (loading) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-gray-50 dark:bg-black">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black dark:border-white" />
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50 dark:bg-black gap-4">
+        <Loader2 className="animate-spin text-rose-600 h-10 w-10" />
+        <p className="text-gray-500 font-bold animate-pulse">Verifying Admin Privileges...</p>
       </div>
     );
   }
@@ -51,19 +64,17 @@ export default function AdminLayout({
   if (!authorized) return null;
 
   return (
-    // 1. WRAP EVERYTHING HERE so Sidebar gets the theme too
     <ThemeProvider
       attribute="class"
       defaultTheme="system"
       enableSystem
       disableTransitionOnChange
     >
-      {/* 2. Add dark:bg-black so the background changes */}
       <div className="min-h-screen bg-gray-50 dark:bg-black flex transition-colors duration-300">
-        {/* 3. SIDEBAR */}
+        {/* SIDEBAR */}
         <AdminSidebar />
 
-        {/* 4. MAIN CONTENT */}
+        {/* MAIN CONTENT */}
         <main className="flex-1 md:ml-72 p-8 w-full text-gray-900 dark:text-white">
           {children}
         </main>

@@ -13,7 +13,8 @@ import {
   Mail,
   Phone,
   CheckCircle,
-  ShieldCheck
+  ShieldCheck,
+  Building2 // Added icon for Hotel Name
 } from "lucide-react";
 
 export default function JoinPage() {
@@ -22,9 +23,10 @@ export default function JoinPage() {
 
   const [formData, setFormData] = useState({
     name: "",
+    hotelName: "", // Added Hotel Name
     email: "",
     phone: "",
-    serviceType: "Hotel",
+    serviceType: "Hotel", // Default hidden value
     officialIdUrl: "",
   });
 
@@ -96,15 +98,32 @@ export default function JoinPage() {
 
           <div className="text-center lg:text-left">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Create Partner Account</h2>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">Enter your details to submit an application.</p>
+            <p className="text-gray-500 dark:text-gray-400 mt-2">Enter your property details to apply.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
 
             {/* Inputs */}
             <div className="space-y-5">
+
+              {/* Hotel Name (New Field) */}
               <div>
-                <label className="block text-xs font-bold uppercase text-gray-500 mb-2 ml-1">Full Name</label>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-2 ml-1">Hotel / Business Name</label>
+                <div className="relative group">
+                  <Building2 className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors" size={18} />
+                  <input
+                    required
+                    className="w-full pl-11 p-3.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-rose-600 dark:text-white font-medium transition-all"
+                    placeholder="Grand Plaza Mathura"
+                    value={formData.hotelName}
+                    onChange={(e) => setFormData({ ...formData, hotelName: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Full Name (Owner Name) */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-2 ml-1">Owner Full Name</label>
                 <div className="relative group">
                   <User className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors" size={18} />
                   <input
@@ -117,6 +136,7 @@ export default function JoinPage() {
                 </div>
               </div>
 
+              {/* Email */}
               <div>
                 <label className="block text-xs font-bold uppercase text-gray-500 mb-2 ml-1">Email Address</label>
                 <div className="relative group">
@@ -132,6 +152,7 @@ export default function JoinPage() {
                 </div>
               </div>
 
+              {/* Phone */}
               <div>
                 <label className="block text-xs font-bold uppercase text-gray-500 mb-2 ml-1">Phone Number</label>
                 <div className="relative group">
@@ -151,11 +172,16 @@ export default function JoinPage() {
                 <label className="block text-xs font-bold uppercase text-gray-500 mb-2 ml-1 flex items-center gap-2">
                   <ShieldCheck size={14} className="text-rose-600" /> Official Verification ID
                 </label>
-                <div className="h-32 bg-gray-50 dark:bg-gray-900 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-800 overflow-hidden hover:border-rose-500 dark:hover:border-rose-500 transition-colors">
+                <div className="h-32 bg-gray-50 dark:bg-gray-900 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-800 overflow-hidden hover:border-rose-500 dark:hover:border-rose-500 transition-colors relative">
                   <ImageUpload
                     onUpload={(url) => setFormData({ ...formData, officialIdUrl: url })}
                     currentUrl={formData.officialIdUrl}
                   />
+                  {!formData.officialIdUrl && (
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-gray-400 text-sm">
+                      <span>Click to upload Aadhar/PAN</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

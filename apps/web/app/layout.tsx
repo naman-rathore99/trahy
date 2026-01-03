@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
-import Footer from "@/components/Footer";
+import FooterWrapper from "@/components/FooterWrapper";
 
 // Renamed variable to 'montserrat' for clarity (was 'poppins')
 const montserrat = Montserrat({
@@ -66,9 +66,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${montserrat.className} antialiased`}>{children}
-        <Footer />
+        <FooterWrapper />
       </body>
     </html>
   );
