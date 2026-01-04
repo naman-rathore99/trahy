@@ -3,87 +3,89 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { initAdmin } from "@/lib/firebaseAdmin";
 
-// GET: Fetch all rooms for a specific hotel
-export async function GET(request: Request) {
-    await initAdmin();
-    const db = getFirestore();
-    const { searchParams } = new URL(request.url);
-    const hotelId = searchParams.get("hotelId");
-
-    if (!hotelId) return NextResponse.json({ error: "Hotel ID required" }, { status: 400 });
-
+// Helper: Get User ID from Token
+async function getUserId(request: Request) {
+    const token = request.headers.get("Authorization")?.split("Bearer ")[1];
+    if (!token) return null;
     try {
-        // 1. Auth Check
-        const token = request.headers.get("Authorization")?.split("Bearer ")[1];
-        if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-        // 2. Fetch Rooms Sub-collection
-        const snapshot = await db.collection("hotels").doc(hotelId).collection("rooms").get();
-        const rooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        return NextResponse.json({ rooms });
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        await initAdmin();
+        const decodedToken = await getAuth().verifyIdToken(token);
+        return decodedToken.uid;
+    } catch (error) {
+        return null;
     }
 }
 
-// POST: Add a new room
-export async function POST(request: Request) {
-    await initAdmin();
-    const db = getFirestore();
-
+// --- GET: Fetch Rooms for Current User's Hotel ---
+export async function GET(request: Request) {
     try {
-        const token = request.headers.get("Authorization")?.split("Bearer ")[1];
-        if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        const decodedToken = await getAuth().verifyIdToken(token);
+        const userId = await getUserId(request);
+        if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const body = await request.json();
-        const { hotelId, title, price, capacity, amenities } = body;
+        const db = getFirestore();
 
-        // 1. Verify Ownership
-        const hotelRef = db.collection("hotels").doc(hotelId);
-        const hotelDoc = await hotelRef.get();
+        // 1. Find the User's Hotel first
+        const hotelSnapshot = await db.collection("hotels").where("ownerId", "==", userId).limit(1).get();
 
-        if (!hotelDoc.exists) return NextResponse.json({ error: "Hotel not found" }, { status: 404 });
-        if (hotelDoc.data()?.ownerId !== decodedToken.uid) {
-            return NextResponse.json({ error: "You do not own this hotel" }, { status: 403 });
+        if (hotelSnapshot.empty) {
+            // STOP HERE: If no hotel, return empty list (don't crash!)
+            return NextResponse.json({ rooms: [] });
         }
 
-        // 2. Add Room
-        const newRoom = {
-            title,
-            price: Number(price),
-            capacity: Number(capacity),
-            amenities: amenities || [], // Array of strings e.g. ["AC", "Wifi"]
-            available: true,
-            createdAt: new Date()
-        };
+        const hotelId = hotelSnapshot.docs[0].id;
 
-        const roomRef = await hotelRef.collection("rooms").add(newRoom);
+        // 2. Fetch Rooms specifically for this Hotel
+        // We assume rooms are stored as a subcollection: hotels/{hotelId}/rooms
+        const roomsSnapshot = await db
+            .collection("hotels")
+            .doc(hotelId)
+            .collection("rooms")
+            .get();
 
-        return NextResponse.json({ success: true, id: roomRef.id });
+        const rooms = roomsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        return NextResponse.json({ rooms });
 
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
 
-// DELETE: Remove a room
-export async function DELETE(request: Request) {
-    await initAdmin();
-    const db = getFirestore();
-    const { searchParams } = new URL(request.url);
-    const hotelId = searchParams.get("hotelId");
-    const roomId = searchParams.get("roomId");
-
-    if (!hotelId || !roomId) return NextResponse.json({ error: " IDs required" }, { status: 400 });
-
+// --- POST: Add a New Room ---
+export async function POST(request: Request) {
     try {
-        const token = request.headers.get("Authorization")?.split("Bearer ")[1];
-        if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const userId = await getUserId(request);
+        if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        await db.collection("hotels").doc(hotelId).collection("rooms").doc(roomId).delete();
-        return NextResponse.json({ success: true });
+        const db = getFirestore();
+        const body = await request.json();
+
+        // 1. Find the User's Hotel
+        const hotelSnapshot = await db.collection("hotels").where("ownerId", "==", userId).limit(1).get();
+
+        if (hotelSnapshot.empty) {
+            return NextResponse.json({ error: "You must create a Hotel Profile first." }, { status: 400 });
+        }
+
+        const hotelId = hotelSnapshot.docs[0].id;
+
+        // 2. Add Room to Subcollection
+        const newRoom = {
+            ...body,
+            createdAt: new Date(),
+        };
+
+        const ref = await db
+            .collection("hotels")
+            .doc(hotelId)
+            .collection("rooms")
+            .add(newRoom);
+
+        return NextResponse.json({ success: true, id: ref.id });
+
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

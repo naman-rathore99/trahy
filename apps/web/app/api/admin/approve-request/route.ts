@@ -1,84 +1,107 @@
 import { NextResponse } from "next/server";
 import { getFirestore } from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth"; // 1. Import Auth
+import { getAuth } from "firebase-admin/auth";
 import { initAdmin } from "@/lib/firebaseAdmin";
 
-export async function POST(request: Request) {
+// --- GET: List All Pending Requests ---
+export async function GET(request: Request) {
     await initAdmin();
     const db = getFirestore();
-    const auth = getAuth(); // 2. Initialize Auth
+
+    // 1. Fetch pending requests from 'join_requests' collection
+    const snapshot = await db.collection("join_requests")
+        .where("status", "==", "pending") // Ensure your frontend sends "pending" (lowercase)
+        .orderBy("createdAt", "desc")
+        .get();
+
+    const requests = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+    }));
+
+    return NextResponse.json({ requests });
+}
+
+// --- PUT: Approve/Reject & Create User ---
+export async function PUT(request: Request) {
+    await initAdmin();
+    const db = getFirestore();
+    const auth = getAuth();
 
     try {
         const body = await request.json();
-        const { requestId, status, email, password, name } = body;
+        const { requestId, status, email, password, name, hotelName, hotelAddress, phone } = body;
 
-        // 3. Validation
         if (!requestId || !status) {
-            return NextResponse.json(
-                { error: "Missing Request ID or Status" },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: "Missing ID or Status" }, { status: 400 });
         }
 
-        // 4. If Status is APPROVED, Create User Account
-        if (status === "approved") {
-            // We need email and password to create an account
-            if (!email || !password) {
-                return NextResponse.json(
-                    { error: "Email and Password are required to approve partner" },
-                    { status: 400 }
-                );
-            }
+        if (status === "APPROVED") {
+            let userId = "";
 
+            // 1. Create the User Account (Login)
             try {
-                // A. Create Authentication User (Login)
-                const userRecord = await auth.createUser({
-                    email: email,
-                    password: password,
-                    displayName: name,
-                    emailVerified: true, // Auto-verify since Admin approved it
-                });
+                // Check if user exists first to avoid error
+                try {
+                    const existingUser = await auth.getUserByEmail(email);
+                    userId = existingUser.uid;
+                } catch (e) {
+                    // User doesn't exist, create new
+                    const userRecord = await auth.createUser({
+                        email,
+                        password: password || "Partner@123", // Default temp password if none provided
+                        displayName: name,
+                        emailVerified: true,
+                    });
+                    userId = userRecord.uid;
+                }
 
-                // B. Set "partner" Role
-                await auth.setCustomUserClaims(userRecord.uid, { role: "partner" });
+                // Set Role
+                await auth.setCustomUserClaims(userId, { role: "partner" });
 
-                // C. Create User Document in 'users' collection (Database)
-                await db.collection("users").doc(userRecord.uid).set({
-                    uid: userRecord.uid,
-                    name: name,
-                    email: email,
+                // Save User to DB
+                await db.collection("users").doc(userId).set({
+                    uid: userId,
+                    name,
+                    email,
+                    phone,
                     role: "partner",
                     createdAt: new Date(),
-                    approvedBy: "admin", // Optional audit trail
-                });
-
-                console.log(`✅ User created: ${email} (${userRecord.uid})`);
+                }, { merge: true });
 
             } catch (authError: any) {
-                // Handle case where user might already exist
-                console.warn("⚠️ User creation warning:", authError.message);
-                // We continue executing to update the request status, 
-                // even if the user account already existed.
+                console.error("Auth Error:", authError);
+                return NextResponse.json({ error: "Failed to create user account" }, { status: 500 });
+            }
+
+            // 2. Create the HOTEL Record (Empty placeholder for them to edit)
+            // This is crucial so they pass the "No Hotel" check immediately
+            if (userId) {
+                const hotelData = {
+                    ownerId: userId,
+                    name: hotelName || `${name}'s Hotel`, // Use name from request or fallback
+                    description: "Welcome! Please update your hotel description in Settings.",
+                    address: hotelAddress || "Address Pending",
+                    city: "Mathura", // Default
+                    status: "APPROVED", // Auto-approve the hotel since we approved the partner
+                    createdAt: new Date(),
+                    images: [],
+                    amenities: []
+                };
+
+                await db.collection("hotels").add(hotelData);
             }
         }
 
-        // 5. Update Request Status in 'join_requests'
-        const requestRef = db.collection("join_requests").doc(requestId);
-        await requestRef.update({
-            status: status, // 'approved' or 'rejected'
-            updatedAt: new Date(),
+        // 3. Update the Request Status
+        await db.collection("join_requests").doc(requestId).update({
+            status: status, // APPROVED or REJECTED
+            updatedAt: new Date()
         });
 
-        return NextResponse.json({
-            success: true,
-            message: `Request ${status} successfully. User account created (if approved).`
-        });
+        return NextResponse.json({ success: true });
 
     } catch (error: any) {
-        console.error("❌ Error updating request:", error);
-        return NextResponse.json(
-            { error: "Internal Server Error", details: error.message },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

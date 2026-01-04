@@ -3,125 +3,200 @@
 import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/api";
 import ImageUpload from "@/components/ImageUpload";
-import { Save, Loader2, Hotel, MapPin } from "lucide-react";
+import {
+    Building2,
+    MapPin,
+    Save,
+    Loader2,
+    FileText,
+    Phone,
+    CheckCircle,
+    AlertCircle
+} from "lucide-react";
 
-export default function PartnerSettingsPage() {
+export default function PropertySettings() {
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [hotel, setHotel] = useState<any>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [isNew, setIsNew] = useState(false);
 
-    // Load current hotel details
+    const [formData, setFormData] = useState({
+        name: "",
+        description: "",
+        address: "",
+        city: "Mathura",
+        phone: "",
+        email: "",
+        mainImage: "",
+        images: [] as string[],
+        amenities: [] as string[] // Global hotel amenities (Parking, Wifi, etc.)
+    });
+
+    // Load existing hotel data (if any)
     useEffect(() => {
-        const fetchHotel = async () => {
-            try {
-                const res = await apiRequest("/api/partner/my-hotel", "GET");
-                if (res.hotel) setHotel(res.hotel);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchHotel();
+        fetchHotelDetails();
     }, []);
 
-    const handleSave = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSaving(true);
+    const fetchHotelDetails = async () => {
         try {
-            // Create a specific PUT route for hotel updates later, 
-            // or reuse an admin one if secured properly.
-            // For now, let's assume this endpoint exists:
-            await apiRequest(`/api/partner/hotel/${hotel.id}`, "PUT", hotel);
-            alert("Settings saved successfully!");
-        } catch (err: any) {
-            alert("Failed to save: " + err.message);
+            // We expect this to fail with "No hotel found" if it's a new user
+            const data = await apiRequest("/api/partner/hotel", "GET");
+            if (data && data.hotel) {
+                setFormData(data.hotel);
+            }
+        } catch (error: any) {
+            // If error is "No hotel found", we know it's a new setup
+            if (error.message.includes("No hotel")) {
+                setIsNew(true);
+            } else {
+                console.error("Fetch error:", error);
+            }
         } finally {
-            setSaving(false);
+            setLoading(false);
         }
     };
 
-    if (loading) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-rose-600" /></div>;
-    if (!hotel) return <div className="p-10">No hotel found.</div>;
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSubmitting(true);
+        try {
+            // POST creates new, PUT updates existing
+            const method = isNew ? "POST" : "PUT";
+            await apiRequest("/api/partner/hotel", method, formData);
+            alert(isNew ? "Property Created Successfully! Now you can add rooms." : "Settings Saved!");
+            setIsNew(false);
+        } catch (error: any) {
+            alert("Error: " + error.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div>;
 
     return (
-        <div className="p-8 max-w-4xl mx-auto">
-            <div className="mb-8 border-b border-gray-200 dark:border-gray-800 pb-4">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Property Settings</h1>
-                <p className="text-gray-500">Update your hotel information and appearance.</p>
+        <div className="max-w-4xl mx-auto p-6 space-y-8">
+
+            {/* HEADER */}
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-6">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                        {isNew ? "Setup Your Property" : "Property Settings"}
+                    </h1>
+                    <p className="text-gray-500 mt-1">
+                        {isNew
+                            ? "Complete your hotel profile to start accepting bookings."
+                            : "Update your hotel details, address, and contacts."}
+                    </p>
+                </div>
+                {isNew && (
+                    <div className="bg-amber-50 text-amber-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                        <AlertCircle size={16} /> Action Required
+                    </div>
+                )}
             </div>
 
-            <form onSubmit={handleSave} className="space-y-8">
+            <form onSubmit={handleSubmit} className="space-y-8">
 
-                {/* Basic Info Section */}
-                <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
-                    <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                        <Hotel size={20} className="text-rose-600" /> General Information
-                    </h2>
+                {/* 1. Basic Info */}
+                <section className="space-y-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                        <Building2 size={20} className="text-rose-600" /> Basic Details
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="text-xs font-bold uppercase text-gray-500 mb-2 block">Property Name</label>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-gray-500">Hotel Name</label>
                             <input
-                                className="w-full p-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-rose-500 font-bold dark:text-white"
-                                value={hotel.name}
-                                onChange={(e) => setHotel({ ...hotel, name: e.target.value })}
+                                required
+                                className="w-full p-3 bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none"
+                                placeholder="Ex: Grand Shubhyatra Hotel"
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             />
                         </div>
-                        <div>
-                            <label className="text-xs font-bold uppercase text-gray-500 mb-2 block">Base Price (₹)</label>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-gray-500">Official Email</label>
                             <input
-                                type="number"
-                                className="w-full p-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-rose-500 font-mono dark:text-white"
-                                value={hotel.pricePerNight}
-                                onChange={(e) => setHotel({ ...hotel, pricePerNight: e.target.value })}
-                            />
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="text-xs font-bold uppercase text-gray-500 mb-2 block">Location Address</label>
-                            <div className="relative">
-                                <MapPin className="absolute left-3 top-3.5 text-gray-400" size={18} />
-                                <input
-                                    className="w-full pl-10 p-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-rose-500 dark:text-white"
-                                    value={hotel.location}
-                                    onChange={(e) => setHotel({ ...hotel, location: e.target.value })}
-                                />
-                            </div>
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="text-xs font-bold uppercase text-gray-500 mb-2 block">Description</label>
-                            <textarea
-                                rows={4}
-                                className="w-full p-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-rose-500 dark:text-white"
-                                value={hotel.description}
-                                onChange={(e) => setHotel({ ...hotel, description: e.target.value })}
+                                type="email"
+                                required
+                                className="w-full p-3 bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none"
+                                placeholder="contact@hotel.com"
+                                value={formData.email}
+                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                             />
                         </div>
                     </div>
-                </div>
-
-                {/* Media Section */}
-                <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
-                    <h2 className="text-lg font-bold mb-4">Cover Image</h2>
-                    <div className="h-64 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black overflow-hidden">
-                        <ImageUpload
-                            label="Change Cover Photo"
-                            currentUrl={hotel.imageUrl}
-                            onUpload={(url) => setHotel({ ...hotel, imageUrl: url })}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase text-gray-500">Description</label>
+                        <textarea
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none h-32"
+                            placeholder="Tell travelers what makes your stay special..."
+                            value={formData.description}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         />
                     </div>
-                </div>
+                </section>
 
-                <div className="flex justify-end">
+                {/* 2. Location */}
+                <section className="space-y-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                        <MapPin size={20} className="text-rose-600" /> Location
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-gray-500">Street Address</label>
+                            <input
+                                required
+                                className="w-full p-3 bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none"
+                                placeholder="123, Temple Road, Near Prem Mandir"
+                                value={formData.address}
+                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-gray-500">City</label>
+                            <select
+                                className="w-full p-3 bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none"
+                                value={formData.city}
+                                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                            >
+                                <option>Mathura</option>
+                                <option>Vrindavan</option>
+                                <option>Govardhan</option>
+                                <option>Barsana</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                {/* 3. Main Image */}
+                <section className="space-y-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                        <FileText size={20} className="text-rose-600" /> Main Cover Photo
+                    </h3>
+                    <div className="h-64 bg-gray-50 dark:bg-gray-900 border-2 border-dashed border-gray-200 rounded-xl overflow-hidden relative">
+                        <ImageUpload className="h-64"
+                            currentUrl={formData.mainImage}
+                            onUpload={(url) => setFormData({ ...formData, mainImage: url })}
+                        />
+                        {!formData.mainImage && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-gray-400">
+                                Upload Main Hotel Image
+                            </div>
+                        )}
+                    </div>
+                </section>
+
+                {/* Submit Button */}
+                <div className="pt-4">
                     <button
                         type="submit"
-                        disabled={saving}
-                        className="bg-black dark:bg-white text-white dark:text-black px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:opacity-90 disabled:opacity-50"
+                        disabled={submitting}
+                        className="w-full md:w-auto px-8 bg-rose-600 hover:bg-rose-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-rose-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                        {saving ? <Loader2 className="animate-spin" /> : <Save size={20} />}
-                        Save Changes
+                        {submitting ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                        {isNew ? "Create Property" : "Save Changes"}
                     </button>
                 </div>
-
             </form>
         </div>
     );
