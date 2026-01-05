@@ -6,8 +6,6 @@ import {
   Users,
   Briefcase,
   Building2,
-  Car,
-  TrendingUp,
   AlertCircle,
   ChevronRight,
   Activity,
@@ -25,20 +23,21 @@ export default function AdminDashboard() {
     activeListings: 0,
     pendingRequests: 0,
     pendingProperties: 0,
-    revenue: 124500,
+    revenue: 124500, // Mock revenue
   });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         // Fetch all necessary data in parallel
+        // ✅ FIX: Use /api/admin/approve-request for requests
         const [usersData, reqData, propData] = await Promise.all([
           apiRequest("/api/admin/users", "GET"),
-          apiRequest("/api/public/join-request", "GET"),
+          apiRequest("/api/admin/approve-request", "GET"),
           apiRequest("/api/admin/hotels", "GET"),
         ]);
 
-        // 1. Calculate User Stats (Safety Check added: || [])
+        // 1. User Stats
         const allUsers = usersData.users || [];
         const travelers = allUsers.filter(
           (u: any) => u.role !== "partner" && u.role !== "admin"
@@ -47,21 +46,26 @@ export default function AdminDashboard() {
           (u: any) => u.role === "partner"
         ).length;
 
-        // 2. Calculate Property Stats (FIXED: Used .hotels instead of .properties)
-        const allProperties = propData.hotels || []; // <--- FIXED HERE
-
+        // 2. Property Stats
+        const allProperties = propData.hotels || [];
         const activeListings = allProperties.filter(
-          (p: any) => p.status === "approved"
+          (p: any) => p.status === "APPROVED" // Ensure match with uppercase
         ).length;
         const pendingProperties = allProperties.filter(
-          (p: any) => p.status === "pending"
+          (p: any) => p.status === "PENDING"
+        ).length;
+
+        // 3. Request Stats
+        const allRequests = reqData.requests || [];
+        const pendingRequests = allRequests.filter(
+          (r: any) => r.status === "pending" || !r.status
         ).length;
 
         setStats({
           travelers,
           partners,
           activeListings,
-          pendingRequests: reqData.requests ? reqData.requests.length : 0,
+          pendingRequests,
           pendingProperties,
           revenue: 124500,
         });
@@ -76,13 +80,14 @@ export default function AdminDashboard() {
 
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-black">
         <Loader2 className="animate-spin text-rose-600" size={40} />
       </div>
     );
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-6 bg-gray-50 dark:bg-black min-h-screen">
+
       {/* 1. HEADER & FINANCIALS */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
@@ -126,7 +131,7 @@ export default function AdminDashboard() {
           value={stats.activeListings}
           icon={Building2}
           color="indigo"
-          link="/admin/properties" // Ensure this page exists or change to /admin/hotels
+          link="/admin/properties"
           sub="Properties & Vehicles"
         />
         <StatCard
@@ -142,6 +147,7 @@ export default function AdminDashboard() {
 
       {/* 3. SPLIT VIEW: ALERTS vs ACTIONS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
         {/* LEFT (2 Cols): ATTENTION NEEDED */}
         <div className="lg:col-span-2 space-y-6">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">

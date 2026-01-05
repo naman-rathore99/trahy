@@ -45,7 +45,7 @@ export default function PartnerVerificationPage() {
 
                     // 2. SMART FIX: If User has no ID image, try to find their original Join Request
                     if (!foundUser.officialIdUrl) {
-                        const reqData = await apiRequest("/api/public/join-request", "GET");
+                        const reqData = await apiRequest("/api/admin/approve-request", "GET");
                         const originalReq = reqData.requests.find((r: any) => r.email === foundUser.email);
                         if (originalReq) {
                             setJoinRequestData(originalReq);

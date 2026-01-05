@@ -37,6 +37,7 @@ export default function JoinPage() {
 
     setLoading(true);
     try {
+      // ✅ FIX: Send to the PUBLIC API (which creates the request)
       await apiRequest("/api/public/join-request", "POST", formData);
       alert("Application Sent! We will review your ID and email you shortly.");
       router.push("/login");

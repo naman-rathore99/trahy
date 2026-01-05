@@ -6,7 +6,6 @@ import {
   Check,
   X,
   Loader2,
-  User,
   Mail,
   Phone,
   ExternalLink,
@@ -25,8 +24,8 @@ export default function RequestsPage() {
 
   const fetchRequests = async () => {
     try {
-      // Fetching from the endpoint you provided
-      const data = await apiRequest("/api/public/join-request", "GET");
+      // ✅ FIX 1: Removed 's' from end of URL (Singular)
+      const data = await apiRequest("/api/admin/approve-request", "GET");
       setRequests(data.requests || []);
     } catch (err) {
       console.error("Failed to load requests:", err);
@@ -37,25 +36,38 @@ export default function RequestsPage() {
 
   // 2. Handle Approve Logic
   const handleApprove = async (req: any) => {
+    if (!req.id) {
+      alert("Error: This request is missing a valid ID. Refresh the page.");
+      return;
+    }
+
     const tempPassword = prompt(
       `Set a temporary password for ${req.email}:`,
-      "Password123!"
+      "Partner@123"
     );
     if (!tempPassword) return;
 
     try {
       setLoading(true);
-      await apiRequest("/api/admin/approve-request", "POST", {
+
+      const payload = {
         requestId: req.id,
-        status: "approved",
+        status: "APPROVED",
         email: req.email,
         name: req.name,
         password: tempPassword,
-      });
+        hotelName: req.hotelName || `${req.name}'s Hotel`,
+        hotelAddress: req.city || "Address Pending",
+        phone: req.phone || ""
+      };
 
-      alert(`User Created! \nEmail: ${req.email}\nPassword: ${tempPassword}`);
-      fetchRequests(); // Refresh list
+      // ✅ Correct URL (Singular) & Method (POST)
+      await apiRequest("/api/admin/approve-request", "POST", payload);
+
+      alert(`User & Hotel Approved!`);
+      fetchRequests();
     } catch (err: any) {
+      console.error("Approval Failed:", err);
       alert("Error approving: " + err.message);
     } finally {
       setLoading(false);
@@ -67,10 +79,13 @@ export default function RequestsPage() {
     if (!confirm("Are you sure you want to reject this request?")) return;
     try {
       setLoading(true);
+
+      // ✅ FIX 2: Updated URL to "approve-request" and Method to "POST"
       await apiRequest("/api/admin/approve-request", "POST", {
         requestId: reqId,
-        status: "rejected"
+        status: "REJECTED"
       });
+
       fetchRequests();
     } catch (err: any) {
       alert("Error rejecting: " + err.message);
@@ -107,77 +122,45 @@ export default function RequestsPage() {
             <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-full mb-4">
               <ShieldAlert size={32} className="text-gray-400" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No Pending Requests</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">New applications will appear here.</p>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No Requests Found</h3>
           </div>
         ) : (
           <div className="grid gap-4">
             {requests.map((req) => (
-              <div
-                key={req.id}
-                className="group bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:border-rose-200 dark:hover:border-rose-900/50 transition-all flex flex-col md:flex-row justify-between gap-6"
-              >
-                {/* Applicant Info */}
+              <div key={req.id} className="group bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row justify-between gap-6">
+
                 <div className="flex-1 space-y-3">
-                  <div className="flex items-start justify-between md:justify-start gap-3">
-                    <h3 className="text-xl font-bold flex items-center gap-2">
-                      {req.name}
-                    </h3>
-                    {/* Status Badge */}
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${req.status === 'approved'
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : req.status === 'rejected'
-                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-bold">{req.name}</h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${req.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
+                      req.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                        'bg-blue-100 text-blue-700'
                       }`}>
-                      {req.status || req.serviceType || "Pending"}
+                      {req.status || "Pending"}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-6 text-sm text-gray-600 dark:text-gray-400">
-                    <div className="flex items-center gap-2">
-                      <Mail size={16} className="text-gray-400 shrink-0" />
-                      <span className="truncate">{req.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Phone size={16} className="text-gray-400 shrink-0" />
-                      <span>{req.phone || "No phone"}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CalendarClock size={16} className="text-gray-400 shrink-0" />
-                      <span>Requested: {new Date(req.createdAt?._seconds * 1000 || Date.now()).toLocaleDateString()}</span>
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-500">
+                    <div className="flex items-center gap-2"><Mail size={16} /> {req.email}</div>
+                    <div className="flex items-center gap-2"><Phone size={16} /> {req.phone || "N/A"}</div>
+                    <div className="flex items-center gap-2"><CalendarClock size={16} /> {new Date(req.createdAt?._seconds * 1000 || Date.now()).toLocaleDateString()}</div>
                   </div>
 
-                  {/* ID Proof Link */}
                   {req.officialIdUrl && (
-                    <div className="pt-2">
-                      <a
-                        href={req.officialIdUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-sm font-medium text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:underline"
-                      >
-                        <ExternalLink size={14} /> View Official ID Proof
-                      </a>
-                    </div>
+                    <a href={req.officialIdUrl} target="_blank" className="inline-flex items-center gap-1 text-sm font-bold text-rose-600 hover:underline mt-1">
+                      <ExternalLink size={14} /> View ID Proof
+                    </a>
                   )}
                 </div>
 
-                {/* Action Buttons */}
+                {/* Buttons only show if Pending */}
                 {(!req.status || req.status === 'pending') && (
-                  <div className="flex flex-row md:flex-col justify-center gap-3 w-full md:w-40 border-t md:border-t-0 md:border-l border-gray-100 dark:border-gray-800 pt-4 md:pt-0 md:pl-6">
-                    <button
-                      onClick={() => handleApprove(req)}
-                      className="flex-1 bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-gray-200/50 dark:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      <Check size={16} strokeWidth={3} /> Approve
+                  <div className="flex flex-row md:flex-col gap-3 min-w-[140px]">
+                    <button onClick={() => handleApprove(req)} className="flex-1 bg-black text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 py-2 hover:bg-gray-800">
+                      <Check size={16} /> Approve
                     </button>
-                    <button
-                      onClick={() => handleReject(req.id)}
-                      className="flex-1 bg-white hover:bg-red-50 dark:bg-gray-900 dark:hover:bg-red-900/20 text-gray-700 hover:text-red-600 dark:text-gray-300 dark:hover:text-red-400 border border-gray-200 dark:border-gray-700 px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      <X size={16} strokeWidth={3} /> Reject
+                    <button onClick={() => handleReject(req.id)} className="flex-1 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold text-sm flex items-center justify-center gap-2 py-2 hover:bg-red-50 hover:text-red-600">
+                      <X size={16} /> Reject
                     </button>
                   </div>
                 )}
