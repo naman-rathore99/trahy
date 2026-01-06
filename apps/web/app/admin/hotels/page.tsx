@@ -23,22 +23,44 @@ export default function AdminDashboard() {
   );
 
   useEffect(() => {
-    setLoading(true);
-    // ✅ FIX 1: Use the correct API endpoint for HOTELS
-    apiRequest("/api/admin/hotels", "GET")
-      .then((data) => {
-        // ✅ FIX 2: Read from 'data.hotels'
-        setAllHotels(data.hotels || []);
-        console.log(data, "hotels data");
-      })
-      .catch((err) => console.error("Failed to load hotels:", err))
-      .finally(() => setLoading(false));
+    fetchHotels();
   }, []);
 
-  // Filter logic
-  const filteredHotels = allHotels.filter(
-    (h) => (h.status || "pending") === activeTab
-  );
+  const fetchHotels = async () => {
+    setLoading(true);
+    try {
+      // ✅ 1. Fetch data from your API
+      const data = await apiRequest("/api/admin/hotels", "GET");
+
+      // ✅ 2. Log data to console for debugging
+      console.log("API Response:", data);
+
+      if (data && data.hotels) {
+        setAllHotels(data.hotels);
+      }
+    } catch (err) {
+      console.error("Failed to load hotels:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ 3. ROBUST FILTER LOGIC (Fixes the empty list issue)
+  const filteredHotels = allHotels.filter((h) => {
+    // Convert status to lowercase to avoid "Pending" vs "pending" mismatches
+    const status = (h.status || "pending").toLowerCase();
+
+    if (activeTab === "approved") {
+      return status === "approved" || status === "active" || status === "confirmed";
+    }
+    if (activeTab === "pending") {
+      return status === "pending" || status === "review";
+    }
+    if (activeTab === "banned") {
+      return status === "banned" || status === "rejected";
+    }
+    return false;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-8 transition-colors">
@@ -51,6 +73,9 @@ export default function AdminDashboard() {
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
               Review and manage hotel listings in Mathura & Vrindavan.
             </p>
+          </div>
+          <div className="bg-white dark:bg-gray-900 px-4 py-2 rounded-lg text-sm border border-gray-200 dark:border-gray-800">
+            Total Hotels: <strong>{allHotels.length}</strong>
           </div>
         </div>
 
@@ -99,7 +124,9 @@ export default function AdminDashboard() {
               No hotels found
             </h3>
             <p className="text-gray-500 dark:text-gray-400">
-              There are no {activeTab} hotels right now.
+              There are no hotels with status <strong>"{activeTab}"</strong>.
+              <br />
+              (Try checking the "Pending" tab?)
             </p>
           </div>
         ) : (
@@ -111,15 +138,16 @@ export default function AdminDashboard() {
               >
                 {/* Image */}
                 <div className="w-full md:w-32 h-48 md:h-24 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 relative">
-                  {hotel.imageUrl ? (
+                  {hotel.imageUrl || (hotel.imageUrls && hotel.imageUrls[0]) ? (
                     <img
-                      src={hotel.imageUrl}
+                      src={hotel.imageUrl || hotel.imageUrls[0]}
                       alt={hotel.name}
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                      No Image
+                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs flex-col gap-1">
+                      <Hotel size={20} />
+                      <span>No Image</span>
                     </div>
                   )}
                 </div>
@@ -129,18 +157,18 @@ export default function AdminDashboard() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate">
-                        {hotel.name}
+                        {hotel.name || "Unnamed Hotel"}
                       </h3>
                       <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-sm mt-1">
                         <MapPin size={14} />
-                        {hotel.location || "Mathura"}
+                        {hotel.location || "Mathura, India"}
                       </div>
                     </div>
 
                     {/* Price */}
                     <div className="hidden md:block text-right">
                       <div className="font-bold text-lg text-gray-900 dark:text-white">
-                        ₹{hotel.pricePerNight}
+                        ₹{hotel.pricePerNight || 0}
                       </div>
                       <div className="text-xs text-gray-500">per night</div>
                     </div>
@@ -154,12 +182,16 @@ export default function AdminDashboard() {
                     {hotel.ownerName || "Unknown"}
                     <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                     <span>{hotel.ownerEmail || "No Email"}</span>
+
+                    {/* Debug Status Badge */}
+                    <span className="ml-auto bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-[10px] uppercase font-bold">
+                      {hotel.status}
+                    </span>
                   </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex w-full md:w-auto gap-3 mt-2 md:mt-0">
-                  {/* ✅ FIX 3: Link points to /admin/hotels/[id] */}
                   <Link
                     href={`/admin/hotels/${hotel.id}`}
                     className="flex-1 md:flex-none text-center bg-black dark:bg-white text-white dark:text-black px-5 py-2.5 rounded-lg font-bold hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm"

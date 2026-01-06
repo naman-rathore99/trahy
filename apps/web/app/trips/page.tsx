@@ -10,20 +10,20 @@ import { app } from "@/lib/firebase";
 import Navbar from "@/components/Navbar";
 import Pagination from "@/components/Pagination";
 import {
-  Loader2, Calendar, MapPin, Car, Clock, XCircle,
-  Ticket, AlertTriangle, Printer, X, Edit, Save, BedDouble,
-  LayoutGrid
+  Loader2, Calendar, Car, Clock, XCircle,
+  Ticket, Edit, Save, BedDouble, X,
+  LayoutGrid, RefreshCcw
 } from "lucide-react";
-import { format, parseISO, isPast, isToday, isValid } from "date-fns";
+import { format, parseISO, isPast, isToday, isValid, formatDistanceToNow } from "date-fns";
 import { DayPicker, DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 
 // --- TYPES ---
 interface Booking {
   id: string;
-  sourceCollection: "bookings" | "vehicle_bookings"; // To know where to update/cancel
+  sourceCollection: "bookings" | "vehicle_bookings";
 
-  // Normalized Fields (Used for UI)
+  // Normalized Fields 
   listingName: string;
   listingImage: string;
   checkIn: string;
@@ -32,14 +32,16 @@ interface Booking {
   serviceType: "hotel" | "vehicle_only";
 
   status: "confirmed" | "pending" | "cancelled" | "failed";
+  paymentStatus?: "pending" | "paid" | "failed";
 
-  // Original Data (Kept for reference/invoices)
+  // Original Data 
   vehicleType?: string;
-  vehicleIncluded?: boolean; // For Hotel+Cab combo
+  vehicleIncluded?: boolean;
   userName?: string;
   userEmail?: string;
   priceBreakdown?: any;
   createdAt: any;
+  updatedAt?: any; // ✅ Track update time
 }
 
 const ITEMS_PER_PAGE = 5;
@@ -59,7 +61,11 @@ export default function TripsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
 
-  // --- 1. FETCH TRIPS (FROM BOTH COLLECTIONS) ---
+  // ✅ Animation States
+  const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
+
+  // --- 1. FETCH TRIPS ---
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       if (!currentUser) {
@@ -70,35 +76,29 @@ export default function TripsPage() {
       try {
         setLoading(true);
 
-        // A. Query Hotels (and legacy mixed data)
         const hotelQuery = query(
           collection(db, "bookings"),
           where("userId", "==", currentUser.uid)
         );
 
-        // B. Query New Vehicles Collection
         const vehicleQuery = query(
           collection(db, "vehicle_bookings"),
           where("userId", "==", currentUser.uid)
         );
 
-        // C. Run both in parallel
         const [hotelSnapshot, vehicleSnapshot] = await Promise.all([
           getDocs(hotelQuery),
           getDocs(vehicleQuery)
         ]);
 
-        // D. Process Hotels
         const hotelData = hotelSnapshot.docs.map((doc) => {
           const d = doc.data();
-          // Handle legacy mixed data in 'bookings'
           const isLegacyVehicle = d.type === 'vehicle' || (d.serviceType || '').includes('vehicle');
 
           return {
             id: doc.id,
             sourceCollection: "bookings",
             ...d,
-            // Normalize
             listingName: d.listingName || d.vehicleName || "Unnamed Booking",
             listingImage: d.listingImage || d.vehicleImage || "/placeholder.jpg",
             checkIn: d.checkIn || d.startDate,
@@ -108,16 +108,14 @@ export default function TripsPage() {
           };
         });
 
-        // E. Process New Vehicles
         const vehicleData = vehicleSnapshot.docs.map((doc) => {
           const d = doc.data();
           return {
             id: doc.id,
             sourceCollection: "vehicle_bookings",
             ...d,
-            // Normalize
             listingName: d.vehicleName || "Unnamed Vehicle",
-            listingImage: d.vehicleImage || "/placeholder.jpg", // Add a vehicle placeholder if needed
+            listingImage: d.vehicleImage || "/placeholder.jpg",
             checkIn: d.startDate,
             checkOut: d.endDate,
             totalAmount: d.totalPrice || 0,
@@ -125,7 +123,6 @@ export default function TripsPage() {
           };
         });
 
-        // F. Merge & Sort
         const allTrips = [...hotelData, ...vehicleData] as Booking[];
 
         allTrips.sort((a, b) => {
@@ -150,41 +147,63 @@ export default function TripsPage() {
     return () => unsubscribe();
   }, [router]);
 
-  // --- 2. FILTER & PAGINATION ---
-  const filteredBookings = bookings.filter((b) => {
-    if (activeTab === "all") return true;
-    if (activeTab === "hotels") return b.serviceType === "hotel";
-    if (activeTab === "vehicles") return b.serviceType === "vehicle_only";
-    return true;
-  });
-
-  useEffect(() => { setCurrentPage(1); }, [activeTab]);
-
-  const totalPages = Math.ceil(filteredBookings.length / ITEMS_PER_PAGE);
-  const safeCurrentPage = Math.min(Math.max(currentPage, 1), Math.max(totalPages, 1));
-  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
-  const currentBookings = filteredBookings.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // ✅ HELPER: Safely convert dates
+  const getValidDate = (dateVal: any): Date | null => {
+    if (!dateVal) return null;
+    if (typeof dateVal === 'object' && dateVal.seconds) return new Date(dateVal.seconds * 1000);
+    if (typeof dateVal === 'string') {
+      const d = parseISO(dateVal);
+      return isValid(d) ? d : null;
+    }
+    if (dateVal instanceof Date) return dateVal;
+    return null;
   };
 
-  // --- 3. ACTIONS ---
+  // --- 2. ACTIONS ---
+  const checkPaymentStatus = async (e: React.MouseEvent, bookingId: string) => {
+    e.stopPropagation();
+
+    // Start Animation
+    setRefreshingIds(prev => new Set(prev).add(bookingId));
+    setFailedIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(bookingId);
+      return newSet;
+    });
+
+    try {
+      const res = await fetch(`/api/payment/check/${bookingId}`);
+      const data = await res.json();
+
+      if (data.success) {
+        alert(`Payment Updated: ${data.paymentStatus.toUpperCase()}`);
+        window.location.reload();
+      } else {
+        setFailedIds(prev => new Set(prev).add(bookingId));
+        alert(`Status: ${data.status || "Still Pending"}`);
+      }
+    } catch (err) {
+      console.error(err);
+      setFailedIds(prev => new Set(prev).add(bookingId));
+    } finally {
+      // Stop Animation
+      setRefreshingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(bookingId);
+        return newSet;
+      });
+    }
+  };
+
   const handleCancel = async (e: React.MouseEvent, booking: Booking) => {
     e.stopPropagation();
     if (!window.confirm("Are you sure? This cannot be undone.")) return;
     setCancellingId(booking.id);
 
     try {
-      // NOTE: You might need to update your API to accept "collectionName"
-      // For now, we update client-side directly or call your existing API
-      // Here is a direct firestore update for safety:
-
       await updateDoc(doc(db, booking.sourceCollection, booking.id), {
         status: "cancelled"
       });
-
       setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: "cancelled" } : b));
     } catch (error) {
       console.error(error);
@@ -213,23 +232,18 @@ export default function TripsPage() {
     try {
       const newStart = format(newDates.from, "yyyy-MM-dd");
       const newEnd = format(newDates.to, "yyyy-MM-dd");
-
       const isVehicleCollection = rescheduleBooking.sourceCollection === "vehicle_bookings";
       const isLegacyVehicle = rescheduleBooking.serviceType === "vehicle_only";
-
-      // Map fields based on source collection
       const updateData = (isVehicleCollection || isLegacyVehicle)
         ? { startDate: newStart, endDate: newEnd, status: "confirmed" }
         : { checkIn: newStart, checkOut: newEnd, status: "confirmed" };
 
       await updateDoc(doc(db, rescheduleBooking.sourceCollection, rescheduleBooking.id), updateData);
-
       setBookings(prev => prev.map(b =>
         b.id === rescheduleBooking.id
           ? { ...b, checkIn: newStart, checkOut: newEnd, status: "confirmed" }
           : b
       ));
-
       setRescheduleBooking(null);
       alert("Rescheduled successfully!");
     } catch (error) {
@@ -240,9 +254,25 @@ export default function TripsPage() {
     }
   };
 
-  const handlePrint = () => window.print();
+  // --- FILTER & PAGINATION ---
+  const filteredBookings = bookings.filter((b) => {
+    if (activeTab === "all") return true;
+    if (activeTab === "hotels") return b.serviceType === "hotel";
+    if (activeTab === "vehicles") return b.serviceType === "vehicle_only";
+    return true;
+  });
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-black"><Loader2 className="animate-spin text-rose-600" size={32} /></div>;
+  useEffect(() => { setCurrentPage(1); }, [activeTab]);
+
+  const totalPages = Math.ceil(filteredBookings.length / ITEMS_PER_PAGE);
+  const safeCurrentPage = Math.min(Math.max(currentPage, 1), Math.max(totalPages, 1));
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+  const currentBookings = filteredBookings.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // --- RENDER HELPERS ---
   const EmptyState = () => (
@@ -254,6 +284,8 @@ export default function TripsPage() {
       <p className="text-sm text-gray-500">Time to book something new!</p>
     </div>
   );
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-black"><Loader2 className="animate-spin text-rose-600" size={32} /></div>;
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-black pb-20 print:bg-white print:p-0">
@@ -277,6 +309,15 @@ export default function TripsPage() {
         <div className="space-y-6 print:hidden">
           {filteredBookings.length === 0 ? <EmptyState /> : (
             currentBookings.map((booking) => {
+
+              const isCancelled = booking.status === "cancelled";
+              const isPaymentPending = (booking.paymentStatus === "pending" || booking.status === "pending") && !isCancelled;
+
+              // Helper vars
+              const isRefreshing = refreshingIds.has(booking.id);
+              const isFailed = failedIds.has(booking.id);
+              const updatedDate = getValidDate(booking.updatedAt);
+
               let displayStart = "Date Pending";
               let displayEnd = "Date Pending";
               let dateValid = false;
@@ -293,9 +334,7 @@ export default function TripsPage() {
                 } catch (e) { }
               }
 
-              const isCancelled = booking.status === "cancelled";
               const isCompleted = dateValid && !isCancelled && isPast(parseISO(booking.checkOut)) && !isToday(parseISO(booking.checkOut));
-
               const isVehicle = booking.serviceType === "vehicle_only";
               const TypeIcon = isVehicle ? Car : BedDouble;
               const typeLabel = isVehicle ? "Vehicle Rental" : "Hotel Stay";
@@ -306,7 +345,38 @@ export default function TripsPage() {
                 <div key={booking.id} onClick={() => setSelectedBooking(booking)} className={`group bg-white dark:bg-gray-900 rounded-2xl p-4 sm:p-5 border shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row gap-6 relative overflow-hidden ${isCancelled ? 'opacity-75 border-gray-200 bg-gray-50 dark:bg-gray-900/50' : 'border-gray-200 dark:border-gray-800'}`}>
                   <div className="w-full sm:w-48 h-48 sm:h-auto shrink-0 rounded-xl overflow-hidden relative bg-gray-100 dark:bg-gray-800">
                     <img src={booking.listingImage || "/placeholder.jpg"} className={`w-full h-full object-cover transition-transform duration-500 ${!isCancelled && 'group-hover:scale-105'} ${isCompleted && 'grayscale'}`} alt={booking.listingName} />
-                    <div className={`absolute top-2 left-2 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${isCancelled ? 'bg-red-500 text-white' : isCompleted ? 'bg-gray-600 text-white' : 'bg-emerald-500 text-white'}`}>{isCancelled ? "Cancelled" : isCompleted ? "Completed" : "Confirmed"}</div>
+
+                    {/* ✅ STATUS BADGE & REFRESH LOGIC */}
+                    <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+                      <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 ${isCancelled ? 'bg-red-500 text-white'
+                          : isPaymentPending ? 'bg-yellow-500 text-white'
+                            : isCompleted ? 'bg-gray-600 text-white'
+                              : 'bg-emerald-500 text-white'
+                        }`}>
+                        {isCancelled ? "Cancelled" : isPaymentPending ? "Payment Pending" : isCompleted ? "Completed" : "Confirmed"}
+
+                        {isPaymentPending && (
+                          <button
+                            onClick={(e) => checkPaymentStatus(e, booking.id)}
+                            disabled={isRefreshing}
+                            className={`p-1 rounded-full transition-all 
+                              ${isFailed ? "bg-red-600 hover:bg-red-700 text-white" : "bg-white/20 hover:bg-white/40 text-white"}
+                            `}
+                            title="Check Payment Status"
+                          >
+                            <RefreshCcw size={10} className={isRefreshing ? "animate-spin" : ""} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Updated Time Badge */}
+                      {isPaymentPending && updatedDate && (
+                        <div className="bg-black/50 backdrop-blur-md text-white px-2 py-0.5 rounded text-[9px]">
+                          Updated {formatDistanceToNow(updatedDate)} ago
+                        </div>
+                      )}
+                    </div>
+
                     <div className={`absolute bottom-2 right-2 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-white flex items-center gap-1 ${isVehicle ? 'bg-indigo-600' : 'bg-rose-600'}`}><TypeIcon size={10} /> {typeLabel}</div>
                   </div>
 
@@ -355,7 +425,7 @@ export default function TripsPage() {
         {filteredBookings.length > 0 && <Pagination currentPage={safeCurrentPage} totalItems={filteredBookings.length} itemsPerPage={ITEMS_PER_PAGE} onPageChange={handlePageChange} className="mt-12" />}
       </div>
 
-      {/* MODALS */}
+      {/* --- INVOICE MODAL --- */}
       {selectedBooking && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 print:p-0 print:static">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm print:hidden" onClick={() => setSelectedBooking(null)}></div>
@@ -399,6 +469,7 @@ export default function TripsPage() {
         </div>
       )}
 
+      {/* --- RESCHEDULE MODAL --- */}
       {rescheduleBooking && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setRescheduleBooking(null)}></div>

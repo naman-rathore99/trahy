@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Briefcase,
   Hotel,
+  Receipt, // ✅ Added Icon
 } from "lucide-react";
 import Link from "next/link";
 import { getAuth, onAuthStateChanged, signOut, IdTokenResult } from "firebase/auth";
@@ -43,7 +44,6 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
       setFirebaseUser(currentUser);
       if (currentUser) {
         try {
-          // Get role directly from the ID token (faster & more reliable)
           const token: IdTokenResult = await currentUser.getIdTokenResult();
           const role = token.claims.role as string || "user";
           setUserRole(role);
@@ -185,6 +185,11 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                           <Link href="/trips" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
                             <Briefcase size={16} /> My Trips
                           </Link>
+
+                          {/* ✅ NEW: Transactions Link (Styled Consistently) */}
+                          <Link href="/transactions" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                            <Receipt size={16} /> Transactions
+                          </Link>
                         </div>
 
                         <div className="border-t border-gray-100 dark:border-slate-800 pt-1">
@@ -235,9 +240,14 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
           )}
 
           {firebaseUser && (
-            <li onClick={() => setIsMobileMenuOpen(false)}>
-              <Link href="/trips" className="flex items-center gap-2">My Trips</Link>
-            </li>
+            <>
+              <li onClick={() => setIsMobileMenuOpen(false)}>
+                <Link href="/trips" className="flex items-center gap-2">My Trips</Link>
+              </li>
+              <li onClick={() => setIsMobileMenuOpen(false)}>
+                <Link href="/transactions" className="flex items-center gap-2">Transactions</Link>
+              </li>
+            </>
           )}
 
           {!firebaseUser && (

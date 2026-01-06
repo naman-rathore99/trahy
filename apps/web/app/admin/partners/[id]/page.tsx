@@ -36,24 +36,33 @@ export default function PartnerVerificationPage() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // 1. Fetch the User
+                // 1. Fetch the User List
                 const usersData = await apiRequest("/api/admin/users?role=partner", "GET");
                 const foundUser = usersData.users.find((u: any) => u.uid === id);
 
                 if (foundUser) {
+                    console.log("✅ Found User Data:", foundUser); // DEBUG LOG
                     setPartner(foundUser);
 
-                    // 2. SMART FIX: If User has no ID image, try to find their original Join Request
-                    if (!foundUser.officialIdUrl) {
-                        const reqData = await apiRequest("/api/admin/approve-request", "GET");
-                        const originalReq = reqData.requests.find((r: any) => r.email === foundUser.email);
-                        if (originalReq) {
-                            setJoinRequestData(originalReq);
+                    // 2. Check for backup image in Join Requests
+                    // (Only if the user object doesn't have an obvious image)
+                    if (!findImage(foundUser)) {
+                        try {
+                            const reqData = await apiRequest("/api/admin/join-requests", "GET");
+                            if (reqData && reqData.requests) {
+                                const originalReq = reqData.requests.find((r: any) => r.email === foundUser.email);
+                                if (originalReq) {
+                                    console.log("✅ Found Backup Request Data:", originalReq); // DEBUG LOG
+                                    setJoinRequestData(originalReq);
+                                }
+                            }
+                        } catch (backupError) {
+                            console.warn("Backup check failed:", backupError);
                         }
                     }
                 }
             } catch (err) {
-                console.error(err);
+                console.error("Critical Error:", err);
             } finally {
                 setLoading(false);
             }
@@ -61,15 +70,27 @@ export default function PartnerVerificationPage() {
         fetchData();
     }, [id]);
 
-    // Determine which image to show (User Profile vs Fallback to Join Request)
-    const idImageUrl = partner?.officialIdUrl || joinRequestData?.officialIdUrl;
+    // ✅ NEW HELPER: Checks multiple field names for the image
+    const findImage = (data: any) => {
+        if (!data) return null;
+        return (
+            data.officialIdUrl ||
+            data.idProofUrl ||
+            data.documentUrl ||
+            data.idUrl ||
+            data.proofUrl ||
+            data.imageUrl ||
+            data.fileUrl
+        );
+    };
 
+    // Determine which image to show using the smart helper
+    const idImageUrl = findImage(partner) || findImage(joinRequestData);
 
     const handleApprove = async () => {
         if (!confirm("Confirm identity verification? This will make their Hotel visible publicly.")) return;
         setProcessing(true);
         try {
-            // ✅ CALL REAL API
             await apiRequest("/api/admin/verify-partner", "POST", {
                 userId: id,
                 action: "approve"
@@ -88,7 +109,6 @@ export default function PartnerVerificationPage() {
         if (!remark.trim()) return alert("Please enter a reason for rejection.");
         setProcessing(true);
         try {
-            // ✅ CALL REAL API
             await apiRequest("/api/admin/verify-partner", "POST", {
                 userId: id,
                 action: "reject",
@@ -103,8 +123,6 @@ export default function PartnerVerificationPage() {
             setProcessing(false);
         }
     };
-
-
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center bg-black text-white">
@@ -258,13 +276,13 @@ export default function PartnerVerificationPage() {
                                     </div>
                                     <h3 className="text-xl font-bold mb-2">No Document Found</h3>
                                     <p className="text-gray-400 max-w-sm mx-auto">
-                                        The user profile does not have an `officialIdUrl`.
+                                        The user profile does not have an image in any common field.
                                         <br /><br />
                                         <span className="text-xs bg-gray-800 px-2 py-1 rounded text-gray-300">
-                                            System Logic:
+                                            Checked Fields:
                                         </span>
-                                        <span className="text-xs text-gray-500 block mt-1">
-                                            We tried checking the Join Request history for `{partner.email}` but found nothing there either.
+                                        <span className="text-xs text-gray-500 block mt-1 font-mono">
+                                            officialIdUrl, idProofUrl, documentUrl, idUrl, imageUrl...
                                         </span>
                                     </p>
                                 </div>

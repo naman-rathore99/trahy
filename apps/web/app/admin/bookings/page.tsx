@@ -1,632 +1,361 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { getAuth } from "firebase/auth";
+import { apiRequest } from "@/lib/api";
+import Pagination from "@/components/Pagination"; // ✅ Import Pagination
 import {
-  getFirestore,
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-} from "firebase/firestore";
-import { app } from "@/lib/firebase";
-import Navbar from "@/components/Navbar";
-import {
-  Loader2,
-  Calendar as CalendarIcon,
-  Car,
-  MessageSquare,
-  Send,
-  X,
-  Search,
-  MapPin,
-  ExternalLink,
-  CalendarDays,
-  CheckCircle,
-  AlertCircle,
-  RefreshCw,
+  Loader2, User, Car, BedDouble, Filter, RefreshCcw, Calendar,
+  LayoutList, CalendarDays, ArrowDownUp
 } from "lucide-react";
-import { format, parseISO, areIntervalsOverlapping } from "date-fns";
-import { DayPicker, DateRange } from "react-day-picker";
-import "react-day-picker/dist/style.css";
+import { format, parseISO, isValid, formatDistanceToNow, isToday, isYesterday } from "date-fns";
 
 // --- TYPES ---
 interface Booking {
   id: string;
-  listingId: string;
+  type: "Hotel" | "Vehicle";
   listingName: string;
-  listingImage: string;
-  checkIn: string;
-  checkOut: string;
-  totalAmount: number;
-  status: "confirmed" | "pending" | "cancelled" | "failed";
-  vehicleIncluded?: boolean;
-  vehicleType?: string;
-  createdAt: string;
-  supportTickets?: { message: string; type: string; createdAt: string }[];
-  adminReplies?: { message: string; createdAt: string }[];
-  hasOpenTicket?: boolean;
-  userId: string;
+  customerName: string;
+  customerContact: string;
+  amount: number;
+  date: string | any;
+  status: string;
+  paymentStatus: string;
+  createdAt: string | any;
+  updatedAt?: string | any;
 }
 
+const ITEMS_PER_PAGE = 10; // ✅ Define items per page
+
 export default function AdminBookingsPage() {
-  const router = useRouter();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // FILTERS & SEARCH
-  const [filter, setFilter] = useState<
-    "all" | "vehicle" | "queries" | "confirmed"
-  >("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  // Controls
+  const [filter, setFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"date-group" | "list">("date-group"); // ✅ View Mode State
+  const [currentPage, setCurrentPage] = useState(1); // ✅ Pagination State
 
-  // MODAL STATES
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<"details" | "chat" | "reschedule">(
-    "details"
-  );
-  const [activeModalType, setActiveModalType] = useState<
-    "none" | "booking" | "globalCheck"
-  >("none");
-
-  // CHAT & RESCHEDULE STATE
-  const [replyMessage, setReplyMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [newDateRange, setNewDateRange] = useState<DateRange | undefined>();
-  const [isRescheduling, setIsRescheduling] = useState(false);
-
-  // GLOBAL AVAILABILITY STATE
-  const [globalCheckRange, setGlobalCheckRange] = useState<
-    DateRange | undefined
-  >();
+  // Animation States
+  const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-      const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
-      const unsub = onSnapshot(q, (snapshot) => {
-        setBookings(
-          snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Booking)
-        );
-        setLoading(false);
-      });
-      return () => unsub();
-    });
-    return () => unsubscribeAuth();
-  }, [router]);
+    fetchBookings();
+  }, []);
 
-  // --- LOGIC: CONFLICT CHECKERS ---
+  // Reset pagination when filter or view changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, viewMode]);
 
-  // 1. Specific Hotel Conflict (For Rescheduling)
-  const checkSpecificConflict = () => {
-    if (!selectedBooking || !newDateRange?.from || !newDateRange?.to) return [];
-    return bookings.filter((b) => {
-      if (b.listingId !== selectedBooking.listingId) return false; // Must be same hotel
-      if (b.id === selectedBooking.id) return false; // Ignore self
-      if (b.status === "cancelled" || b.status === "failed") return false;
-      return areIntervalsOverlapping(
-        { start: newDateRange.from!, end: newDateRange.to! },
-        { start: parseISO(b.checkIn), end: parseISO(b.checkOut) },
-        { inclusive: true }
-      );
-    });
-  };
-
-  // 2. Global Conflict (For "Check Availability" Tool)
-  const checkGlobalConflicts = () => {
-    if (!globalCheckRange?.from || !globalCheckRange?.to) return [];
-    return bookings.filter((b) => {
-      if (b.status === "cancelled" || b.status === "failed") return false;
-      return areIntervalsOverlapping(
-        { start: globalCheckRange.from!, end: globalCheckRange.to! },
-        { start: parseISO(b.checkIn), end: parseISO(b.checkOut) },
-        { inclusive: true }
-      );
-    });
-  };
-
-  const specificConflicts = checkSpecificConflict();
-  const globalConflicts = checkGlobalConflicts();
-
-  // --- HANDLERS ---
-  const openBookingModal = (booking: Booking) => {
-    setSelectedBooking(booking);
-    setModalTab(booking.hasOpenTicket ? "chat" : "details");
-    setNewDateRange(undefined);
-    setActiveModalType("booking");
-    setIsModalOpen(true);
-  };
-
-  const openGlobalCheck = () => {
-    setGlobalCheckRange(undefined);
-    setActiveModalType("globalCheck");
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setActiveModalType("none");
-    setSelectedBooking(null);
-  };
-
-  const handleSendReply = async () => {
-    if (!replyMessage.trim() || !selectedBooking) return;
-    setIsSending(true);
+  const fetchBookings = async () => {
+    setLoading(true);
     try {
-      await fetch("/api/bookings/reply", {
-        method: "POST",
-        body: JSON.stringify({
-          bookingId: selectedBooking.id,
-          message: replyMessage,
-        }),
-      });
-      setReplyMessage("");
+      const data = await apiRequest("/api/admin/bookings", "GET");
+      setBookings(data.bookings || []);
     } catch (err) {
-      alert("Failed to send reply");
+      console.error(err);
     } finally {
-      setIsSending(false);
+      setLoading(false);
     }
   };
 
-  const handleConfirmReschedule = async () => {
-    if (!selectedBooking || !newDateRange?.from || !newDateRange?.to) return;
-    if (!confirm(`Move booking to ${format(newDateRange.from, "MMM dd")}?`))
-      return;
+  const getValidDate = (dateVal: any): Date | null => {
+    if (!dateVal) return null;
+    if (typeof dateVal === 'object' && dateVal.seconds) return new Date(dateVal.seconds * 1000);
+    if (typeof dateVal === 'string') {
+      const d = parseISO(dateVal);
+      return isValid(d) ? d : null;
+    }
+    if (dateVal instanceof Date) return dateVal;
+    return null;
+  };
 
-    setIsRescheduling(true);
+  const checkPaymentStatus = async (e: React.MouseEvent, bookingId: string) => {
+    e.stopPropagation();
+    setRefreshingIds(prev => new Set(prev).add(bookingId));
+    setFailedIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(bookingId);
+      return newSet;
+    });
+
     try {
-      const res = await fetch("/api/bookings/update-dates", {
-        method: "POST",
-        body: JSON.stringify({
-          bookingId: selectedBooking.id,
-          newCheckIn: format(newDateRange.from, "yyyy-MM-dd"),
-          newCheckOut: format(newDateRange.to, "yyyy-MM-dd"),
-        }),
-      });
-      if (res.ok) {
-        alert("Booking Moved Successfully!");
-        setModalTab("chat");
+      const res = await fetch(`/api/payment/check/${bookingId}`);
+      const data = await res.json();
+      if (data.success) {
+        await fetchBookings();
       } else {
-        alert("Failed to move booking.");
+        setFailedIds(prev => new Set(prev).add(bookingId));
+        alert(`Status: ${data.status || "Still Pending"}`);
       }
-    } catch (e) {
-      alert("Error moving booking");
+    } catch (err) {
+      console.error(err);
+      setFailedIds(prev => new Set(prev).add(bookingId));
     } finally {
-      setIsRescheduling(false);
+      setRefreshingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(bookingId);
+        return newSet;
+      });
     }
   };
 
-  // Filter List
-  const filteredBookings = bookings.filter((b) => {
-    if (
-      filter === "vehicle" &&
-      (!b.vehicleIncluded || b.status === "cancelled")
-    )
-      return false;
-    if (filter === "queries" && !b.hasOpenTicket) return false;
-    if (filter === "confirmed" && b.status !== "confirmed") return false;
-    if (searchQuery) {
-      return (
-        b.listingName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.id.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
+  // --- FILTERING & SORTING ---
+  const filteredBookings = bookings.filter(b => {
+    if (filter === "all") return true;
+    if (filter === "confirmed") return b.status === "confirmed";
+    if (filter === "pending") return b.status === "pending";
+    if (filter === "cancelled") return b.status === "cancelled";
     return true;
   });
 
-  if (loading)
+  // Always sort Newest First
+  filteredBookings.sort((a, b) => {
+    const dateA = getValidDate(a.createdAt)?.getTime() || 0;
+    const dateB = getValidDate(b.createdAt)?.getTime() || 0;
+    return dateB - dateA;
+  });
+
+  // --- PAGINATION LOGIC ---
+  const totalPages = Math.ceil(filteredBookings.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentItems = filteredBookings.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // --- GROUPING LOGIC (Only applies to current page items) ---
+  const groupedBookings: { [key: string]: Booking[] } = {};
+
+  if (viewMode === 'date-group') {
+    currentItems.forEach((booking) => {
+      const date = getValidDate(booking.createdAt);
+      let key = "Unknown Date";
+
+      if (date) {
+        if (isToday(date)) key = "Today";
+        else if (isYesterday(date)) key = "Yesterday";
+        else key = format(date, "dd MMM yyyy");
+      }
+
+      if (!groupedBookings[key]) groupedBookings[key] = [];
+      groupedBookings[key].push(booking);
+    });
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "confirmed": return "bg-green-100 text-green-700 border-green-200";
+      case "paid": return "bg-green-100 text-green-700 border-green-200";
+      case "pending": return "bg-yellow-50 text-yellow-700 border-yellow-200";
+      case "cancelled": return "bg-red-50 text-red-600 border-red-200";
+      case "failed": return "bg-red-100 text-red-700 border-red-200";
+      default: return "bg-gray-100 text-gray-600 border-gray-200";
+    }
+  };
+
+  // --- RENDER ROW HELPER ---
+  const renderBookingRow = (booking: Booking) => {
+    const isRefreshing = refreshingIds.has(booking.id);
+    const isFailed = failedIds.has(booking.id);
+    const bookingDate = getValidDate(booking.date);
+    const updatedDate = getValidDate(booking.updatedAt);
+    const createdDate = getValidDate(booking.createdAt);
+
     return (
-      <div className="h-screen flex justify-center items-center bg-gray-50 dark:bg-black">
-        <Loader2 className="animate-spin text-rose-600" />
-      </div>
+      <tr key={booking.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+        <td className="p-4">
+          <div className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            {booking.type === 'Hotel' ? <BedDouble size={16} className="text-rose-500" /> : <Car size={16} className="text-indigo-500" />}
+            <span className="truncate max-w-[180px]">{booking.listingName || "Unknown"}</span>
+          </div>
+          <div className="text-[10px] text-gray-400 font-mono mt-1 uppercase flex gap-2">
+            <span>#{booking.id.slice(0, 6)}</span>
+            {viewMode === 'list' && createdDate && (
+              <span>• {format(createdDate, "dd MMM, HH:mm")}</span>
+            )}
+          </div>
+        </td>
+        <td className="p-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 shrink-0">
+              <User size={14} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{booking.customerName}</div>
+              <div className="text-xs text-gray-500 truncate">{booking.customerContact}</div>
+            </div>
+          </div>
+        </td>
+        <td className="p-4 text-sm text-gray-600 dark:text-gray-400">
+          {bookingDate ? format(bookingDate, "dd MMM") : "-"}
+        </td>
+        <td className="p-4">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(booking.paymentStatus)} uppercase`}>
+                {booking.paymentStatus}
+              </span>
+              {booking.paymentStatus !== 'paid' && (
+                <button
+                  onClick={(e) => checkPaymentStatus(e, booking.id)}
+                  disabled={isRefreshing}
+                  className={`p-1 rounded-full transition-all ${isFailed ? "bg-red-100 text-red-600" : "bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-rose-600"}`}
+                >
+                  <RefreshCcw size={12} className={isRefreshing ? "animate-spin text-rose-600" : ""} />
+                </button>
+              )}
+            </div>
+            {updatedDate && (
+              <span className="text-[10px] text-gray-400">
+                {formatDistanceToNow(updatedDate)} ago
+              </span>
+            )}
+          </div>
+        </td>
+        <td className="p-4">
+          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(booking.status)} uppercase`}>
+            {booking.status}
+          </span>
+        </td>
+        <td className="p-4 text-right font-bold text-gray-900 dark:text-white">
+          ₹{Number(booking.amount).toLocaleString('en-IN')}
+        </td>
+      </tr>
     );
+  };
 
   return (
-    <main className="min-h-screen bg-gray-50 dark:bg-black pb-20 transition-colors duration-300">
-      <Navbar variant="default" />
+    <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-8">
+      <div className="max-w-7xl mx-auto pb-20">
 
-      {/* GLOBAL STYLES FOR CALENDAR DARK MODE */}
-      <style jsx global>{`
-        .dark .rdp {
-          --rdp-cell-size: 40px;
-          --rdp-accent-color: #2563eb;
-          --rdp-background-color: #202020;
-          margin: 0;
-        }
-        .dark .rdp-day_selected:not([disabled]) {
-          color: white;
-          background-color: var(--rdp-accent-color);
-        }
-        .dark .rdp-day:hover:not([disabled]) {
-          background-color: #333;
-        }
-        .dark .rdp-caption_label,
-        .dark .rdp-head_cell,
-        .dark .rdp-day {
-          color: #e5e7eb;
-        }
-        .dark .rdp-button:hover:not([disabled]) {
-          color: white;
-        }
-      `}</style>
-
-      <div className="max-w-6xl mx-auto px-4 pt-24 md:pt-32">
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
-              Admin Dashboard
-            </h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
-              Manage stays, vehicles & guest queries.
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">All Bookings</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Track payments and reservations.</p>
           </div>
-          <button
-            onClick={openGlobalCheck}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-600/20 font-bold flex items-center gap-2 transition-all transform active:scale-95"
-          >
-            <CalendarDays size={20} /> Check Availability
-          </button>
-        </div>
 
-        {/* SEARCH & FILTERS */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={18}
-            />
-            <input
-              placeholder="Search bookings..."
-              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm outline-none"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {["all", "vehicle", "queries", "confirmed"].map((f) => (
+          <div className="flex flex-wrap items-center gap-3">
+            {/* VIEW TOGGLE */}
+            <div className="flex bg-gray-200 dark:bg-gray-800 p-1 rounded-lg">
               <button
-                key={f}
-                onClick={() => setFilter(f as any)}
-                className={`px-4 py-3 rounded-xl text-sm font-bold border capitalize ${filter === f ? "bg-black text-white dark:bg-white dark:text-black border-transparent" : "bg-white dark:bg-gray-900 text-gray-600 border-gray-200 dark:border-gray-800"}`}
+                onClick={() => setViewMode('date-group')}
+                className={`p-2 rounded-md flex items-center gap-2 text-xs font-bold transition-all ${viewMode === 'date-group' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}
               >
-                {f}
+                <CalendarDays size={16} /> <span className="hidden sm:inline">Date Group</span>
               </button>
-            ))}
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-md flex items-center gap-2 text-xs font-bold transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <LayoutList size={16} /> <span className="hidden sm:inline">List View</span>
+              </button>
+            </div>
+
+            {/* FILTER */}
+            <div className="flex items-center gap-2 bg-white dark:bg-gray-900 p-1 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm h-[38px]">
+              <Filter size={16} className="ml-2 text-gray-400" />
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="bg-transparent text-sm font-medium outline-none p-1 pr-4 text-gray-700 dark:text-gray-300 h-full"
+              >
+                <option value="all">All Status</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="pending">Pending</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* BOOKING LIST */}
-        <div className="grid grid-cols-1 gap-4">
-          {filteredBookings.map((booking) => (
-            <div
-              key={booking.id}
-              onClick={() => openBookingModal(booking)}
-              className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group"
-            >
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex gap-4">
-                  <img
-                    src={booking.listingImage}
-                    className="w-16 h-16 rounded-lg object-cover bg-gray-100 dark:bg-gray-800"
-                  />
-                  <div>
-                    <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-blue-600">
-                      {booking.listingName}
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      #{booking.id.slice(0, 6).toUpperCase()} •{" "}
-                      {format(parseISO(booking.checkIn), "dd MMM")}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span
-                    className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${booking.status === "confirmed" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}
-                  >
-                    {booking.status}
-                  </span>
-                  {booking.hasOpenTicket && (
-                    <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-1 rounded flex items-center gap-1 animate-pulse">
-                      <MessageSquare size={10} /> Request Pending
-                    </span>
-                  )}
-                </div>
+        {/* LOADING STATE */}
+        {loading ? (
+          <div className="flex justify-center py-20"><Loader2 className="animate-spin text-rose-600" size={32} /></div>
+        ) : (
+          <div className="space-y-8">
+            {filteredBookings.length === 0 ? (
+              <div className="text-center py-20 bg-white dark:bg-gray-900 rounded-xl border border-dashed border-gray-200 dark:border-gray-800">
+                <p className="text-gray-500">No bookings found.</p>
               </div>
-            </div>
-          ))}
-          {filteredBookings.length === 0 && (
-            <div className="text-center py-10 text-gray-400 border border-dashed rounded-xl">
-              No bookings found.
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* MODAL SYSTEM */}
-      {/* ========================================================= */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 w-full max-w-4xl rounded-3xl shadow-2xl border dark:border-gray-800 overflow-hidden flex flex-col h-[650px] max-h-[90vh]">
-            {/* --- TYPE 1: BOOKING SUPER MODAL --- */}
-            {activeModalType === "booking" && selectedBooking && (
+            ) : (
               <>
-                <div className="p-4 border-b dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
-                  <div className="flex gap-4 text-sm font-bold">
-                    <button
-                      onClick={() => setModalTab("chat")}
-                      className={`pb-1 border-b-2 transition-colors flex items-center gap-2 ${modalTab === "chat" ? "border-black dark:border-white text-black dark:text-white" : "border-transparent text-gray-400"}`}
-                    >
-                      💬 Chat{" "}
-                      {selectedBooking.hasOpenTicket && (
-                        <span className="w-2 h-2 bg-red-500 rounded-full" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setModalTab("reschedule")}
-                      className={`pb-1 border-b-2 transition-colors ${modalTab === "reschedule" ? "border-black dark:border-white text-black dark:text-white" : "border-transparent text-gray-400"}`}
-                    >
-                      📅 Reschedule
-                    </button>
-                    <button
-                      onClick={() => setModalTab("details")}
-                      className={`pb-1 border-b-2 transition-colors ${modalTab === "details" ? "border-black dark:border-white text-black dark:text-white" : "border-transparent text-gray-400"}`}
-                    >
-                      📋 Details
-                    </button>
+                {/* --- DATE GROUP MODE --- */}
+                {viewMode === 'date-group' && Object.keys(groupedBookings).length > 0 && (
+                  Object.entries(groupedBookings).map(([dateLabel, group]) => (
+                    <div key={dateLabel}>
+                      <div className="flex items-center gap-2 mb-3 px-1">
+                        <Calendar size={16} className="text-rose-500" />
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{dateLabel}</h3>
+                        <div className="h-[1px] flex-1 bg-gray-200 dark:bg-gray-800 ml-2"></div>
+                      </div>
+
+                      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead className="bg-gray-50 dark:bg-gray-800/50 text-xs font-bold uppercase text-gray-500 border-b border-gray-200 dark:border-gray-800">
+                              <tr>
+                                <th className="p-4 w-1/4">Listing</th>
+                                <th className="p-4 w-1/4">Customer</th>
+                                <th className="p-4 w-1/6">Trip Date</th>
+                                <th className="p-4 w-1/6">Payment</th>
+                                <th className="p-4 w-1/6">Status</th>
+                                <th className="p-4 w-1/6 text-right">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                              {group.map((booking) => renderBookingRow(booking))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+
+                {/* --- LIST MODE --- */}
+                {viewMode === 'list' && (
+                  <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-gray-50 dark:bg-gray-800/50 text-xs font-bold uppercase text-gray-500 border-b border-gray-200 dark:border-gray-800">
+                          <tr>
+                            <th className="p-4 w-1/4">
+                              <div className="flex items-center gap-1"><ArrowDownUp size={12} /> Listing</div>
+                            </th>
+                            <th className="p-4 w-1/4">Customer</th>
+                            <th className="p-4 w-1/6">Trip Date</th>
+                            <th className="p-4 w-1/6">Payment</th>
+                            <th className="p-4 w-1/6">Status</th>
+                            <th className="p-4 w-1/6 text-right">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                          {currentItems.map((booking) => renderBookingRow(booking))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <button onClick={closeModal}>
-                    <X size={20} className="dark:text-white" />
-                  </button>
-                </div>
+                )}
 
-                <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
-                  {/* TAB: CHAT */}
-                  {modalTab === "chat" && (
-                    <div className="flex flex-col h-full">
-                      <div className="flex-1 p-4 space-y-4 overflow-y-auto bg-gray-50/50 dark:bg-black/20">
-                        {[
-                          ...(selectedBooking.supportTickets || []).map(
-                            (t) => ({ ...t, s: "guest" })
-                          ),
-                          ...(selectedBooking.adminReplies || []).map((r) => ({
-                            ...r,
-                            s: "admin",
-                          })),
-                        ]
-                          .sort(
-                            (a, b) =>
-                              new Date(a.createdAt).getTime() -
-                              new Date(b.createdAt).getTime()
-                          )
-                          .map((m, i) => (
-                            <div
-                              key={i}
-                              className={`flex ${m.s === "admin" ? "justify-end" : "justify-start"}`}
-                            >
-                              <div
-                                className={`max-w-[85%] p-3 rounded-2xl text-sm ${m.s === "admin" ? "bg-black dark:bg-blue-600 text-white" : "bg-white dark:bg-gray-800 dark:text-white border dark:border-gray-700"}`}
-                              >
-                                {m.message}
-                                <p className="text-[10px] opacity-60 text-right mt-1">
-                                  {format(parseISO(m.createdAt), "hh:mm a")}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        {!selectedBooking.supportTickets?.length &&
-                          !selectedBooking.adminReplies?.length && (
-                            <div className="text-center text-gray-400 text-sm mt-10">
-                              No messages.
-                            </div>
-                          )}
-                      </div>
-                      <div className="p-4 border-t dark:border-gray-800 flex gap-2">
-                        <input
-                          className="flex-1 p-3 rounded-xl border dark:border-gray-700 dark:bg-gray-800 dark:text-white outline-none"
-                          placeholder="Reply..."
-                          value={replyMessage}
-                          onChange={(e) => setReplyMessage(e.target.value)}
-                        />
-                        <button
-                          onClick={handleSendReply}
-                          disabled={isSending}
-                          className="p-3 bg-black dark:bg-white text-white dark:text-black rounded-xl hover:opacity-80"
-                        >
-                          {isSending ? (
-                            <Loader2 className="animate-spin" />
-                          ) : (
-                            <Send size={18} />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB: RESCHEDULE */}
-                  {modalTab === "reschedule" && (
-                    <div className="p-6 flex flex-col h-full">
-                      <div className="text-center mb-4">
-                        <h3 className="font-bold text-lg dark:text-white">
-                          Check {selectedBooking.listingName} Availability
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          Booked: {selectedBooking.checkIn} to{" "}
-                          {selectedBooking.checkOut}
-                        </p>
-                      </div>
-                      <div className="flex justify-center bg-gray-50 dark:bg-black rounded-2xl p-2 mb-4">
-                        <DayPicker
-                          mode="range"
-                          selected={newDateRange}
-                          onSelect={setNewDateRange}
-                          min={1}
-                          modifiersStyles={{ selected: { fontWeight: "bold" } }}
-                        />
-                      </div>
-                      <div className="mt-auto">
-                        {newDateRange?.from && newDateRange?.to ? (
-                          specificConflicts.length > 0 ? (
-                            <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 font-bold">
-                              <AlertCircle className="inline mr-2" /> Conflict:
-                              Booking #{specificConflicts[0].id.slice(0, 4)}{" "}
-                              exists here.
-                            </div>
-                          ) : (
-                            <button
-                              onClick={handleConfirmReschedule}
-                              disabled={isRescheduling}
-                              className="w-full py-4 bg-black dark:bg-white text-white dark:text-black font-bold rounded-xl flex justify-center gap-2"
-                            >
-                              {isRescheduling ? (
-                                <Loader2 className="animate-spin" />
-                              ) : (
-                                <RefreshCw size={20} />
-                              )}{" "}
-                              Approve Move
-                            </button>
-                          )
-                        ) : (
-                          <div className="text-center text-gray-400">
-                            Select new dates.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB: DETAILS */}
-                  {modalTab === "details" && (
-                    <div className="p-6 space-y-6">
-                      <div className="flex gap-4">
-                        <img
-                          src={selectedBooking.listingImage}
-                          className="w-20 h-20 rounded-xl object-cover bg-gray-100"
-                        />
-                        <div>
-                          <h2 className="text-xl font-bold dark:text-white">
-                            {selectedBooking.listingName}
-                          </h2>
-                          <p className="text-sm text-gray-500">Mathura</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                          <p className="text-xs text-gray-500 uppercase">
-                            Check In
-                          </p>
-                          <p className="font-bold dark:text-white">
-                            {format(
-                              parseISO(selectedBooking.checkIn),
-                              "EEE, dd MMM"
-                            )}
-                          </p>
-                        </div>
-                        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                          <p className="text-xs text-gray-500 uppercase">
-                            Total
-                          </p>
-                          <p className="font-bold dark:text-white">
-                            ₹{selectedBooking.totalAmount}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                {/* --- PAGINATION --- */}
+                <div className="mt-8">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalItems={filteredBookings.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    onPageChange={handlePageChange}
+                  />
                 </div>
               </>
             )}
-
-            {/* --- TYPE 2: GLOBAL AVAILABILITY CHECK --- */}
-            {activeModalType === "globalCheck" && (
-              <div className="flex flex-col md:flex-row h-full">
-                <div className="p-6 border-r border-gray-100 dark:border-gray-800 w-full md:w-auto overflow-y-auto">
-                  <div className="flex justify-between mb-4">
-                    <h3 className="font-bold text-lg dark:text-white">
-                      Global Check
-                    </h3>
-                    <button onClick={closeModal} className="md:hidden">
-                      <X />
-                    </button>
-                  </div>
-                  <div className="flex justify-center bg-gray-50 dark:bg-black rounded-2xl p-2">
-                    <DayPicker
-                      mode="range"
-                      selected={globalCheckRange}
-                      onSelect={setGlobalCheckRange}
-                      min={1}
-                      modifiersStyles={{ selected: { fontWeight: "bold" } }}
-                    />
-                  </div>
-                </div>
-                <div className="flex-1 p-6 bg-gray-50/50 dark:bg-black/20 overflow-y-auto">
-                  <div className="flex justify-between mb-4">
-                    <h3 className="font-bold text-xl dark:text-white">
-                      Report
-                    </h3>
-                    <button
-                      onClick={closeModal}
-                      className="hidden md:block hover:bg-gray-200 rounded-full p-2"
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-                  {globalCheckRange?.from && globalCheckRange?.to ? (
-                    <div>
-                      <div className="flex items-center gap-2 mb-3 text-red-500 font-bold uppercase text-sm">
-                        <AlertCircle size={14} /> Occupied (
-                        {globalConflicts.length})
-                      </div>
-                      {globalConflicts.length === 0 ? (
-                        <div className="p-4 bg-emerald-100 text-emerald-800 rounded-xl font-bold flex items-center gap-2">
-                          <CheckCircle size={18} /> All properties free!
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {globalConflicts.map((b) => (
-                            <div
-                              key={b.id}
-                              className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-red-100 flex justify-between items-center"
-                            >
-                              <div className="flex gap-3 items-center">
-                                <img
-                                  src={b.listingImage}
-                                  className="w-10 h-10 rounded-lg"
-                                />
-                                <div className="text-sm font-bold dark:text-white">
-                                  {b.listingName}
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => openBookingModal(b)}
-                                className="text-xs bg-gray-100 px-2 py-1 rounded"
-                              >
-                                View
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-center text-gray-400 mt-20">
-                      Select dates to scan availability.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
-        </div>
-      )}
-    </main>
+        )}
+      </div>
+    </div>
   );
 }
