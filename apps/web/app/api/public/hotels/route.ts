@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getFirestore } from "firebase-admin/firestore";
 import { initAdmin } from "@/lib/firebaseAdmin";
 
-// 1. Force dynamic (No caching) so new approvals show instantly
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
@@ -10,19 +9,37 @@ export async function GET(request: Request) {
   const db = getFirestore();
 
   try {
-    // 2. Fetch ONLY 'APPROVED' (Uppercase) hotels
     const snapshot = await db
       .collection("hotels")
       .where("status", "==", "APPROVED")
       .get();
 
-    const hotels = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const hotels = snapshot.docs.map((doc) => {
+      const data = doc.data();
 
-    // 3. (Optional) Debug Log to see what's happening in your terminal
-    console.log(`Public API found ${hotels.length} approved hotels.`);
+      // 🔧 FIX: Handle both 'images' (Array) and 'imageUrl' (String)
+      let imageList = [];
+
+      if (Array.isArray(data.images) && data.images.length > 0) {
+        // Case A: It's already a list
+        imageList = data.images;
+      } else if (data.imageUrl) {
+        // Case B: It's a single string (Old format)
+        imageList = [data.imageUrl];
+      }
+
+      return {
+        id: doc.id,
+        // ✅ Public Data
+        name: data.name,
+        location: data.location || data.address || "Mathura",
+        city: data.city,
+        images: imageList, // <--- Now guaranteed to be an Array
+        price: data.price || data.pricePerNight || 0,
+        rating: data.rating || 5,
+        slug: data.slug || doc.id,
+      };
+    });
 
     return NextResponse.json({ hotels });
   } catch (error: any) {
