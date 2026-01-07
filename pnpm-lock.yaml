@@ -54,6 +54,9 @@ importers:
 
   apps/web:
     dependencies:
+      axios:
+        specifier: ^1.13.2
+        version: 1.13.2
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
