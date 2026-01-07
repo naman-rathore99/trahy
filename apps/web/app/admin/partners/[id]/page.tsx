@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import {
-    ArrowLeft, ShieldCheck, ShieldAlert, Check, X, Loader2,
-    User, Mail, Phone, Maximize2, AlertTriangle, FileText, Database
+    ArrowLeft, Check, X, Loader2, User, Mail, Phone,
+    Maximize2, AlertTriangle, FileText, Save, Edit2, Database
 } from "lucide-react";
 import Link from "next/link";
 
@@ -18,6 +18,11 @@ export default function PartnerVerificationPage() {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
 
+    // ✅ NEW: STATES FOR EDITING PHONE
+    const [isEditingPhone, setIsEditingPhone] = useState(false);
+    const [newPhone, setNewPhone] = useState("");
+    const [savingPhone, setSavingPhone] = useState(false);
+
     // Modal States
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [showImageModal, setShowImageModal] = useState(false);
@@ -26,14 +31,15 @@ export default function PartnerVerificationPage() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // 1. Fetch User List
                 const usersData = await apiRequest("/api/admin/users?role=partner", "GET");
                 const foundUser = usersData.users.find((u: any) => u.uid === id);
 
                 if (foundUser) {
                     setPartner(foundUser);
+                    // Initialize edit field with existing phone
+                    setNewPhone(foundUser.phone || foundUser.phoneNumber || "");
 
-                    // 2. If no image in User, check Join Requests
+                    // Backup check
                     if (!findImage(foundUser)) {
                         try {
                             const reqData = await apiRequest("/api/admin/approve-request", "GET");
@@ -53,20 +59,40 @@ export default function PartnerVerificationPage() {
         fetchData();
     }, [id]);
 
-    // ✅ HELPER: Checks EVERY possible name for the image
     const findImage = (data: any) => {
         if (!data) return null;
         return (
             data.officialIdUrl || data.idProofUrl || data.documentUrl ||
             data.idUrl || data.proofUrl || data.imageUrl || data.fileUrl ||
             data.image || data.url || data.attachment ||
-            // Check nested objects if they exist
             data.documents?.idProof || data.documents?.url
         );
     };
 
     const idImageUrl = findImage(partner) || findImage(joinRequestData);
-    // --- ACTIONS ---
+
+    // ✅ NEW: FUNCTION TO SAVE PHONE NUMBER
+    const handleSavePhone = async () => {
+        if (!newPhone) return;
+        setSavingPhone(true);
+        try {
+            await apiRequest("/api/admin/verify-partner", "POST", {
+                userId: id,
+                action: "update_phone",
+                phoneNumber: newPhone
+            });
+
+            // Update local state so we see the change immediately
+            setPartner((prev: any) => ({ ...prev, phone: newPhone }));
+            setIsEditingPhone(false);
+            alert("Phone Number Saved!");
+        } catch (err: any) {
+            alert("Update Failed: " + err.message);
+        } finally {
+            setSavingPhone(false);
+        }
+    };
+
     const handleApprove = async () => {
         if (!confirm("Confirm identity verification?")) return;
         setProcessing(true);
@@ -89,9 +115,9 @@ export default function PartnerVerificationPage() {
         finally { setProcessing(false); }
     };
 
-
     if (loading) return <div className="h-screen flex items-center justify-center bg-black text-white"><Loader2 className="animate-spin text-rose-600" size={40} /></div>;
     if (!partner) return <div className="p-10 text-white">Partner not found</div>;
+
     return (
         <div className="min-h-screen bg-black text-white p-6 md:p-10 relative">
 
@@ -126,14 +152,59 @@ export default function PartnerVerificationPage() {
                         <h1 className="text-3xl font-bold">{partner.displayName || partner.name}</h1>
                         <p className="text-gray-500 text-xs font-mono mt-1">UID: {partner.uid}</p>
                     </div>
+
                     <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 space-y-4">
                         <div className="flex gap-3"><Mail className="text-gray-400" size={18} /> {partner.email}</div>
-                        <div className="flex gap-3">
+
+                        {/* ✅ NEW: EDITABLE PHONE SECTION */}
+                        <div className="flex gap-3 items-center">
                             <Phone className="text-gray-400" size={18} />
-                            {/* Yahan humne 'phoneNumber' bhi add kar diya */}
-                            {partner.phone || partner.phoneNumber || "No phone linked"}
+
+                            {isEditingPhone ? (
+                                // EDIT MODE
+                                <div className="flex items-center gap-2 flex-1 animate-in fade-in">
+                                    <input
+                                        autoFocus
+                                        className="bg-black border border-gray-600 rounded px-2 py-1 text-sm w-full outline-none focus:border-blue-500 text-white"
+                                        value={newPhone}
+                                        onChange={(e) => setNewPhone(e.target.value)}
+                                        placeholder="+91..."
+                                    />
+                                    <button
+                                        onClick={handleSavePhone}
+                                        disabled={savingPhone}
+                                        className="bg-green-600 p-1.5 rounded hover:bg-green-500 text-white"
+                                    >
+                                        {savingPhone ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                                    </button>
+                                    <button
+                                        onClick={() => setIsEditingPhone(false)}
+                                        className="bg-gray-700 p-1.5 rounded hover:bg-gray-600 text-white"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            ) : (
+                                // VIEW MODE
+                                <div className="flex items-center justify-between flex-1">
+                                    <span>
+                                        {partner.phone || partner.phoneNumber || joinRequestData?.phone || <span className="text-red-500 italic text-xs">No Number</span>}
+                                    </span>
+                                    <button
+                                        onClick={() => {
+                                            setNewPhone(partner.phone || partner.phoneNumber || joinRequestData?.phone || "");
+                                            setIsEditingPhone(true);
+                                        }}
+                                        className="text-gray-500 hover:text-white p-1 rounded-full hover:bg-gray-800 transition"
+                                        title="Edit Phone Number"
+                                    >
+                                        <Edit2 size={14} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
+
                     <div className="space-y-3 pt-4">
                         <button onClick={handleApprove} className="w-full py-4 bg-white text-black rounded-xl font-bold flex justify-center gap-2 hover:bg-gray-200"><Check /> Approve Partner</button>
                         <button onClick={() => setShowRejectModal(true)} className="w-full py-4 bg-gray-900 text-red-500 border border-gray-800 rounded-xl font-bold flex justify-center gap-2 hover:bg-red-900/10"><X /> Reject</button>
@@ -157,7 +228,7 @@ export default function PartnerVerificationPage() {
                                     <h3 className="text-xl font-bold">No Document Found</h3>
                                     <p className="text-gray-400 text-sm mb-6">The system couldn't find an image URL in the usual fields.</p>
 
-                                    {/* ✅ DEBUGGER: SHOWS RAW DATA */}
+                                    {/* DEBUGGER */}
                                     <div className="bg-black border border-gray-700 rounded-xl p-4 text-left w-full max-w-lg mx-auto overflow-hidden">
                                         <h4 className="text-xs font-bold text-green-500 mb-2 flex items-center gap-2">
                                             <Database size={12} /> RAW DATA INSPECTOR
@@ -172,9 +243,6 @@ export default function PartnerVerificationPage() {
                                                 </>
                                             )}
                                         </div>
-                                        <p className="text-xs text-gray-500 mt-2 text-center">
-                                            Look for the image URL above. Add that key to <b>findImage()</b> in the code.
-                                        </p>
                                     </div>
                                 </div>
                             )}

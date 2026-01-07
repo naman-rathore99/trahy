@@ -40,13 +40,7 @@ export async function GET(request: Request) {
       // Get Firestore data
       const firestoreData = userProfiles[uid] || {};
 
-      // 🔥 JASOOS UPDATE: POORA DATA DIKHAO
-      if (userRecord.email === "andrew@gmail.com") {
-        console.log("\n--- DEBUGGING ANDREW (FULL DATA) ---");
-        console.log("KEYS FOUND:", Object.keys(firestoreData)); // Ye batayega kaunse fields exist karte hain
-        console.log("FULL OBJECT:", JSON.stringify(firestoreData, null, 2)); // Ye poora data print karega
-        console.log("------------------------\n");
-      }
+
       const hasProperty = propertyOwners.has(uid);
       const hasVehicle = vehicleOwners.has(uid);
 
