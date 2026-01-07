@@ -14,7 +14,8 @@ import {
     PieChart,
     ChevronLeft,
     ChevronRight,
-    Menu
+    Menu,
+    IndianRupee,
 } from "lucide-react";
 
 // Define props for the component
@@ -30,6 +31,7 @@ const MENU_ITEMS = [
     { label: "Bookings", href: "/partner/bookings", icon: CalendarCheck },
     { label: "Reports", href: "/partner/reports", icon: PieChart },
     { label: "Settings", href: "/partner/settings", icon: Settings },
+    { label: "Earnings", href: "/partner/earnings", icon: IndianRupee },
 ];
 
 export default function PartnerSidebar({ isCollapsed, toggleSidebar }: SidebarProps) {

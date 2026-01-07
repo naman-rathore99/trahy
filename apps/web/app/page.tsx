@@ -74,6 +74,7 @@ export default function HomePage() {
         setLoading(true);
         const data = await apiRequest("/api/public/hotels", "GET");
         const list = data.hotels || [];
+        console.log(list);
         setAllHotels(list);
         setFilteredHotels(list);
       } catch (err) {

@@ -11,7 +11,8 @@ import {
     FileText,
     Phone,
     CheckCircle,
-    AlertCircle
+    AlertCircle,
+    IndianRupee
 } from "lucide-react";
 
 export default function PropertySettings() {
@@ -26,9 +27,10 @@ export default function PropertySettings() {
         city: "Mathura",
         phone: "",
         email: "",
+        pricePerNight: "", // ✅ ADDED: Price field state
         mainImage: "",
         images: [] as string[],
-        amenities: [] as string[] // Global hotel amenities (Parking, Wifi, etc.)
+        amenities: [] as string[]
     });
 
     // Load existing hotel data (if any)
@@ -38,13 +40,16 @@ export default function PropertySettings() {
 
     const fetchHotelDetails = async () => {
         try {
-            // We expect this to fail with "No hotel found" if it's a new user
             const data = await apiRequest("/api/partner/hotel", "GET");
             if (data && data.hotel) {
-                setFormData(data.hotel);
+                // ✅ MAP DATA: Ensure we map the database 'pricePerNight' to our form
+                setFormData({
+                    ...data.hotel,
+                    pricePerNight: data.hotel.pricePerNight || "",
+                    mainImage: data.hotel.imageUrl || data.hotel.mainImage || "" // Handle mismatch names
+                });
             }
         } catch (error: any) {
-            // If error is "No hotel found", we know it's a new setup
             if (error.message.includes("No hotel")) {
                 setIsNew(true);
             } else {
@@ -59,7 +64,6 @@ export default function PropertySettings() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            // POST creates new, PUT updates existing
             const method = isNew ? "POST" : "PUT";
             await apiRequest("/api/partner/hotel", method, formData);
             alert(isNew ? "Property Created Successfully! Now you can add rooms." : "Settings Saved!");
@@ -125,6 +129,24 @@ export default function PropertySettings() {
                             />
                         </div>
                     </div>
+
+                    {/* ✅ NEW: Price Input Field */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase text-gray-500 flex items-center gap-1">
+                            <IndianRupee size={12} /> Starting Price (Per Night)
+                        </label>
+                        <input
+                            type="number"
+                            required
+                            min="0"
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none font-bold text-lg"
+                            placeholder="Ex: 1500"
+                            value={formData.pricePerNight}
+                            onChange={(e) => setFormData({ ...formData, pricePerNight: e.target.value })}
+                        />
+                        <p className="text-xs text-gray-400">This price will be shown on the home page card.</p>
+                    </div>
+
                     <div className="space-y-2">
                         <label className="text-xs font-bold uppercase text-gray-500">Description</label>
                         <textarea

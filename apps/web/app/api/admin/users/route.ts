@@ -1,4 +1,4 @@
-export const dynamic = "force-dynamic"; // ✅ Fixes caching
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
@@ -13,21 +13,21 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const roleFilter = searchParams.get("role");
 
-    // 1. Get All Auth Users
+    // 1. Get Users from Auth
     const listUsersResult = await auth.listUsers(1000);
 
-    // 2. Fetch DATA from Firestore (Hotels, Vehicles, AND User Profiles)
+    // 2. Fetch DATA from Firestore
     const [hotelsSnap, vehiclesSnap, usersSnap] = await Promise.all([
       db.collection("hotels").get(),
       db.collection("vehicles").get(),
-      db.collection("users").get(), // <--- ✅ ADDED: Fetch user profiles
+      db.collection("users").get(),
     ]);
 
-    // 3. Create Lookup Maps for Speed
+    // 3. Create Lookup Maps
     const propertyOwners = new Set(hotelsSnap.docs.map((doc) => doc.data().ownerId));
     const vehicleOwners = new Set(vehiclesSnap.docs.map((doc) => doc.data().ownerId));
 
-    // Create a map of UID -> User Data (to find isVerified)
+    // Map: UID -> User Data
     const userProfiles: Record<string, any> = {};
     usersSnap.forEach((doc) => {
       userProfiles[doc.id] = doc.data();
@@ -36,13 +36,20 @@ export async function GET(request: Request) {
     // 4. Merge Data
     let users = listUsersResult.users.map((userRecord) => {
       const uid = userRecord.uid;
+
+      // Get Firestore data
+      const firestoreData = userProfiles[uid] || {};
+
+      // 🔥 JASOOS UPDATE: POORA DATA DIKHAO
+      if (userRecord.email === "andrew@gmail.com") {
+        console.log("\n--- DEBUGGING ANDREW (FULL DATA) ---");
+        console.log("KEYS FOUND:", Object.keys(firestoreData)); // Ye batayega kaunse fields exist karte hain
+        console.log("FULL OBJECT:", JSON.stringify(firestoreData, null, 2)); // Ye poora data print karega
+        console.log("------------------------\n");
+      }
       const hasProperty = propertyOwners.has(uid);
       const hasVehicle = vehicleOwners.has(uid);
 
-      // Get Firestore data for this user (if it exists)
-      const firestoreData = userProfiles[uid] || {};
-
-      // Logic: Partner if they have role OR own assets
       const isPartner =
         hasProperty ||
         hasVehicle ||
@@ -54,14 +61,16 @@ export async function GET(request: Request) {
         email: userRecord.email,
         displayName: userRecord.displayName || firestoreData.name || "No Name",
         photoURL: userRecord.photoURL || "",
+        creationTime: userRecord.metadata.creationTime,
+
+        // SPREAD DATA
+        ...firestoreData,
+
+        // FORCE PHONE PRIORITY
+        phone: firestoreData.phone || firestoreData.phoneNumber || userRecord.phoneNumber || "",
+
         role: userRecord.customClaims?.role || firestoreData.role || "user",
-        createdAt: userRecord.metadata.creationTime,
-        phone: userRecord.phoneNumber || firestoreData.phone,
-
-        // ✅ CRITICAL FIX: Read isVerified from Firestore
         isVerified: firestoreData.isVerified === true,
-
-        // Dashboard Flags
         hasProperty,
         hasVehicle,
         isPartner,
@@ -78,11 +87,8 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ users });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching users:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch users" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

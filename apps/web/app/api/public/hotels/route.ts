@@ -9,35 +9,37 @@ export async function GET(request: Request) {
   const db = getFirestore();
 
   try {
+    // ✅ FIX: Change "APPROVED" to "approved" (lowercase) to match your database
     const snapshot = await db
       .collection("hotels")
-      .where("status", "==", "APPROVED")
+      .where("status", "==", "approved")
+      .orderBy("createdAt", "desc") // Recommended: Sort by newest
       .get();
 
     const hotels = snapshot.docs.map((doc) => {
       const data = doc.data();
 
-      // 🔧 FIX: Handle both 'images' (Array) and 'imageUrl' (String)
+      // Handle both 'images' (Array) and 'imageUrl' (String)
       let imageList = [];
 
-      if (Array.isArray(data.images) && data.images.length > 0) {
-        // Case A: It's already a list
-        imageList = data.images;
+      if (Array.isArray(data.imageUrls) && data.imageUrls.length > 0) {
+        imageList = data.imageUrls; // Use the standard plural name
+      } else if (Array.isArray(data.images) && data.images.length > 0) {
+        imageList = data.images;    // Fallback for older data
       } else if (data.imageUrl) {
-        // Case B: It's a single string (Old format)
-        imageList = [data.imageUrl];
+        imageList = [data.imageUrl]; // Fallback for oldest data
       }
 
       return {
         id: doc.id,
-        // ✅ Public Data
         name: data.name,
         location: data.location || data.address || "Mathura",
         city: data.city,
-        images: imageList, // <--- Now guaranteed to be an Array
+        images: imageList,
         price: data.price || data.pricePerNight || 0,
         rating: data.rating || 5,
         slug: data.slug || doc.id,
+        amenities: data.amenities || []
       };
     });
 

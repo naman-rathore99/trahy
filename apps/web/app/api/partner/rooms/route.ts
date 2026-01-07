@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore"; // ✅ Added FieldValue
 import { getAuth } from "firebase-admin/auth";
 import { initAdmin } from "@/lib/firebaseAdmin";
 
@@ -28,14 +28,12 @@ export async function GET(request: Request) {
         const hotelSnapshot = await db.collection("hotels").where("ownerId", "==", userId).limit(1).get();
 
         if (hotelSnapshot.empty) {
-            // STOP HERE: If no hotel, return empty list (don't crash!)
             return NextResponse.json({ rooms: [] });
         }
 
         const hotelId = hotelSnapshot.docs[0].id;
 
         // 2. Fetch Rooms specifically for this Hotel
-        // We assume rooms are stored as a subcollection: hotels/{hotelId}/rooms
         const roomsSnapshot = await db
             .collection("hotels")
             .doc(hotelId)
@@ -54,7 +52,7 @@ export async function GET(request: Request) {
     }
 }
 
-// --- POST: Add a New Room ---
+// --- POST: Add a New Room AND Update Hotel Amenities ---
 export async function POST(request: Request) {
     try {
         const userId = await getUserId(request);
@@ -83,6 +81,19 @@ export async function POST(request: Request) {
             .doc(hotelId)
             .collection("rooms")
             .add(newRoom);
+
+        // ---------------------------------------------------------
+        // ✅ NEW LOGIC: Bubble Up Amenities to Main Hotel
+        // ---------------------------------------------------------
+        if (body.amenities && Array.isArray(body.amenities) && body.amenities.length > 0) {
+            console.log("Syncing amenities to hotel:", body.amenities);
+
+            // This adds the new amenities to the Hotel document WITHOUT overwriting existing ones
+            await db.collection("hotels").doc(hotelId).update({
+                amenities: FieldValue.arrayUnion(...body.amenities)
+            });
+        }
+        // ---------------------------------------------------------
 
         return NextResponse.json({ success: true, id: ref.id });
 

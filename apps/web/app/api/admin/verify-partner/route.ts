@@ -1,43 +1,92 @@
 import { NextResponse } from "next/server";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth"; // ✅ Added Auth
 import { initAdmin } from "@/lib/firebaseAdmin";
 
 export async function POST(request: Request) {
     await initAdmin();
     const db = getFirestore();
+    const auth = getAuth();
 
     try {
-        const { userId, action, remark } = await request.json(); // action = 'approve' | 'reject'
+        // ✅ We added phoneNumber and documentUrl to the request body
+        const { userId, action, remark, phoneNumber, documentUrl } = await request.json();
 
-        if (!userId) return NextResponse.json({ error: "User ID missing" }, { status: 400 });
+        if (!userId || !action) {
+            return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+        }
 
-        const isApprove = action === "approve";
+        // 1. APPROVE PARTNER
+        if (action === "approve") {
+            await db.collection("users").doc(userId).update({
+                isVerified: true,
+                verificationStatus: "verified",
+                verificationRemark: "",
+                approvedBy: "admin",
+                updatedAt: new Date(),
+            });
 
-        // 1. Update USER (The Partner Identity)
-        await db.collection("users").doc(userId).update({
-            isVerified: isApprove,
-            verificationStatus: isApprove ? "verified" : "rejected",
-            verificationRemark: remark || "", // Save the rejection reason if any
-            updatedAt: new Date(),
-        });
+            // Also Approve their Hotel
+            const hotelQuery = await db.collection("hotels").where("ownerId", "==", userId).get();
+            if (!hotelQuery.empty) {
+                await db.collection("hotels").doc(hotelQuery.docs[0].id).update({
+                    status: "APPROVED",
+                });
+            }
+        }
 
-        // 2. Update HOTEL (The Property Visibility)
-        // Find the hotel owned by this user
-        const hotelQuery = await db.collection("hotels").where("ownerId", "==", userId).get();
+        // 2. REJECT PARTNER
+        else if (action === "reject") {
+            await db.collection("users").doc(userId).update({
+                isVerified: false,
+                verificationStatus: "rejected",
+                verificationRemark: remark || "Documents rejected",
+                updatedAt: new Date(),
+            });
 
-        if (!hotelQuery.empty) {
-            const hotelDoc = hotelQuery.docs[0];
+            // Hide their Hotel
+            const hotelQuery = await db.collection("hotels").where("ownerId", "==", userId).get();
+            if (!hotelQuery.empty) {
+                await db.collection("hotels").doc(hotelQuery.docs[0].id).update({
+                    status: "REJECTED",
+                });
+            }
+        }
 
-            // If Approving User -> Approve Hotel
-            // If Rejecting User -> Set Hotel to Pending/Rejected (Hide it)
-            await db.collection("hotels").doc(hotelDoc.id).update({
-                status: isApprove ? "APPROVED" : "REJECTED",
+        // 3. ✅ NEW: UPDATE PHONE NUMBER (Fixes missing numbers)
+        else if (action === "update_phone") {
+            if (!phoneNumber) return NextResponse.json({ error: "No phone provided" }, { status: 400 });
+
+            // Update Firestore (Saving both keys to be safe)
+            await db.collection("users").doc(userId).update({
+                phone: phoneNumber,
+                phoneNumber: phoneNumber,
+                updatedAt: new Date(),
+            });
+
+            // Attempt to update Firebase Auth User (Optional but good)
+            try {
+                await auth.updateUser(userId, { phoneNumber: phoneNumber });
+            } catch (e) {
+                console.log("Could not update Auth phone (likely format issue), but Firestore updated.");
+            }
+        }
+
+        // 4. ✅ NEW: MANUAL IMAGE FIX (Fixes missing images)
+        else if (action === "update_doc") {
+            if (!documentUrl) return NextResponse.json({ error: "No URL provided" }, { status: 400 });
+
+            await db.collection("users").doc(userId).update({
+                idProofUrl: documentUrl,
+                // We keep isVerified false so you can review it again
+                updatedAt: new Date(),
             });
         }
 
         return NextResponse.json({ success: true });
 
     } catch (error: any) {
+        console.error("Verification Error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+} 
