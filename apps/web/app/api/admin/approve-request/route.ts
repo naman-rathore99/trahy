@@ -5,7 +5,6 @@ import { initAdmin } from "@/lib/firebaseAdmin";
 
 export const dynamic = "force-dynamic";
 
-// --- GET: List Requests (Smart Filter) ---
 export async function GET(request: Request) {
     await initAdmin();
     const db = getFirestore();
@@ -124,4 +123,7 @@ export async function PUT(request: Request) {
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
+}
+export async function POST(request: Request) {
+    return PUT(request);
 }
