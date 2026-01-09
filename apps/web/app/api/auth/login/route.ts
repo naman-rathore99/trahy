@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
         // 1. Verify Password using Firebase REST API
         // Ensure FIREBASE_API_KEY is in your .env file
-        const apiKey = process.env.FIREBASE_API_KEY;
+        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
         if (!apiKey) {
             return NextResponse.json({ error: "Server Error: API Key missing" }, { status: 500 });
         }
