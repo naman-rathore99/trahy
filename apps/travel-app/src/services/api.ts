@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-
+// ⚠️ Use 10.0.2.2 for Android Emulator, localhost for iOS
 export const API_URL = "http://10.0.2.2:3000/api";
 
 const api = axios.create({
@@ -11,7 +11,7 @@ const api = axios.create({
     },
 });
 
-// ✅ INTERCEPTOR: Automatically adds the Token to every request
+// Interceptor for Auth Token
 api.interceptors.request.use(async (config) => {
     const token = await AsyncStorage.getItem("userToken");
     if (token) {
@@ -20,16 +20,35 @@ api.interceptors.request.use(async (config) => {
     return config;
 });
 
-// ✅ HELPER: Function to Save/Remove Token (Use this on Login/Logout)
+// Helper to Save Token
 export const setAuthToken = async (token: string | null) => {
     if (token) {
-        // Login: Save token and set header
         await AsyncStorage.setItem('userToken', token);
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     } else {
-        // Logout: Clear token and remove header
         await AsyncStorage.removeItem('userToken');
         delete api.defaults.headers.common['Authorization'];
+    }
+};
+
+// ✅ API Functions
+export const getStays = async () => {
+    try {
+        const response = await api.get('/stays');
+        return response.data;
+    } catch (error) {
+        console.error("API Error (Stays):", error);
+        throw error;
+    }
+};
+
+export const getVehicles = async () => {
+    try {
+        const response = await api.get('/vehicle'); // Singular 'vehicle' route
+        return response.data;
+    } catch (error) {
+        console.error("API Error (Vehicles):", error);
+        throw error;
     }
 };
 
