@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { getFirestore, FieldValue } from "firebase-admin/firestore"; // ✅ Added FieldValue
 import { getAuth } from "firebase-admin/auth";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 // Helper: Get User ID from Token
 async function getUserId(request: Request) {
     const token = request.headers.get("Authorization")?.split("Bearer ")[1];
     if (!token) return null;
     try {
-        await initAdmin();
+        // initAdmin auto-initialized
         const decodedToken = await getAuth().verifyIdToken(token);
         return decodedToken.uid;
     } catch (error) {
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
         const userId = await getUserId(request);
         if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const db = getFirestore();
+        const db = adminDb;
 
         // 1. Find the User's Hotel first
         const hotelSnapshot = await db.collection("hotels").where("ownerId", "==", userId).limit(1).get();
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
         const userId = await getUserId(request);
         if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const db = getFirestore();
+        const db = adminDb;
         const body = await request.json();
 
         // 1. Find the User's Hotel

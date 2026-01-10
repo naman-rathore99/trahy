@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
+``
 import { getAuth } from "firebase-admin/auth";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 export async function GET(request: Request) {
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initialized
+    const db = adminDb;
 
     try {
         const token = request.headers.get("Authorization")?.split("Bearer ")[1];

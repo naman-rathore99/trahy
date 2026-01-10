@@ -1,13 +1,13 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
-import { initAdmin } from "@/lib/firebaseAdmin";
+``
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 export async function GET(request: Request) {
-  await initAdmin();
+  // initAdmin auto-initialized
   const auth = getAuth();
-  const db = getFirestore();
+  const db = adminDb;
 
   try {
     const { searchParams } = new URL(request.url);

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
-import { initAdmin } from "@/lib/firebaseAdmin";
+``
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 export async function POST(request: Request) {
     try {
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
         const { hotelId, reviewId, text, rating } = await request.json();
 
         const hotelRef = db.collection("hotels").doc(hotelId);

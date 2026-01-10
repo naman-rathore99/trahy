@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 
 async function handlePayment(request: Request) {
   const url = new URL(request.url);
@@ -24,8 +24,8 @@ async function handlePayment(request: Request) {
   }
 
   // 2. Initialize DB
-  await initAdmin();
-  const db = getFirestore();
+  // initAdmin auto-initialized
+  const db = adminDb;
 
   // --- 🆕 SMART COLLECTION CHECK (Hotels vs Vehicles) ---
   let docRef = db.collection("bookings").doc(bookingId);

@@ -38,16 +38,22 @@ export default function HomeScreen({ navigation }: any) {
             <SafeAreaView className="flex-1">
 
                 {/* Header */}
+                {/* 🟠 Header Update */}
                 <View className="px-5 py-3 flex-row justify-between items-center">
                     <View>
-                        <Text className="text-gray-500 text-xs font-bold uppercase">Current Location</Text>
-                        <View className="flex-row items-center">
-                            <MapPin size={16} color="#EA580C" />
-                            <Text className="text-gray-900 text-lg font-bold ml-1">Mathura, India</Text>
-                        </View>
+                        <Text className="text-gray-500 text-xs font-bold uppercase">Welcome Back</Text>
+                        <Text className="text-gray-900 text-lg font-bold">Naman Rathore 👋</Text>
                     </View>
-                    <TouchableOpacity className="bg-gray-50 p-2 rounded-full border border-gray-100">
-                        <Bell color="black" size={20} />
+
+                    {/* 👇 Profile Icon ko Clickable banaya */}
+                    <TouchableOpacity
+                        onPress={() => navigation.navigate('Profile')} // ✅ Navigates to Profile
+                        className="w-10 h-10 bg-gray-200 rounded-full overflow-hidden border border-white shadow-sm"
+                    >
+                        <Image
+                            source={{ uri: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400&auto=format&fit=crop&q=60' }}
+                            className="w-full h-full"
+                        />
                     </TouchableOpacity>
                 </View>
 

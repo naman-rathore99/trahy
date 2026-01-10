@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +10,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initialized
+    const db = adminDb;
 
     let docSnap;
     let finalId = id;

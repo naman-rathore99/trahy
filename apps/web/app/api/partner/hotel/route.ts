@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
+``
 import { getAuth } from "firebase-admin/auth";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 // Helper: Verify Token & Get User ID
 async function getUserId(request: Request) {
@@ -10,7 +10,7 @@ async function getUserId(request: Request) {
 
     const token = authHeader.split("Bearer ")[1];
     try {
-        await initAdmin();
+        // initAdmin auto-initializedinitialized
         const decodedToken = await getAuth().verifyIdToken(token);
         return decodedToken.uid;
     } catch (error) {
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
         const userId = await getUserId(request);
         if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const db = getFirestore();
+        const db = adminDb;
 
         // Find the hotel owned by this user
         const snapshot = await db.collection("hotels").where("ownerId", "==", userId).limit(1).get();
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
         const userId = await getUserId(request);
         if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const db = getFirestore();
+        const db = adminDb;
         const body = await request.json();
 
         // Check if user already has a hotel
@@ -88,7 +88,7 @@ export async function PUT(request: Request) {
         const userId = await getUserId(request);
         if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const db = getFirestore();
+        const db = adminDb;
         const body = await request.json();
 
         // Find the user's hotel

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 
 // 1. Shared Logic for both GET and POST
 async function handlePayment(request: Request) {
@@ -29,8 +29,8 @@ async function handlePayment(request: Request) {
     }
 
     // 2. Update Database
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initialized
+    const db = adminDb;
     const bookingRef = db.collection("bookings").doc(bookingId);
 
     // If we have an ID but no code (e.g. forced GET redirect), check if we should default to success 

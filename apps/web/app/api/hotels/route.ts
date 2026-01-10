@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
-import { initAdmin } from "@/lib/firebaseAdmin";
+``
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 export async function GET() {
-  await initAdmin();
-  const db = getFirestore();
+  // initAdmin auto-initialized
+  const db = adminDb;
 
   try {
     // 1. Fetch ONLY "approved" hotels (Public shouldn't see drafts)

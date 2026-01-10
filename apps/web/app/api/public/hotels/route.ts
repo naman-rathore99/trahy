@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
-import { initAdmin } from "@/lib/firebaseAdmin";
+``
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  await initAdmin();
-  const db = getFirestore();
+  // initAdmin auto-initialized
+  const db = adminDb;
 
   try {
     // ✅ FIX: Change "APPROVED" to "approved" (lowercase) to match your database

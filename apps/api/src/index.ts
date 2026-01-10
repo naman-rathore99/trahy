@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { initializeApp, cert, ServiceAccount } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+``
 import { getAuth, DecodedIdToken } from "firebase-admin/auth";
 
 // 1. SETUP & CONFIGURATION
@@ -38,7 +38,7 @@ initializeApp({
   credential: cert(serviceAccount),
 });
 
-const db = getFirestore();
+const db = adminDb;
 const app = express();
 
 app.use(cors());
@@ -181,7 +181,7 @@ app.post(
 app.get('/api/hotels', async (req: any, res: any) => {
   try {
     const snapshot = await db.collection('hotels')
-     
+
       .get();
 
     const hotels = snapshot.docs.map((doc: any) => ({
@@ -287,14 +287,14 @@ app.post(
         password,
         displayName: name,
       });
-// create doc dB
-    await db.collection("users").doc(newUser.uid).set({
-     name,
-     email,
-     role: "partner", // <--- CHANGE THIS (Was 'user', must be 'partner')
-     createdAt: new Date().toISOString(),
-     isLicenseVerified: false,
-   });
+      // create doc dB
+      await db.collection("users").doc(newUser.uid).set({
+        name,
+        email,
+        role: "partner", // <--- CHANGE THIS (Was 'user', must be 'partner')
+        createdAt: new Date().toISOString(),
+        isLicenseVerified: false,
+      });
 
       // Mark Request as Approved
       await db.collection("join_requests").doc(requestId).update({
@@ -321,13 +321,13 @@ app.post('/api/admin/add-hotel', checkAuth, async (req: any, res: any) => {
     if (userDoc.data()?.role !== 'admin') return res.status(403).json({ error: "Denied" });
 
     // 1. Destructure Common & Specific Fields
-    const { 
+    const {
       type, // 'hotel' | 'vehicle'
       name, location, price, description, imageUrls,
       // Hotel Specific
-      amenities, 
+      amenities,
       // Vehicle Specific
-      vehicleType, seats, transmission, fuelType 
+      vehicleType, seats, transmission, fuelType
     } = req.body;
 
     // 2. Build the Object based on Type
@@ -342,7 +342,7 @@ app.post('/api/admin/add-hotel', checkAuth, async (req: any, res: any) => {
       status: 'pending',
       createdAt: new Date().toISOString(),
       ownerId: uid,
-      
+
       // Store specific details in a clean way
       details: type === 'vehicle' ? {
         vehicleType, // e.g., SUV, Sedan
@@ -368,7 +368,7 @@ app.get('/api/admin/bookings', checkAuth, async (req: any, res: any) => {
   try {
     const uid = req.user.uid;
     const userDoc = await db.collection('users').doc(uid).get();
-    
+
     // 1. Security Check
     if (userDoc.data()?.role !== 'admin' && userDoc.data()?.role !== 'partner') {
       return res.status(403).json({ error: "Denied" });
@@ -399,9 +399,9 @@ app.get('/api/admin/bookings', checkAuth, async (req: any, res: any) => {
 // Create a New Booking
 app.post('/api/bookings', checkAuth, async (req: any, res: any) => {
   try {
-    const { 
+    const {
       listingId, listingName, listingImage, serviceType,
-      checkIn, checkOut, guests, totalAmount 
+      checkIn, checkOut, guests, totalAmount
     } = req.body;
 
     // Validation
@@ -429,7 +429,7 @@ app.post('/api/bookings', checkAuth, async (req: any, res: any) => {
 
     // Save to Firestore
     const docRef = await db.collection('bookings').add(bookingData);
-    
+
     console.log(`Booking Created: ${docRef.id}`); // Log it so you can see in Render logs
     res.json({ success: true, bookingId: docRef.id });
 

@@ -4,14 +4,14 @@ import {
     Env,
     StandardCheckoutPayRequest,
 } from "pg-sdk-node";
-import { getFirestore } from "firebase-admin/firestore";
+``
 import { getAuth } from "firebase-admin/auth";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 export async function POST(request: Request) {
     // Initialize Firebase
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initializedinitialized
+    const db = adminDb;
     const auth = getAuth();
 
     try {

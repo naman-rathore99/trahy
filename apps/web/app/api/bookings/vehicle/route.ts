@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
 
         // 1. Validate
         if (!body.vehicleId || !body.customer || !body.startDate || !body.endDate) {

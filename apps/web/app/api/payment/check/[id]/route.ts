@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 import { StandardCheckoutClient, Env } from "pg-sdk-node";
 
 export async function GET(
@@ -47,8 +47,8 @@ export async function GET(
         }
 
         // 4. Update Firestore (SMART CHECK 🧠)
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
 
         // Step A: Try finding it in 'bookings' (Hotels)
         let bookingRef = db.collection("bookings").doc(id);

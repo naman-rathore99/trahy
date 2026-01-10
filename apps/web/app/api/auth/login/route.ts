@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 import axios from "axios";
 
 export async function POST(request: Request) {
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initializedinitialized
+    const db = adminDb;
 
     try {
         const { email, password } = await request.json();

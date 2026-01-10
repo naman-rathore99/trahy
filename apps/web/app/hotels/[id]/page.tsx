@@ -302,7 +302,7 @@ export default function HotelDetailsPage({ params }: { params: Promise<{ id: str
   return (
     <main className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white pb-24 lg:pb-20 transition-colors duration-200">
       <Navbar variant="default" />
-      <style jsx global>{`.rdp { --rdp-accent-color: #e11d48; } .rdp-day_selected:not([disabled]) { color: white; background-color: var(--rdp-accent-color); }`}</style>
+
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 md:pt-32">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">

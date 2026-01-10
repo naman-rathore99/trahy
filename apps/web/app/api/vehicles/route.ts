@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";
+``
 
 export const dynamic = "force-dynamic"; // Forces fresh data
 
 export async function GET() {
     try {
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
         const snapshot = await db.collection("vehicles").get();
 
         const vehicles = snapshot.docs.map(doc => ({

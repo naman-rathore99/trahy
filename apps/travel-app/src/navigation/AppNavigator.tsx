@@ -2,15 +2,14 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// Screens
+// ✅ Import All Screens
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
-import SignupUserScreen from '../screens/SignupUserScreen';
-import HomeScreen from '../screens/HomeScreen'; // ✅ Import hai
+import HomeScreen from '../screens/HomeScreen';
 import StaysScreen from '../screens/StaysScreen';
-import RentalsScreen from '../screens/RentalsScreen';
-import YatraScreen from '../screens/YatraScreen';
 import HotelDetailsScreen from '../screens/HotelDetailsScreen';
+import RentalsScreen from '../screens/RentalsScreen';
+import ProfileScreen from '../screens/ProfileScreen'; // 👈 Import This
 
 const Stack = createNativeStackNavigator();
 
@@ -18,14 +17,20 @@ export default function AppNavigator() {
     return (
         <NavigationContainer>
             <Stack.Navigator screenOptions={{ headerShown: false }}>
+
+                {/* Auth Screens */}
                 <Stack.Screen name="Login" component={LoginScreen} />
-                <Stack.Screen name="SignupPartner" component={SignupScreen} />
-                <Stack.Screen name="SignupUser" component={SignupUserScreen} />
+                <Stack.Screen name="SignupUser" component={SignupScreen} />
+
+                {/* Main App Screens */}
                 <Stack.Screen name="Home" component={HomeScreen} />
-                <Stack.Screen name="HotelDetails" component={HotelDetailsScreen} />
                 <Stack.Screen name="Stays" component={StaysScreen} />
+                <Stack.Screen name="HotelDetails" component={HotelDetailsScreen} />
                 <Stack.Screen name="Rentals" component={RentalsScreen} />
-                <Stack.Screen name="Yatra" component={YatraScreen} />
+
+                {/* ✅ REGISTER PROFILE SCREEN HERE */}
+                <Stack.Screen name="Profile" component={ProfileScreen} />
+
             </Stack.Navigator>
         </NavigationContainer>
     );

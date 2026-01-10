@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 
 // ⚠️ FORCE DYNAMIC: Prevents Next.js from caching old data
 export const dynamic = "force-dynamic";
@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 // 1. GET: Fetch ALL Hotels
 export async function GET() {
   try {
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initialized
+    const db = adminDb;
 
     const snapshot = await db.collection("hotels").get();
 
@@ -29,8 +29,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initialized
+    const db = adminDb;
 
     // Create a new document with an auto-generated ID
     const docRef = await db.collection("hotels").add({

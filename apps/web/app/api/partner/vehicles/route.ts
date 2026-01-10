@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
+``
 import { getAuth } from "firebase-admin/auth";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 // GET: Fetch Partner's Vehicles
 export async function GET(request: Request) {
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initialized
+    const db = adminDb;
 
     try {
         // 1. Auth Check
@@ -30,8 +30,8 @@ export async function GET(request: Request) {
 
 // POST: Add New Vehicle
 export async function POST(request: Request) {
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initialized
+    const db = adminDb;
 
     try {
         const token = request.headers.get("Authorization")?.split("Bearer ")[1];

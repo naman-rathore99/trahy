@@ -19,8 +19,12 @@
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.rdp {
+  --rdp-cell-size: 40px;
+  --rdp-accent-color: #e11d48;
+  margin: 0;
+}
+
+.rdp-day_selected:not([disabled]) {
+  background-color: var(--rdp-accent-color);
 }

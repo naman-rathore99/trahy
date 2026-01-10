@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
-import { initAdmin } from "@/lib/firebaseAdmin";
+``
+import { adminDb } from "@/lib/firebaseAdmin";;
 import { headers } from "next/headers";
 
 export async function GET() {
-  await initAdmin();
-  const db = getFirestore();
+  // initAdmin auto-initialized
+  const db = adminDb;
   const auth = getAuth();
 
   try {

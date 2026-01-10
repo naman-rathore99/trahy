@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 export async function POST(request: Request) {
@@ -12,8 +12,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Missing fields" }, { status: 400 });
         }
 
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
 
         // ✅ SMART TARGETING
         // If collectionName is sent (new frontend), use it.

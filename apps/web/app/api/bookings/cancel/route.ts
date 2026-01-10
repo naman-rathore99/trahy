@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 
 export async function POST(request: Request) {
     try {
@@ -12,8 +12,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Missing Booking ID" }, { status: 400 });
         }
 
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
 
         // ✅ SMART TARGETING
         // If collectionName is sent (new frontend), use it.

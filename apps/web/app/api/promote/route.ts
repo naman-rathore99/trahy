@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAuth } from "firebase-admin/auth";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 export async function GET() {
-  await initAdmin();
+  // initAdmin auto-initialized
   const auth = getAuth();
 
   // YOUR SPECIFIC USER ID (From the data you sent me)

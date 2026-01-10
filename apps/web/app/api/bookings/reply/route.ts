@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 export async function POST(request: Request) {
@@ -10,8 +10,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Missing fields" }, { status: 400 });
         }
 
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
         const bookingRef = db.collection("bookings").doc(bookingId);
 
         // Save the Admin's reply into a separate array 'adminReplies'

@@ -1,6 +1,6 @@
 import { MetadataRoute } from "next";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://shubhyatra.world";
@@ -18,8 +18,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // 2. Dynamic Hotel Pages (Fetch from Database)
   let hotelRoutes: any[] = [];
   try {
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initialized
+    const db = adminDb;
     const snapshot = await db.collection("hotels").get(); // Change "hotels" to your actual collection name
 
     hotelRoutes = snapshot.docs.map((doc) => ({

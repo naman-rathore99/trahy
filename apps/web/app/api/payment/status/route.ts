@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 import crypto from "crypto";
 
 export async function GET(request: Request) {
@@ -12,8 +12,8 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: "Missing Booking ID" }, { status: 400 });
         }
 
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
 
         // --- 1. SMART CHECK (Look in both collections) ---
         let docRef = db.collection("bookings").doc(bookingId);

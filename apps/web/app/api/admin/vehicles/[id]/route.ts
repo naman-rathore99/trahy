@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";;
+``
 
 // DELETE
 export async function DELETE(
@@ -9,8 +9,8 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params;
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
 
         await db.collection("vehicles").doc(id).delete();
         return NextResponse.json({ success: true });
@@ -27,8 +27,8 @@ export async function PUT(
     try {
         const { id } = await params;
         const body = await request.json();
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
 
         const { id: _, ...updateData } = body; // Remove ID from data
 

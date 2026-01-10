@@ -97,14 +97,6 @@ export default function BookingSuccessPage({ params }: { params: Promise<{ id: s
     <main className="min-h-screen bg-gray-50 dark:bg-black pb-20 transition-colors duration-300">
       <Navbar variant="default" />
 
-      <style jsx global>{`
-                .dark .rdp { --rdp-cell-size: 40px; --rdp-accent-color: #e11d48; --rdp-background-color: #202020; margin: 0; }
-                .dark .rdp-day_selected:not([disabled]) { color: white; background-color: var(--rdp-accent-color); }
-                .dark .rdp-day:hover:not([disabled]) { background-color: #333; }
-                .dark .rdp-caption_label, .dark .rdp-head_cell, .dark .rdp-day { color: #e5e7eb; }
-                .dark .rdp-button:hover:not([disabled]) { color: white; }
-            `}</style>
-
       <div className="max-w-3xl mx-auto px-4 pt-24 md:pt-32">
         <div className="text-center mb-8">
           {isCancelled ? (

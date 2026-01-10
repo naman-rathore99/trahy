@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
+``
 import { getAuth } from "firebase-admin/auth";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-    await initAdmin();
-    const db = getFirestore();
+    const db = adminDb;
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get("status"); // e.g. ?status=pending
 
@@ -39,8 +38,8 @@ export async function GET(request: Request) {
 
 // --- PUT: Approve/Reject & Create User ---
 export async function PUT(request: Request) {
-    await initAdmin();
-    const db = getFirestore();
+    // initAdmin auto-initialized
+    const db = adminDb;
     const auth = getAuth();
 
     try {

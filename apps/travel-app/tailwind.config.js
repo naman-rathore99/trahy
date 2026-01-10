@@ -2,9 +2,9 @@
 module.exports = {
   content: [
     "./App.{js,jsx,ts,tsx}",
-    "./src/**/*.{js,jsx,ts,tsx}" // ✅ Ensure ye line sahi ho
+    "./src/**/*.{js,jsx,ts,tsx}"
   ],
-  presets: [require("nativewind/preset")], // ✅ v4 ke liye zaroori
+  presets: [require("nativewind/preset")],
   theme: {
     extend: {},
   },

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
-import { initAdmin } from "@/lib/firebaseAdmin";
+``
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
     try {
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
 
         // 1. Fetch ALL reviews (REMOVED .orderBy to fix the error)
         const snapshot = await db.collectionGroup("reviews").get();

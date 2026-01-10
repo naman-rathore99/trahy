@@ -11,8 +11,8 @@ export async function PUT(
     const body = await request.json();
 
     // ❌ OLD LINES REMOVED:
-    // await initAdmin();
-    // const db = getFirestore();
+    // // initAdmin auto-initialized
+    // const db = adminDb;
 
     // Remove 'id' from body to allow Firestore update
     const { id: _, ...updateData } = body;
@@ -38,8 +38,8 @@ export async function DELETE(
     const { id } = await params;
 
     // ❌ OLD LINES REMOVED:
-    // await initAdmin();
-    // const db = getFirestore();
+    // // initAdmin auto-initialized
+    // const db = adminDb;
 
     // ✅ USE adminDb DIRECTLY
     await adminDb.collection("vehicles").doc(id).delete();

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
+``
 import { getAuth } from "firebase-admin/auth";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 // Helper: Get User ID from Token
 async function getUserId(request: Request) {
     const token = request.headers.get("Authorization")?.split("Bearer ")[1];
     if (!token) return null;
     try {
-        await initAdmin();
+        // initAdmin auto-initialized
         const decodedToken = await getAuth().verifyIdToken(token);
         return decodedToken;
     } catch (error) {
@@ -24,8 +24,8 @@ export async function GET(request: Request) {
     if (!hotelId) return NextResponse.json({ error: "Hotel ID required" }, { status: 400 });
 
     try {
-        await initAdmin();
-        const db = getFirestore();
+        // initAdmin auto-initialized
+        const db = adminDb;
         const snapshot = await db
             .collection("hotels")
             .doc(hotelId)
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
 
         if (!hotelId || !rating) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
 
-        const db = getFirestore();
+        const db = adminDb;
         const hotelRef = db.collection("hotels").doc(hotelId);
 
         // 1. Add the Review

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
+``
 import { getAuth } from "firebase-admin/auth";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 
 // Helper: Get User ID
 async function getUserId(request: Request) {
     const token = request.headers.get("Authorization")?.split("Bearer ")[1];
     if (!token) return null;
     try {
-        await initAdmin();
+        // initAdmin auto-initialized
         const decodedToken = await getAuth().verifyIdToken(token);
         return decodedToken.uid;
     } catch (error) {
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
         const userId = await getUserId(request);
         if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const db = getFirestore();
+        const db = adminDb;
 
         // 1. Fetch User Profile (to get Bank Details)
         const userDoc = await db.collection("users").doc(userId).get();
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
         const userId = await getUserId(request);
         if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const db = getFirestore();
+        const db = adminDb;
         const body = await request.json();
 
         const userRef = db.collection("users").doc(userId);

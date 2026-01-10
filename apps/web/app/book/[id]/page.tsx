@@ -320,31 +320,6 @@ function HotelBookingContent() {
     <main className="min-h-screen bg-gray-50 dark:bg-black pb-20 transition-colors duration-300">
       <Navbar variant="default" />
 
-      <style jsx global>{`
-        .rdp {
-          --rdp-cell-size: 40px;
-          --rdp-accent-color: #e11d48;
-          --rdp-background-color: #e11d48;
-          margin: 0;
-        }
-        .rdp-day_selected:not([disabled]) {
-          color: white;
-          background-color: var(--rdp-accent-color);
-        }
-        .rdp-button:hover:not([disabled]) {
-          background-color: #fce7f3;
-          color: #e11d48;
-        }
-        .dark .rdp-caption_label,
-        .dark .rdp-head_cell,
-        .dark .rdp-day {
-          color: #e5e7eb;
-        }
-        .dark .rdp-button:hover:not([disabled]) {
-          background-color: #333;
-          color: white;
-        }
-      `}</style>
 
       <div className="max-w-6xl mx-auto px-4 pt-28 md:pt-32">
         <h1 className="text-3xl font-bold mb-8 text-gray-900 dark:text-white">

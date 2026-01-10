@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { getFirestore } from "firebase-admin/firestore";
+``
 import { getAuth } from "firebase-admin/auth";
-import { initAdmin } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";;
 import { headers } from "next/headers";
 
 // GET: Fetch All Hotels + Owner Details
 export async function GET() {
-  await initAdmin();
-  const db = getFirestore();
+  // initAdmin auto-initialized
+  const db = adminDb;
   const auth = getAuth();
 
   try {
@@ -60,8 +60,8 @@ export async function GET() {
 
 // POST: Add a New Hotel (Fixes the "Missing Partner" issue)
 export async function POST(request: Request) {
-  await initAdmin();
-  const db = getFirestore();
+  // initAdmin auto-initialized
+  const db = adminDb;
   const auth = getAuth();
 
   try {

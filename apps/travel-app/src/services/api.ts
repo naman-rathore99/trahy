@@ -2,7 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ⚠️ Use 10.0.2.2 for Android Emulator, localhost for iOS
-export const API_URL = "http://10.0.2.2:3000/api";
+export const API_URL = "http://192.168.0.176:3000/api";
 
 const api = axios.create({
     baseURL: API_URL,
@@ -51,5 +51,13 @@ export const getVehicles = async () => {
         throw error;
     }
 };
-
+export const signOut = async () => {
+    try {
+        await setAuthToken(null); // Token delete karega
+        return true;
+    } catch (error) {
+        console.error("Logout Error:", error);
+        return false;
+    }
+}
 export default api;
