@@ -1,12 +1,11 @@
 {
   "expo": {
-    "name": "travel-app",
-    "slug": "travel-app",
+    "name": "Shubhyatra",
+    "slug": "shubhyatra",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -14,20 +13,24 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "superapp-8e8ba.firebaseapp.com"
+      "bundleIdentifier": "com.shubhyatra.world",
+      "googleServicesFile": "./google-services.json"
     },
     "android": {
-      "package": "superapp-8e8ba.firebaseapp.com",
+      "package": "com.shubhyatra.world",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "googleServicesFile": "./google-services.json",
+      "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
-    }
+    },
+    "plugins": [
+      "@react-native-google-signin/google-signin"
+    ]
   }
 }
