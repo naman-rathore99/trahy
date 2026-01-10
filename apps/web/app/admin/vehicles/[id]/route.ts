@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { initAdmin } from "@/lib/firebaseAdmin";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin"; // ✅ Import adminDb only
 
 // 1. PUT: Update a specific vehicle
 export async function PUT(
@@ -10,13 +9,16 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    await initAdmin();
-    const db = getFirestore();
+
+    // ❌ OLD LINES REMOVED:
+    // await initAdmin();
+    // const db = getFirestore();
 
     // Remove 'id' from body to allow Firestore update
     const { id: _, ...updateData } = body;
 
-    await db.collection("vehicles").doc(id).update({
+    // ✅ USE adminDb DIRECTLY
+    await adminDb.collection("vehicles").doc(id).update({
       ...updateData,
       updatedAt: new Date(),
     });
@@ -34,10 +36,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await initAdmin();
-    const db = getFirestore();
 
-    await db.collection("vehicles").doc(id).delete();
+    // ❌ OLD LINES REMOVED:
+    // await initAdmin();
+    // const db = getFirestore();
+
+    // ✅ USE adminDb DIRECTLY
+    await adminDb.collection("vehicles").doc(id).delete();
 
     return NextResponse.json({ success: true });
   } catch (error) {
