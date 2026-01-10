@@ -1,17 +1,43 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, FlatList, StatusBar, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router'; // ✅ Import Router
 import {
-    Search, Bell, Car, BedDouble, Compass, Map, Star, MapPin
+    Search, Car, BedDouble, Compass, Map
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
+// ✅ FIXED ROUTES: Now pointing to correct Tab files
 const SERVICES = [
-    { id: '1', name: 'Hotels', route: 'Stays', icon: <BedDouble size={24} color="#D97706" />, bg: 'bg-orange-100' },
-    { id: '2', name: 'Cabs', route: 'Yatra', icon: <Map size={24} color="#2563EB" />, bg: 'bg-blue-100' },
-    { id: '3', name: 'Rentals', route: 'Rentals', icon: <Car size={24} color="#059669" />, bg: 'bg-green-100' },
-    { id: '4', name: 'Packages', route: 'Home', icon: <Compass size={24} color="#7C3AED" />, bg: 'bg-purple-100' },
+    {
+        id: '1',
+        name: 'Hotels',
+        route: '/(tabs)/stays', // 👈 Points to Stays List (API Data)
+        icon: <BedDouble size={24} color="#D97706" />,
+        bg: 'bg-orange-100'
+    },
+    {
+        id: '2',
+        name: 'Cabs',
+        route: '/(tabs)/yatra', // (Assuming you have yatra.tsx, else keep as is)
+        icon: <Map size={24} color="#2563EB" />,
+        bg: 'bg-blue-100'
+    },
+    {
+        id: '3',
+        name: 'Rentals',
+        route: '/(tabs)/vehicles', // 👈 Points to Vehicles File (Cars Data)
+        icon: <Car size={24} color="#059669" />,
+        bg: 'bg-green-100'
+    },
+    {
+        id: '4',
+        name: 'Packages',
+        route: '/(tabs)/home',
+        icon: <Compass size={24} color="#7C3AED" />,
+        bg: 'bg-purple-100'
+    },
 ];
 
 const BANNERS = [
@@ -19,7 +45,8 @@ const BANNERS = [
     { id: '2', image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80', title: 'Road Trip Special', sub: 'Rentals starting ₹999' },
 ];
 
-export default function HomeScreen({ navigation }: any) {
+export default function HomeScreen() {
+    const router = useRouter(); // ✅ Use Router Hook
 
     const renderBanner = ({ item }: any) => (
         <TouchableOpacity className="mr-4 relative rounded-2xl overflow-hidden shadow-sm" style={{ width: width * 0.75, height: 160 }}>
@@ -38,16 +65,14 @@ export default function HomeScreen({ navigation }: any) {
             <SafeAreaView className="flex-1">
 
                 {/* Header */}
-                {/* 🟠 Header Update */}
                 <View className="px-5 py-3 flex-row justify-between items-center">
                     <View>
                         <Text className="text-gray-500 text-xs font-bold uppercase">Welcome Back</Text>
                         <Text className="text-gray-900 text-lg font-bold">Naman Rathore 👋</Text>
                     </View>
 
-                    {/* 👇 Profile Icon ko Clickable banaya */}
                     <TouchableOpacity
-                        onPress={() => navigation.navigate('Profile')} // ✅ Navigates to Profile
+                        onPress={() => router.push('/profile')} // ✅ Fixed Profile Link
                         className="w-10 h-10 bg-gray-200 rounded-full overflow-hidden border border-white shadow-sm"
                     >
                         <Image
@@ -78,7 +103,10 @@ export default function HomeScreen({ navigation }: any) {
                             {SERVICES.map((item) => (
                                 <TouchableOpacity
                                     key={item.id}
-                                    onPress={() => navigation.navigate(item.route)}
+                                    onPress={() => {
+                                        // ✅ FIXED: Using router.push with specific paths
+                                        if (item.route) router.push(item.route as any);
+                                    }}
                                     className="items-center w-[23%]"
                                 >
                                     <View className={`w-16 h-16 ${item.bg} rounded-2xl items-center justify-center mb-2`}>

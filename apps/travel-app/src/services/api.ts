@@ -53,4 +53,15 @@ export const getVehicles = async () => {
     return response.data;
 };
 
+// ✅ Logout Helper
+export const signOut = async () => {
+    try {
+        await setAuthToken(null); // Token delete karega
+        return true;
+    } catch (error) {
+        console.error("Logout Error:", error);
+        return false;
+    }
+};
+
 export default api;
