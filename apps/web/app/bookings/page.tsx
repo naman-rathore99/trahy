@@ -118,7 +118,7 @@ export default function BookingSuccessPage({ params }: { params: Promise<{ id: s
         </div>
 
         <div className={`bg-white dark:bg-gray-900 rounded-3xl shadow-xl border overflow-hidden relative transition-colors ${isCancelled ? 'border-red-100 dark:border-red-900/50 opacity-90' : 'border-gray-100 dark:border-gray-800'}`}>
-          <div className={`h-2 w-full ${isCancelled ? 'bg-red-500' : 'bg-gradient-to-r from-emerald-400 to-teal-500'}`} />
+          <div className={`h-2 w-full ${isCancelled ? 'bg-red-500' : 'bg-linear-to-r from-emerald-400 to-teal-500'}`} />
 
           <div className="p-6 md:p-8 space-y-8">
             {/* 1. MAIN INFO */}

@@ -1,8 +1,16 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-// ⚠️ Use 10.0.2.2 for Android Emulator, localhost for iOS
-export const API_URL = "http://192.168.0.176:3000/api";
+// ✅ SMART URL: Switches automatically based on device
+const getBaseUrl = () => {
+    if (Platform.OS === 'android') {
+        return "http://192.168.29.191:3000/api"; // Your IP
+    }
+    return "http://localhost:3000/api"; // Web/iOS
+};
+
+export const API_URL = getBaseUrl();
 
 const api = axios.create({
     baseURL: API_URL,
@@ -11,16 +19,19 @@ const api = axios.create({
     },
 });
 
-// Interceptor for Auth Token
-api.interceptors.request.use(async (config) => {
-    const token = await AsyncStorage.getItem("userToken");
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-});
+// ✅ 1. Interceptor: Adds token to every request
+api.interceptors.request.use(
+    async (config) => {
+        const token = await AsyncStorage.getItem("userToken");
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
 
-// Helper to Save Token
+// ✅ 2. Helper: Manually save/remove token
 export const setAuthToken = async (token: string | null) => {
     if (token) {
         await AsyncStorage.setItem('userToken', token);
@@ -31,33 +42,15 @@ export const setAuthToken = async (token: string | null) => {
     }
 };
 
-// ✅ API Functions
+// API Functions
 export const getStays = async () => {
-    try {
-        const response = await api.get('/stays');
-        return response.data;
-    } catch (error) {
-        console.error("API Error (Stays):", error);
-        throw error;
-    }
+    const response = await api.get('/stays');
+    return response.data;
 };
 
 export const getVehicles = async () => {
-    try {
-        const response = await api.get('/vehicle'); // Singular 'vehicle' route
-        return response.data;
-    } catch (error) {
-        console.error("API Error (Vehicles):", error);
-        throw error;
-    }
+    const response = await api.get('/vehicle');
+    return response.data;
 };
-export const signOut = async () => {
-    try {
-        await setAuthToken(null); // Token delete karega
-        return true;
-    } catch (error) {
-        console.error("Logout Error:", error);
-        return false;
-    }
-}
+
 export default api;

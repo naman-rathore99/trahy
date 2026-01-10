@@ -1,9 +1,24 @@
-import React, { useState } from 'react';
-import { View, Text, Image, ScrollView, TouchableOpacity, TextInput, StatusBar, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Share2, Heart, Star, MapPin, CheckCircle2, Bike, Car } from 'lucide-react-native';
+'use client'; // ✅ FIX 1: Essential for Web/Next.js
 
-const { width } = Dimensions.get('window');
+import React, { useState } from 'react';
+import { View, Text, Image, ScrollView, TouchableOpacity, StatusBar, useWindowDimensions } from 'react-native';
+import { ArrowLeft, Heart, Star, MapPin, CheckCircle2, Bike, Car } from 'lucide-react-native';
+
+// ✅ FIX 2: Default Data for Web (When route.params is missing)
+const DEFAULT_HOTEL = {
+    id: 'default-1',
+    name: 'Mathura Grand Palace',
+    price: 1500,
+    rating: 4.8,
+    location: 'Krishna Nagar, Mathura',
+    description: 'Experience luxury and peace near the birth place of Lord Krishna. Featuring modern amenities and traditional hospitality.',
+    image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945',
+    images: [
+        'https://images.unsplash.com/photo-1566073771259-6a8506099945',
+        'https://images.unsplash.com/photo-1582719508461-905c673771fd',
+        'https://images.unsplash.com/photo-1596436889106-be35e843f974',
+    ]
+};
 
 const MOCK_ROOMS = [
     { id: 'r1', name: 'Standard', price: 1199, type: 'Standard', image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945' },
@@ -11,36 +26,31 @@ const MOCK_ROOMS = [
 ];
 
 const ADDONS = [
-    { id: 'bike', name: '2-Wheeler', price: 400, icon: (active: any) => <Bike size={20} color={active ? 'white' : 'gray'} /> },
-    { id: 'cab', name: 'Cab', price: 2000, icon: (active: any) => <Car size={20} color={active ? 'white' : 'gray'} /> },
+    { id: 'bike', name: '2-Wheeler', price: 400, icon: (active: boolean) => <Bike size={20} color={active ? 'white' : 'gray'} /> },
+    { id: 'cab', name: 'Cab', price: 2000, icon: (active: boolean) => <Car size={20} color={active ? 'white' : 'gray'} /> },
 ];
 
 export default function HotelDetailsScreen({ navigation, route }: any) {
-    const { hotel } = route.params || {};
+    // ✅ FIX 3: Use Hook for responsive width on Web
+    const { width } = useWindowDimensions();
 
-    if (!hotel) return null;
+    // ✅ Logic: Try to get data from navigation (Mobile), otherwise use Default (Web)
+    const params = route?.params || {};
+    const hotel = params.hotel || DEFAULT_HOTEL;
 
     const [selectedRoom, setSelectedRoom] = useState(MOCK_ROOMS[0]);
     const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
     const [activeSlide, setActiveSlide] = useState(0);
 
-    // ✅ 1. PREPARE IMAGES ARRAY
-    // Combines DB images with Mock Room images so user sees everything in carousel
-    let carouselImages = [];
-
-    // A. Add Main Hotel Images from DB
+    // Prepare Images
+    let carouselImages: string[] = [];
     if (hotel.images && Array.isArray(hotel.images) && hotel.images.length > 0) {
         carouselImages = [...hotel.images];
     } else if (hotel.image) {
         carouselImages = [hotel.image];
     } else {
-        // Fallback
-        carouselImages = ['https://images.unsplash.com/photo-1566073771259-6a8506099945'];
+        carouselImages = [DEFAULT_HOTEL.image];
     }
-
-    // B. Add Selected Room Image to the front if available
-    // This makes the carousel feel "responsive" to room selection
-    // (In a real app, you would filter images based on room type ID)
 
     const onScroll = (nativeEvent: any) => {
         if (nativeEvent) {
@@ -52,11 +62,20 @@ export default function HotelDetailsScreen({ navigation, route }: any) {
     // Price Logic
     const basePrice = Number(hotel.price) || 1500;
     const addonTotal = ADDONS.filter(a => selectedAddons.includes(a.id)).reduce((sum, item) => sum + item.price, 0);
-    const totalPrice = basePrice + addonTotal; // You can add selectedRoom.price logic here too
+    const totalPrice = basePrice + addonTotal;
 
     const toggleAddon = (id: string) => {
         if (selectedAddons.includes(id)) setSelectedAddons(prev => prev.filter(item => item !== id));
         else setSelectedAddons(prev => [...prev, id]);
+    };
+
+    // Safe Navigation wrapper
+    const handleGoBack = () => {
+        if (navigation && navigation.goBack) {
+            navigation.goBack();
+        } else {
+            console.log("Back button clicked (No navigation prop on web)");
+        }
     };
 
     return (
@@ -85,12 +104,14 @@ export default function HotelDetailsScreen({ navigation, route }: any) {
                     </ScrollView>
 
                     {/* Header Buttons */}
-                    <View className="absolute top-12 left-0 w-full flex-row justify-between px-4 z-10">
-                        <TouchableOpacity onPress={() => navigation.goBack()} className="bg-white/80 p-2 rounded-full shadow-sm">
+                    <View className="absolute top-4 left-0 w-full flex-row justify-between px-4 z-10 pt-8">
+                        <TouchableOpacity onPress={handleGoBack} className="bg-white/80 p-2 rounded-full shadow-sm">
                             <ArrowLeft color="black" size={24} />
                         </TouchableOpacity>
                         <View className="flex-row gap-3">
-                            <TouchableOpacity className="bg-white/80 p-2 rounded-full shadow-sm"><Heart color="black" size={22} /></TouchableOpacity>
+                            <TouchableOpacity className="bg-white/80 p-2 rounded-full shadow-sm">
+                                <Heart color="black" size={22} />
+                            </TouchableOpacity>
                         </View>
                     </View>
 
@@ -114,10 +135,10 @@ export default function HotelDetailsScreen({ navigation, route }: any) {
                         <View className="flex-row items-center">
                             <View className="flex-row bg-yellow-50 px-2 py-1 rounded border border-yellow-200 mr-2">
                                 <Star size={12} color="#D97706" fill="#D97706" />
-                                <Text className="text-yellow-700 text-xs font-bold ml-1">{hotel.rating || '4.5'}</Text>
+                                <Text className="text-yellow-700 text-xs font-bold ml-1">{hotel.rating}</Text>
                             </View>
                             <MapPin size={14} color="#6B7280" />
-                            <Text className="text-gray-500 text-sm ml-1">{hotel.location || 'Mathura'}</Text>
+                            <Text className="text-gray-500 text-sm ml-1">{hotel.location}</Text>
                         </View>
                     </View>
 
@@ -127,7 +148,7 @@ export default function HotelDetailsScreen({ navigation, route }: any) {
 
                     <Text className="text-gray-900 text-lg font-bold mb-2">About</Text>
                     <Text className="text-gray-500 leading-5 mb-6">
-                        {hotel.description || `Experience a peaceful stay at ${hotel.name}.`}
+                        {hotel.description}
                     </Text>
 
                     {/* 🛏️ Room Selection */}

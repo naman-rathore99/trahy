@@ -476,7 +476,7 @@ export default function HotelDetailsPage({ params }: { params: Promise<{ id: str
 
       {/* LIGHTBOX */}
       {lightboxIndex !== null && galleryImages && (
-        <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-60 bg-black/95 flex items-center justify-center backdrop-blur-md p-4 animate-in fade-in duration-200">
           <button onClick={() => setLightboxIndex(null)} className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20"><X size={24} /></button>
           <img src={galleryImages[lightboxIndex]} className="max-h-[90vh] max-w-full object-contain rounded-lg shadow-2xl" alt="Lightbox" />
         </div>
