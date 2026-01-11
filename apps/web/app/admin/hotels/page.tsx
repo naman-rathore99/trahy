@@ -24,21 +24,22 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     setLoading(true);
-    // ✅ FIX 1: Use the correct API endpoint for HOTELS
+    // 1. Fetch All Hotels
     apiRequest("/api/admin/hotels", "GET")
       .then((data) => {
-        // ✅ FIX 2: Read from 'data.hotels'
         setAllHotels(data.hotels || []);
-        console.log(data, "hotels data");
+        console.log("Fetched hotels:", data.hotels);
       })
       .catch((err) => console.error("Failed to load hotels:", err))
       .finally(() => setLoading(false));
   }, []);
 
-  // Filter logic
-  const filteredHotels = allHotels.filter(
-    (h) => (h.status || "pending") === activeTab
-  );
+  // ✅ FIX: Case-Insensitive Filtering
+  // This safely converts DB status (e.g., "APPROVED") to lowercase ("approved") to match tabs
+  const filteredHotels = allHotels.filter((h) => {
+    const status = (h.status || "pending").toLowerCase();
+    return status === activeTab;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-8 transition-colors">
@@ -58,28 +59,31 @@ export default function AdminDashboard() {
         <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-800 mb-6 scrollbar-hide">
           <button
             onClick={() => setActiveTab("approved")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === "approved"
-              ? "border-b-2 border-green-600 text-green-600 dark:text-green-400"
-              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
+            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === "approved"
+                ? "border-b-2 border-green-600 text-green-600 dark:text-green-400"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            }`}
           >
             <CheckCircle size={16} /> Active Hotels
           </button>
           <button
             onClick={() => setActiveTab("pending")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === "pending"
-              ? "border-b-2 border-yellow-500 text-yellow-600 dark:text-yellow-400"
-              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
+            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === "pending"
+                ? "border-b-2 border-yellow-500 text-yellow-600 dark:text-yellow-400"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            }`}
           >
             <Clock size={16} /> Pending Review
           </button>
           <button
             onClick={() => setActiveTab("banned")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === "banned"
-              ? "border-b-2 border-red-600 text-red-600 dark:text-red-400"
-              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
+            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === "banned"
+                ? "border-b-2 border-red-600 text-red-600 dark:text-red-400"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            }`}
           >
             <Ban size={16} /> Banned
           </button>
@@ -111,9 +115,9 @@ export default function AdminDashboard() {
               >
                 {/* Image */}
                 <div className="w-full md:w-32 h-48 md:h-24 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 relative">
-                  {hotel.imageUrl ? (
+                  {(hotel.images && hotel.images[0]) || hotel.imageUrl ? (
                     <img
-                      src={hotel.imageUrl}
+                      src={hotel.images?.[0] || hotel.imageUrl}
                       alt={hotel.name}
                       className="w-full h-full object-cover"
                     />
@@ -140,7 +144,7 @@ export default function AdminDashboard() {
                     {/* Price */}
                     <div className="hidden md:block text-right">
                       <div className="font-bold text-lg text-gray-900 dark:text-white">
-                        ₹{hotel.pricePerNight}
+                        ₹{hotel.pricePerNight || hotel.price}
                       </div>
                       <div className="text-xs text-gray-500">per night</div>
                     </div>
@@ -159,7 +163,6 @@ export default function AdminDashboard() {
 
                 {/* Actions */}
                 <div className="flex w-full md:w-auto gap-3 mt-2 md:mt-0">
-                  {/* ✅ FIX 3: Link points to /admin/hotels/[id] */}
                   <Link
                     href={`/admin/hotels/${hotel.id}`}
                     className="flex-1 md:flex-none text-center bg-black dark:bg-white text-white dark:text-black px-5 py-2.5 rounded-lg font-bold hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm"
