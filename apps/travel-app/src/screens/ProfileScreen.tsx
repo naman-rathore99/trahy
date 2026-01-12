@@ -1,15 +1,16 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router'; // ✅ 1. Import Router Hook
 import {
-    ArrowLeft, User, Mail, Phone, LogOut, ChevronRight,
+    ArrowLeft, User, LogOut, ChevronRight,
     ShieldCheck, HelpCircle, FileText
 } from 'lucide-react-native';
-import { signOut } from '../services/api'; // ✅ Import Logout Function
+import { signOut } from '../services/api';
 
-export default function ProfileScreen({ navigation }: any) {
+export default function ProfileScreen() { // ❌ navigation prop hata diya
+    const router = useRouter(); // ✅ 2. Initialize Router
 
-    // 🚪 Handle Logout
     const handleLogout = async () => {
         Alert.alert(
             "Sign Out",
@@ -21,11 +22,9 @@ export default function ProfileScreen({ navigation }: any) {
                     style: "destructive",
                     onPress: async () => {
                         await signOut();
-                        // Reset Navigation to Login Screen (User back nahi ja payega)
-                        navigation.reset({
-                            index: 0,
-                            routes: [{ name: 'Login' }],
-                        });
+                        // ✅ 3. Correct way to Logout in Expo Router
+                        // 'replace' use karein taaki user Back button se wapas na aa sake
+                        router.replace('/login');
                     }
                 }
             ]
@@ -54,9 +53,9 @@ export default function ProfileScreen({ navigation }: any) {
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
             <SafeAreaView className="flex-1">
 
-                {/* 🟠 Header */}
+                {/* Header */}
                 <View className="bg-white px-4 py-3 flex-row items-center border-b border-gray-100">
-                    <TouchableOpacity onPress={() => navigation.goBack()} className="p-2 -ml-2">
+                    <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
                         <ArrowLeft color="#1F2937" size={24} />
                     </TouchableOpacity>
                     <Text className="text-gray-900 text-lg font-bold ml-2">My Profile</Text>
@@ -64,7 +63,7 @@ export default function ProfileScreen({ navigation }: any) {
 
                 <ScrollView showsVerticalScrollIndicator={false}>
 
-                    {/* 👤 User Card */}
+                    {/* User Card */}
                     <View className="bg-white m-4 p-5 rounded-2xl shadow-sm border border-gray-100 items-center">
                         <View className="relative">
                             <Image
@@ -81,7 +80,7 @@ export default function ProfileScreen({ navigation }: any) {
                         </TouchableOpacity>
                     </View>
 
-                    {/* 📋 Menu Options */}
+                    {/* Menu Options */}
                     <View className="bg-white mx-4 rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
                         <MenuItem
                             icon={<User size={20} color="#4B5563" />}
@@ -105,7 +104,7 @@ export default function ProfileScreen({ navigation }: any) {
                         />
                     </View>
 
-                    {/* 🔴 Sign Out Button */}
+                    {/* Sign Out Button */}
                     <View className="bg-white mx-4 rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-10">
                         <MenuItem
                             icon={<LogOut size={20} color="#DC2626" />}

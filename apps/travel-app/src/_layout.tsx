@@ -1,41 +1,66 @@
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 
-// Separate component to handle redirection logic
 const MainLayout = () => {
     const { userToken, isLoading } = useAuth();
     const segments = useSegments();
     const router = useRouter();
+    const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
-        if (isLoading) return;
+        setIsMounted(true);
+    }, []);
 
-        const inAuthGroup = segments[0] === "(auth)"; // e.g., Login/Signup screens
+    useEffect(() => {
+        // Wait for mounting and auth loading to finish
+        if (isLoading || !isMounted) return;
 
-        // Logic: If no user and not in auth group -> Go to Login
+        const inAuthGroup = segments[0] === "(auth)";
+
+        // Redirect Logic
         if (!userToken && !inAuthGroup) {
             router.replace("/login");
         }
-        // Logic: If user exists and in auth group -> Go to Home
         else if (userToken && inAuthGroup) {
             router.replace("/(tabs)/home");
         }
-    }, [userToken, isLoading, segments]);
+    }, [userToken, isLoading, segments, isMounted]);
 
-    if (isLoading) {
-        return (
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-                <ActivityIndicator size="large" color="#E11D48" />
-            </View>
-        );
-    }
+    // ✅ FIX: Don't unmount the Stack while loading.
+    // Instead, just render the Stack always.
+    // If we are loading, we can show a spinner ON TOP, or just rely on the splash screen.
+    // But returning <View> here destroys the navigation history.
 
-    return <Slot />;
+    return (
+        <View style={{ flex: 1 }}>
+            <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen
+                    name="hotel-details"
+                    options={{
+                        presentation: 'card',
+                        headerShown: false,
+                        animation: 'slide_from_right'
+                    }}
+                />
+            </Stack>
+
+            {/* Overlay Loading Spinner if needed, but keep Stack mounted underneath */}
+            {isLoading && (
+                <View style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', zIndex: 999
+                }}>
+                    <ActivityIndicator size="large" color="#E11D48" />
+                </View>
+            )}
+        </View>
+    );
 };
 
-// Wrap everything in AuthProvider
 export default function RootLayout() {
     return (
         <AuthProvider>

@@ -1,103 +1,142 @@
 import { Tabs } from 'expo-router';
-import { Home, BedDouble, Car, User, Search } from 'lucide-react-native';
-import { View, Text, Platform } from 'react-native';
+import { Home, BedDouble, Car, User } from 'lucide-react-native';
+import { View, Text, Platform, LayoutAnimation, UIManager, TouchableOpacity } from 'react-native';
 
-export default function TabLayout() {
+// Enable LayoutAnimation for Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
-    // 💎 Custom "Expanding Pill" Component
-    const TabIcon = ({ icon: Icon, label, focused }: any) => {
-        return (
-            <View
-                className={`flex-row items-center  justify-center rounded-full py-5 px-5 transition-all ${focused ? 'bg-[#6366f1]' : 'bg-transparent'
-                    }`}
-                style={{ gap: 8 }} // Gap between icon and text
-            >
-                {/* Icon */}
+function TabIcon({
+    icon: Icon,
+    label,
+    focused,
+}: {
+    icon: any
+    label: string
+    focused: boolean
+}) {
+    // 🪄 MAGIC SAUCE: This line creates the smooth sliding effect
+    if (focused) {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+
+    return (
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 30,
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                // 🎨 Sophisticated Active State: Very light gray bg for subtle contrast
+                backgroundColor: focused ? '#F3F4F6' : 'transparent',
+                minWidth: focused ? 100 : 50, // Smoothly animates between these widths
+            }}
+        >
+            {/* Icon */}
+            <View style={{
+                width: 32,
+                height: 32,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: focused ? '#E11D48' : 'transparent', // Icon circle bg
+                borderRadius: 16,
+            }}>
                 <Icon
-                    size={22}
-                    color={focused ? 'white' : '#94a3b8'} // White if active, Gray if inactive
+                    size={20}
+                    // Active: White icon on Rose circle. Inactive: Gray icon.
+                    color={focused ? '#FFFFFF' : '#94A3B8'}
                     strokeWidth={focused ? 2.5 : 2}
                 />
-
-                {/* Label (Only shows when focused) */}
-                {focused && (
-                    <Text className="text-white text-xs font-bold tracking-wide">
-                        {label}
-                    </Text>
-                )}
             </View>
-        );
-    };
 
+            {/* Label - Only renders when focused */}
+            {focused && (
+                <Text
+                    numberOfLines={1}
+                    style={{
+                        marginLeft: 8,
+                        fontSize: 13,
+                        fontWeight: '600',
+                        color: '#1F2937', // Dark Gray text
+                    }}
+                >
+                    {label}
+                </Text>
+            )}
+        </View>
+    )
+}
+
+/* -----------------------------
+   Tabs Layout
+------------------------------*/
+export default function TabLayout() {
     return (
         <Tabs
             screenOptions={{
                 headerShown: false,
-                tabBarShowLabel: false, // Hide default system labels
+                tabBarShowLabel: false,
 
-                // 🌑 DARK FLOATING BAR CONTAINER
+                // 💎 FLOATING BAR CONTAINER
                 tabBarStyle: {
                     position: 'absolute',
-                    bottom: 25,
+                    bottom: Platform.OS === 'ios' ? 30 : 20,
                     left: 20,
                     right: 20,
-                    backgroundColor: '#1e293b', // Premium Dark Slate
-                    borderRadius: 40,          // Fully rounded capsule edges
-                    height: 80,                // Taller for better touch targets
-                    borderTopWidth: 0,         // Remove ugly top line
+                    height: 65, // Tighter height for a sleeker look
+                    borderRadius: 35,
+                    backgroundColor: '#ffffff',
 
-                    // Shadows for Depth
+                    // 🌑 Subtle, Expensive-looking Shadow
                     shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 10 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 20,
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.1, // Lighter opacity
+                    shadowRadius: 15,   // Bigger spread (softer)
                     elevation: 10,
 
-                    paddingBottom: 0, // Center items vertically
+                    borderTopWidth: 0, // Removes ugly line
+                    paddingBottom: 0,
                     alignItems: 'center',
                     justifyContent: 'center',
                 },
+
+                // Centers content vertically
+                tabBarItemStyle: {
+                    height: 65,
+                    padding: 0,
+                },
             }}
         >
-            {/* 1. Home */}
             <Tabs.Screen
                 name="home"
                 options={{
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon icon={Home} label="Home" focused={focused} />
-                    ),
+                    tabBarIcon: ({ focused }) => <TabIcon icon={Home} label="Home" focused={focused} />,
                 }}
             />
 
-            {/* 2. Stays (Hotels) */}
             <Tabs.Screen
                 name="stays"
                 options={{
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon icon={BedDouble} label="Stays" focused={focused} />
-                    ),
+                    tabBarIcon: ({ focused }) => <TabIcon icon={BedDouble} label="Stays" focused={focused} />,
                 }}
             />
 
-            {/* 3. Vehicles (Rentals) */}
             <Tabs.Screen
                 name="vehicles"
                 options={{
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon icon={Car} label="Ride" focused={focused} />
-                    ),
+                    tabBarIcon: ({ focused }) => <TabIcon icon={Car} label="Rentals" focused={focused} />,
                 }}
             />
 
-            {/* 4. Profile */}
             <Tabs.Screen
                 name="profile"
                 options={{
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon icon={User} label="Profile" focused={focused} />
-                    ),
+                    tabBarIcon: ({ focused }) => <TabIcon icon={User} label="Profile" focused={focused} />,
                 }}
             />
         </Tabs>
-    );
+    )
 }
