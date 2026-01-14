@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 // ✅ SMART URL: Switches automatically based on device
 const getBaseUrl = () => {
     if (Platform.OS === 'android') {
-        return "http://192.168.29.191:3000/api";
+        return "http://10.72.31.25:3000/api";
     }
     return "http://localhost:3000/api"; // Web/iOS
 };
