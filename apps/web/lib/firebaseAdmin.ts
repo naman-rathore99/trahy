@@ -1,8 +1,8 @@
 import 'server-only';
-import { initializeApp, getApps, getApp, App, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { initializeApp, getApps, cert, getApp, App } from 'firebase-admin/app';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
 
-// 1. Service Account Config (Keep this same)
+// 1. Service Account Config
 const serviceAccount = {
   projectId: process.env.FIREBASE_PROJECT_ID,
   clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
@@ -13,32 +13,44 @@ const serviceAccount = {
 
 // 2. Global variable to cache the instance
 let app: App | undefined;
+let firestoreInstance: Firestore | undefined;
 
-// 3. Lazy Initializer
-function getFirebaseApp() {
-  if (app) return app;
+// 3. Helper to initialize ONLY when needed
+function getHelperFirestore(): Firestore {
+  if (firestoreInstance) return firestoreInstance;
 
-  // Check valid instance from Firebase internal cache
+  // Check if app is already initialized in Firebase memory
   if (getApps().length > 0) {
     app = getApp();
-    return app;
+  } else {
+    // Only throw error if we are ACTUALLY trying to use the DB and keys are missing
+    if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
+      throw new Error('❌ FIREBASE ENV VARIABLES MISSING IN APPS/WEB/.ENV FILE');
+    }
+
+    app = initializeApp({
+      credential: cert(serviceAccount),
+    });
   }
 
-  // Validate Keys ONLY when we actually try to use the DB
-  if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
-    throw new Error('❌ FIREBASE ENV VARIABLES MISSING IN APPS/WEB/.ENV FILE');
-  }
-
-  app = initializeApp({
-    credential: cert(serviceAccount),
-  });
-  
-  return app;
+  firestoreInstance = getFirestore(app);
+  return firestoreInstance;
 }
 
-// 4. Export a Function instead of a constant
-// Using a function ensures the code above only runs when you call this function
-export function getAdminDb() {
-  const firebaseApp = getFirebaseApp();
-  return getFirestore(firebaseApp);
-}
+// 4. MAGIC EXPORT (Lazy Proxy)
+// This creates a "fake" adminDb that waits to initialize until you touch it.
+export const adminDb = new Proxy({} as Firestore, {
+  get: (_target, prop) => {
+    const db = getHelperFirestore(); // Init happens here, NOT at file load
+    
+    // @ts-ignore: handling generic property access safely
+    const value = db[prop as keyof Firestore];
+    
+    // Bind functions (like .collection, .doc) to the real instance
+    if (typeof value === 'function') {
+      return value.bind(db);
+    }
+    
+    return value;
+  },
+});
