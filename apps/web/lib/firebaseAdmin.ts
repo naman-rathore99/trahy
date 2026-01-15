@@ -1,35 +1,44 @@
 import 'server-only';
-import { initializeApp, getApps, cert, getApp } from 'firebase-admin/app';
+import { initializeApp, getApps, getApp, App, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// 1. Service Account Config
+// 1. Service Account Config (Keep this same)
 const serviceAccount = {
   projectId: process.env.FIREBASE_PROJECT_ID,
   clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  // Private key mein \n ko handle karna zaroori hai
   privateKey: process.env.FIREBASE_PRIVATE_KEY
     ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
     : undefined,
 };
 
-// 2. Auto-Initialize Logic (File load hote hi chalega)
+// 2. Global variable to cache the instance
+let app: App | undefined;
+
+// 3. Lazy Initializer
 function getFirebaseApp() {
+  if (app) return app;
+
+  // Check valid instance from Firebase internal cache
   if (getApps().length > 0) {
-    return getApp(); // Agar pehle se hai, wahi use karo
+    app = getApp();
+    return app;
   }
 
-  // Agar keys nahi hain toh error throw karo taaki debug aasaan ho
+  // Validate Keys ONLY when we actually try to use the DB
   if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
     throw new Error('❌ FIREBASE ENV VARIABLES MISSING IN APPS/WEB/.ENV FILE');
   }
 
-  return initializeApp({
+  app = initializeApp({
     credential: cert(serviceAccount),
   });
+  
+  return app;
 }
 
-// 3. App Instance Banao
-const app = getFirebaseApp();
-
-// 4. DB Export Karo (Ab ye safe hai kyunki 'app' ban chuka hai)
-export const adminDb = getFirestore(app);
+// 4. Export a Function instead of a constant
+// Using a function ensures the code above only runs when you call this function
+export function getAdminDb() {
+  const firebaseApp = getFirebaseApp();
+  return getFirestore(firebaseApp);
+}
