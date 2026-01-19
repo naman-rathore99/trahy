@@ -37,11 +37,10 @@ function getHelperFirestore(): Firestore {
   return firestoreInstance;
 }
 
-// 4. MAGIC EXPORT (Lazy Proxy)
-// This creates a "fake" adminDb that waits to initialize until you touch it.
+
 export const adminDb = new Proxy({} as Firestore, {
   get: (_target, prop) => {
-    const db = getHelperFirestore(); // Init happens here, NOT at file load
+    const db = getHelperFirestore(); 
     
     // @ts-ignore: handling generic property access safely
     const value = db[prop as keyof Firestore];

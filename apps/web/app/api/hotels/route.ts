@@ -7,7 +7,6 @@ export async function GET() {
   const db = adminDb;
 
   try {
-    // 1. Fetch ONLY "approved" hotels (Public shouldn't see drafts)
     const snapshot = await db
       .collection("hotels")
       .where("status", "==", "approved")
@@ -16,7 +15,6 @@ export async function GET() {
     const hotels = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-      // Ensure price is a number for math/sorting
       price: Number(doc.data().pricePerNight) || 0,
     }));
 
