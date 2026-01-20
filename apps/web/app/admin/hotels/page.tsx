@@ -11,15 +11,14 @@ import {
   MapPin,
   Loader2,
   Hotel,
+  Mail,
 } from "lucide-react";
 
 export default function AdminDashboard() {
   const [allHotels, setAllHotels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Tab Order: Active -> Pending -> Banned
   const [activeTab, setActiveTab] = useState<"approved" | "pending" | "banned">(
-    "approved"
+    "approved",
   );
 
   useEffect(() => {
@@ -29,15 +28,8 @@ export default function AdminDashboard() {
   const fetchHotels = async () => {
     setLoading(true);
     try {
-      // ✅ 1. Fetch data from your API
       const data = await apiRequest("/api/admin/hotels", "GET");
-
-      // ✅ 2. Log data to console for debugging
-      console.log("API Response:", data);
-
-      if (data && data.hotels) {
-        setAllHotels(data.hotels);
-      }
+      if (data && data.hotels) setAllHotels(data.hotels);
     } catch (err) {
       console.error("Failed to load hotels:", err);
     } finally {
@@ -45,99 +37,91 @@ export default function AdminDashboard() {
     }
   };
 
-  // ✅ 3. ROBUST FILTER LOGIC (Fixes the empty list issue)
   const filteredHotels = allHotels.filter((h) => {
-    // Convert status to lowercase to avoid "Pending" vs "pending" mismatches
     const status = (h.status || "pending").toLowerCase();
-
-    if (activeTab === "approved") {
-      return status === "approved" || status === "active" || status === "confirmed";
-    }
-    if (activeTab === "pending") {
-      return status === "pending" || status === "review";
-    }
-    if (activeTab === "banned") {
-      return status === "banned" || status === "rejected";
-    }
+    if (activeTab === "approved")
+      return ["approved", "active", "confirmed"].includes(status);
+    if (activeTab === "pending") return ["pending", "review"].includes(status);
+    if (activeTab === "banned") return ["banned", "rejected"].includes(status);
     return false;
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-8 transition-colors">
+    <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-8 font-sans pb-20">
       <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
               Manage Hotels
             </h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-              Review and manage hotel listings in Mathura & Vrindavan.
+            <p className="text-gray-500 text-sm mt-1">
+              {filteredHotels.length} {activeTab} listings found
             </p>
           </div>
-          <div className="bg-white dark:bg-gray-900 px-4 py-2 rounded-lg text-sm border border-gray-200 dark:border-gray-800">
-            Total Hotels: <strong>{allHotels.length}</strong>
+
+          {/* TABS (Pill Style) */}
+          <div className="flex p-1 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-x-auto no-scrollbar">
+            {[
+              {
+                id: "approved",
+                label: "Active",
+                icon: CheckCircle,
+                color: "text-green-600",
+              },
+              {
+                id: "pending",
+                label: "Pending",
+                icon: Clock,
+                color: "text-yellow-600",
+              },
+              {
+                id: "banned",
+                label: "Banned",
+                icon: Ban,
+                color: "text-red-600",
+              },
+            ].map((tab: any) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex-1 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                }`}
+              >
+                <tab.icon
+                  size={16}
+                  className={activeTab === tab.id ? tab.color : ""}
+                />
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* --- TABS --- */}
-        <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-800 mb-6 scrollbar-hide">
-          <button
-            onClick={() => setActiveTab("approved")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === "approved"
-              ? "border-b-2 border-green-600 text-green-600 dark:text-green-400"
-              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
-          >
-            <CheckCircle size={16} /> Active Hotels
-          </button>
-          <button
-            onClick={() => setActiveTab("pending")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === "pending"
-              ? "border-b-2 border-yellow-500 text-yellow-600 dark:text-yellow-400"
-              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
-          >
-            <Clock size={16} /> Pending Review
-          </button>
-          <button
-            onClick={() => setActiveTab("banned")}
-            className={`pb-3 px-4 font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === "banned"
-              ? "border-b-2 border-red-600 text-red-600 dark:text-red-400"
-              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
-          >
-            <Ban size={16} /> Banned
-          </button>
-        </div>
-
-        {/* --- LIST AREA --- */}
+        {/* LOADING STATE */}
         {loading ? (
-          <div className="p-20 flex justify-center">
+          <div className="h-64 flex items-center justify-center">
             <Loader2 className="animate-spin text-gray-400" size={32} />
           </div>
         ) : filteredHotels.length === 0 ? (
-          <div className="bg-white dark:bg-gray-900 p-12 text-center rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 mb-4">
-              <Hotel className="text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-              No hotels found
-            </h3>
-            <p className="text-gray-500 dark:text-gray-400">
-              There are no hotels with status <strong>"{activeTab}"</strong>.
-              <br />
-              (Try checking the "Pending" tab?)
+          <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-300 dark:border-gray-800">
+            <Hotel className="text-gray-300 mb-3" size={48} />
+            <p className="text-gray-500 font-medium">
+              No hotels found in this tab.
             </p>
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid grid-cols-1 gap-6">
             {filteredHotels.map((hotel) => (
               <div
                 key={hotel.id}
-                className="bg-white dark:bg-gray-900 p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row gap-6 items-start md:items-center transition-colors hover:border-gray-300 dark:hover:border-gray-700"
+                className="group bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row"
               >
-                {/* Image */}
-                <div className="w-full md:w-32 h-48 md:h-24 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 relative">
+                {/* IMAGE SECTION */}
+                <div className="w-full md:w-64 h-48 md:h-auto bg-gray-100 relative shrink-0">
                   {hotel.imageUrl || (hotel.imageUrls && hotel.imageUrls[0]) ? (
                     <img
                       src={hotel.imageUrl || hotel.imageUrls[0]}
@@ -145,59 +129,72 @@ export default function AdminDashboard() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs flex-col gap-1">
-                      <Hotel size={20} />
-                      <span>No Image</span>
+                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                      <Hotel size={32} />
+                      <span className="text-xs font-bold mt-2">No Image</span>
                     </div>
                   )}
+                  {/* Status Badge (Mobile Overlay) */}
+                  <div className="absolute top-3 left-3 md:hidden">
+                    <StatusBadge status={hotel.status} />
+                  </div>
                 </div>
 
-                {/* Details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between">
+                {/* CONTENT SECTION */}
+                <div className="p-5 md:p-6 flex-1 flex flex-col justify-between">
+                  {/* Top Row */}
+                  <div className="flex justify-between items-start mb-4">
                     <div>
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate">
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">
                         {hotel.name || "Unnamed Hotel"}
                       </h3>
-                      <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-sm mt-1">
-                        <MapPin size={14} />
-                        {hotel.location || "Mathura, India"}
+                      <div className="flex items-center gap-1.5 text-gray-500 text-sm mt-1.5">
+                        <MapPin size={14} className="text-rose-500" />
+                        {hotel.location || "Location not set"}
                       </div>
                     </div>
-
-                    {/* Price */}
-                    <div className="hidden md:block text-right">
-                      <div className="font-bold text-lg text-gray-900 dark:text-white">
-                        ₹{hotel.pricePerNight || 0}
+                    {/* Price (Hidden on small mobile, visible on desktop) */}
+                    <div className="text-right hidden md:block">
+                      <div className="text-xl font-bold text-gray-900 dark:text-white">
+                        ₹{hotel.pricePerNight}
                       </div>
                       <div className="text-xs text-gray-500">per night</div>
                     </div>
                   </div>
 
-                  {/* Owner Info */}
-                  <div className="mt-3 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
-                    <span className="font-medium text-gray-700 dark:text-gray-300">
-                      Owner:
-                    </span>{" "}
-                    {hotel.ownerName || "Unknown"}
-                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                    <span>{hotel.ownerEmail || "No Email"}</span>
-
-                    {/* Debug Status Badge */}
-                    <span className="ml-auto bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-[10px] uppercase font-bold">
-                      {hotel.status}
-                    </span>
+                  {/* Owner Info Block */}
+                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 mb-5 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 font-bold text-xs">
+                      {hotel.ownerName?.[0] || "U"}
+                    </div>
+                    <div className="overflow-hidden">
+                      <div className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                        {hotel.ownerName || "Unknown Owner"}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate flex items-center gap-1">
+                        <Mail size={10} /> {hotel.ownerEmail}
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                {/* Actions */}
-                <div className="flex w-full md:w-auto gap-3 mt-2 md:mt-0">
-                  <Link
-                    href={`/admin/hotels/${hotel.id}`}
-                    className="flex-1 md:flex-none text-center bg-black dark:bg-white text-white dark:text-black px-5 py-2.5 rounded-lg font-bold hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Edit size={16} /> Manage
-                  </Link>
+                  {/* Footer Actions */}
+                  <div className="flex items-center justify-between gap-4 mt-auto">
+                    <div className="md:hidden">
+                      <span className="text-lg font-bold">
+                        ₹{hotel.pricePerNight}
+                      </span>
+                      <span className="text-xs text-gray-500 ml-1">
+                        / night
+                      </span>
+                    </div>
+
+                    <Link
+                      href={`/admin/hotels/${hotel.id}`}
+                      className="flex-1 md:flex-none bg-black dark:bg-white text-white dark:text-black px-6 py-3 rounded-xl font-bold text-sm hover:opacity-80 transition-opacity text-center"
+                    >
+                      Manage Hotel
+                    </Link>
+                  </div>
                 </div>
               </div>
             ))}
@@ -205,5 +202,23 @@ export default function AdminDashboard() {
         )}
       </div>
     </div>
+  );
+}
+
+// Small Helper Component for Badges
+function StatusBadge({ status }: { status: string }) {
+  const s = (status || "pending").toLowerCase();
+  let color = "bg-gray-100 text-gray-600";
+  if (["approved", "active"].includes(s)) color = "bg-green-100 text-green-700";
+  if (["pending", "review"].includes(s))
+    color = "bg-yellow-100 text-yellow-700";
+  if (["banned", "rejected"].includes(s)) color = "bg-red-100 text-red-700";
+
+  return (
+    <span
+      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide shadow-sm ${color}`}
+    >
+      {status}
+    </span>
   );
 }

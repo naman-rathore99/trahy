@@ -89,18 +89,10 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href="/partner"
+                  href="/join"
                   className="hover:text-rose-600 dark:hover:text-rose-400 transition-colors block w-fit"
                 >
                   Become a Partner
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/blog"
-                  className="hover:text-rose-600 dark:hover:text-rose-400 transition-colors block w-fit"
-                >
-                  Travel Blog
                 </Link>
               </li>
             </ul>
@@ -130,7 +122,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href="/cancellation"
+                  href="/cancellations"
                   className="hover:text-rose-600 dark:hover:text-rose-400 transition-colors block w-fit"
                 >
                   Cancellation Options
@@ -169,10 +161,10 @@ export default function Footer() {
               <li className="flex items-center gap-2">
                 <Phone size={16} className="flex-shrink-0" />
                 <a
-                  href="tel:+919876543210"
+                  href="tel:+9870897086"
                   className="hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
                 >
-                  +91 98765 43210
+                  +91 9870897086
                 </a>
               </li>
             </ul>

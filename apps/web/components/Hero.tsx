@@ -12,7 +12,7 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { Destination } from "@/lib/data"; // Removed 'allDestinations' import since we use props now
+import { Destination } from "@/lib/data";
 import Image from "next/image";
 
 interface HeroProps {
@@ -25,7 +25,7 @@ interface HeroProps {
   setAdults: (val: number) => void;
   setChildren: (val: number) => void;
   onSearch: (query: string) => void;
-  data: Destination[]; // Receiving real data from Home
+  data: Destination[];
 }
 
 const Hero = ({
@@ -38,7 +38,7 @@ const Hero = ({
   setAdults,
   setChildren,
   onSearch,
-  data = [], // Default to empty array
+  data = [],
 }: HeroProps) => {
   const [query, setQuery] = useState("");
   const [totalDays, setTotalDays] = useState(0);
@@ -85,23 +85,22 @@ const Hero = ({
     }
   }, [startDate, endDate]);
 
-  // 3. Search Suggestion Logic (FIXED)
+  // 3. Search Suggestion Logic
   useEffect(() => {
     if (query.length < 2) {
       setShowSuggestions(false);
       return;
     }
 
-    // FIX: Use 'data' prop instead of 'allDestinations'
     const matches = data.filter(
       (d) =>
         d.title.toLowerCase().includes(query.toLowerCase()) ||
-        d.location.toLowerCase().includes(query.toLowerCase())
+        d.location.toLowerCase().includes(query.toLowerCase()),
     );
 
     setSuggestions(matches);
     setShowSuggestions(true);
-  }, [query, data]); // Added 'data' to dependency array
+  }, [query, data]);
 
   // 4. Click Outside Logic
   useEffect(() => {
@@ -119,7 +118,10 @@ const Hero = ({
 
   return (
     <div className="relative w-full max-w-[1400px] mx-auto p-4 z-10">
-      <div className="relative h-[85vh] w-full">
+      {/* 1. min-h-[650px]: Forces the container to be tall enough on mobile. 
+         2. h-[85vh]: Maintains responsiveness on desktop.
+      */}
+      <div className="relative h-[85vh] min-h-[650px] w-full">
         {/* Background Image */}
         <div className="absolute inset-0 rounded-[2.5rem] overflow-hidden -z-10">
           <Image
@@ -127,12 +129,19 @@ const Hero = ({
             className="w-full h-full object-cover"
             alt="Hero"
             fill
+            priority
           />
           <div className="absolute inset-0 bg-black/20" />
           <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
         </div>
 
-        <div className="absolute inset-0 flex flex-col justify-center items-center text-center px-4 pt-20">
+        {/* ✅ CRITICAL FIX HERE:
+           - justify-start: Don't center vertically on mobile.
+           - pt-48: Push content down by ~12rem (approx 190px) to clear navbar.
+           - md:justify-center: Only center on Desktop.
+           - md:pt-0: Remove the manual padding on Desktop.
+        */}
+        <div className="absolute inset-0 flex flex-col justify-start md:justify-center items-center text-center px-4 pt-48 md:pt-0">
           <h1 className="text-4xl md:text-7xl font-medium text-white mb-8 drop-shadow-lg leading-tight">
             Where every journey <br /> becomes an adventure.
           </h1>
@@ -312,7 +321,7 @@ const Hero = ({
                     onClick={() => {
                       setQuery(s.title);
                       setShowSuggestions(false);
-                      onSearch(s.title); // Auto search on click
+                      onSearch(s.title);
                     }}
                     className="p-4 hover:bg-gray-50 cursor-pointer flex items-center gap-4 border-b border-gray-100"
                   >
