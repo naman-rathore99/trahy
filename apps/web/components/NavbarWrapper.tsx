@@ -7,7 +7,9 @@ export default function NavbarWrapper() {
   const pathname = usePathname();
 
   const isDashboard =
-    pathname.startsWith("/admin") || pathname.startsWith("/login");
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/partner");
 
   if (isDashboard) return null;
 

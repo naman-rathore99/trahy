@@ -40,25 +40,25 @@ export default function AdminDashboard() {
         // 1. User Stats
         const allUsers = usersData.users || [];
         const travelers = allUsers.filter(
-          (u: any) => u.role !== "partner" && u.role !== "admin"
+          (u: any) => u.role !== "partner" && u.role !== "admin",
         ).length;
         const partners = allUsers.filter(
-          (u: any) => u.role === "partner"
+          (u: any) => u.role === "partner",
         ).length;
 
         // 2. Property Stats
         const allProperties = propData.hotels || [];
         const activeListings = allProperties.filter(
-          (p: any) => p.status === "APPROVED" // Ensure match with uppercase
+          (p: any) => p.status === "APPROVED", // Ensure match with uppercase
         ).length;
         const pendingProperties = allProperties.filter(
-          (p: any) => p.status === "PENDING"
+          (p: any) => p.status === "PENDING",
         ).length;
 
         // 3. Request Stats
         const allRequests = reqData.requests || [];
         const pendingRequests = allRequests.filter(
-          (r: any) => r.status === "pending" || !r.status
+          (r: any) => r.status === "pending" || !r.status,
         ).length;
 
         setStats({
@@ -87,7 +87,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto p-6 bg-gray-50 dark:bg-black min-h-screen">
-
       {/* 1. HEADER & FINANCIALS */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
@@ -131,8 +130,8 @@ export default function AdminDashboard() {
           value={stats.activeListings}
           icon={Building2}
           color="indigo"
-          link="/admin/properties"
-          sub="Properties & Vehicles"
+          link="/admin/hotels"
+          sub="Hotels & Vehicle"
         />
         <StatCard
           label="Action Needed"
@@ -147,7 +146,6 @@ export default function AdminDashboard() {
 
       {/* 3. SPLIT VIEW: ALERTS vs ACTIONS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
         {/* LEFT (2 Cols): ATTENTION NEEDED */}
         <div className="lg:col-span-2 space-y-6">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">

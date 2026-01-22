@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebaseAdmin";;
-``
+import { adminDb } from "@/lib/firebaseAdmin";
 
 // 1. GET Single Hotel
 export async function GET(
@@ -8,28 +7,32 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params; // ✅ Await params
-    // initAdmin auto-initialized
-    const db = adminDb;
+    const { id } = await params;
+    
+    console.log(`🔍 Admin fetching hotel with ID: ${id}`); // DEBUG LOG
 
+    const db = adminDb;
     const docRef = db.collection("hotels").doc(id);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
+      console.error(`❌ Hotel ID ${id} not found in Firestore.`);
       return NextResponse.json({ error: "Hotel not found" }, { status: 404 });
     }
 
-    // ✅ CORRECT: Returns a single "hotel" object
+    const hotelData = docSnap.data();
+    console.log(`✅ Found Hotel: ${hotelData?.name}`);
+
     return NextResponse.json({
       hotel: {
         id: docSnap.id,
-        ...docSnap.data(),
+        ...hotelData,
       },
     });
-  } catch (error) {
-    console.error("Get Hotel Error:", error);
+  } catch (error: any) {
+    console.error("🔥 Get Hotel Error:", error);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: "Internal Server Error", details: error.message },
       { status: 500 }
     );
   }
@@ -43,23 +46,37 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    // initAdmin auto-initialized
     const db = adminDb;
 
-    // Remove 'id' from body to prevent overwriting document ID
+    // Prevent overwriting the ID
     const { id: _, ...updateData } = body;
 
-    await db
-      .collection("hotels")
-      .doc(id)
-      .update({
-        ...updateData,
-        updatedAt: new Date(),
-      });
+    await db.collection("hotels").doc(id).update({
+      ...updateData,
+      updatedAt: new Date(),
+    });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Update Hotel Error:", error);
     return NextResponse.json({ error: "Failed to update" }, { status: 500 });
+  }
+}
+
+// 3. DELETE Hotel
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const db = adminDb;
+
+    await db.collection("hotels").doc(id).delete();
+
+    return NextResponse.json({ success: true, message: "Hotel deleted" });
+  } catch (error: any) {
+    console.error("Delete Hotel Error:", error);
+    return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
   }
 }
