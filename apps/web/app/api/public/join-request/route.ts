@@ -18,7 +18,6 @@ export async function POST(request: Request) {
 
         // OWNER NAME: 
         // Website sends 'name'. Mobile sends 'ownerName'.
-        // We prefer 'name' (Website style) for the database.
         const finalOwnerName = body.name || body.ownerName;
 
         // PHONE: 
@@ -27,12 +26,16 @@ export async function POST(request: Request) {
 
         // BUSINESS NAME:
         // Website sends 'hotelName'. Mobile sends 'name'.
-        // We map mobile's 'name' to 'hotelName' so Admin Panel sees it correctly.
         const finalHotelName = body.hotelName || body.name || "Not Provided";
 
         // ID URL:
         // Website sends 'officialIdUrl'. Mobile sends 'verificationImage'.
         const finalIdUrl = body.officialIdUrl || body.verificationImage || "";
+
+        // ✅ NEW: CITY MAPPING
+        // If the mobile app or website sends 'city', use it.
+        // If they send nothing (old website version), default to "Mathura".
+        const finalCity = body.city || "Mathura";
 
         // =========================================================
         // 2. VALIDATION
@@ -59,21 +62,24 @@ export async function POST(request: Request) {
         // 4. SAVE TO DATABASE (Using WEBSITE Schema)
         // =========================================================
         const newRequest = {
-            // ✅ We save using OLD keys so your Admin Panel works perfectly
+            // ✅ Keep existing keys exactly as they were
             name: finalOwnerName,
             email: email,
             phone: finalPhone,
             hotelName: finalHotelName,
             officialIdUrl: finalIdUrl,
 
+            // ✅ Add the new field (Safe: it won't break the admin panel)
+            city: finalCity,
+
             // Default Fields
             serviceType: body.serviceType || "Hotel",
             status: "pending",
             createdAt: new Date(),
 
-            // Extra: Track where it came from (Optional but helpful)
+            // Source Tracking
             source: body.verificationImage ? "Mobile App" : "Website",
-            verificationId: body.verificationId || "" // Save extra mobile data just in case
+            verificationId: body.verificationId || ""
         };
 
         const docRef = await db.collection("join_requests").add(newRequest);
