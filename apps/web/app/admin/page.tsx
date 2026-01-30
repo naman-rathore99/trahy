@@ -203,7 +203,7 @@ export default function AdminDashboard() {
                 </div>
               </Link>
             ) : (
-              <EmptyState message="No pending properties" />
+              <EmptyState message="No pending Hotels" />
             )}
           </div>
         </div>

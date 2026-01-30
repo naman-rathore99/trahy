@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { apiRequest } from "@/lib/api";
-import Pagination from "@/components/Pagination"; // ✅ Import Pagination
 import {
-  Loader2, User, Car, BedDouble, Filter, RefreshCcw, Calendar,
-  LayoutList, CalendarDays, ArrowDownUp
+  Loader2,
+  Search,
+  Filter,
+  Calendar,
+  Hotel,
+  ArrowRight,
+  User,
+  Phone,
+  CreditCard,
+  X,
+  ChevronRight,
+  LayoutGrid,
+  CalendarDays,
 } from "lucide-react";
-import { format, parseISO, isValid, formatDistanceToNow, isToday, isYesterday } from "date-fns";
+import { format, parseISO, isToday, isTomorrow, isYesterday } from "date-fns";
 
 // --- TYPES ---
 interface Booking {
@@ -15,44 +25,53 @@ interface Booking {
   type: "Hotel" | "Vehicle";
   listingName: string;
   customerName: string;
-  customerContact: string;
+  customerContact?: string;
+  checkIn: string;
+  checkOut: string;
   amount: number;
-  date: string | any;
   status: string;
   paymentStatus: string;
-  createdAt: string | any;
-  updatedAt?: string | any;
+  createdAt: string;
 }
 
-const ITEMS_PER_PAGE = 10; // ✅ Define items per page
+interface GroupedData {
+  title: string;
+  subtitle: string;
+  count: number;
+  revenue: number;
+  bookings: Booking[];
+}
 
 export default function AdminBookingsPage() {
-  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookings, setBookings] = useState<Booking[]>([]);
 
-  // Controls
-  const [filter, setFilter] = useState("all");
-  const [viewMode, setViewMode] = useState<"date-group" | "list">("date-group"); // ✅ View Mode State
-  const [currentPage, setCurrentPage] = useState(1); // ✅ Pagination State
+  // --- VIEW STATE ---
+  const [viewMode, setViewMode] = useState<"hotel" | "date">("hotel");
+  const [selectedGroup, setSelectedGroup] = useState<GroupedData | null>(null);
 
-  // Animation States
-  const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
-  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
+  // --- FILTERS INSIDE DETAIL VIEW ---
+  const [detailSearch, setDetailSearch] = useState("");
+  const [detailFilter, setDetailFilter] = useState("all");
 
   useEffect(() => {
     fetchBookings();
   }, []);
 
-  // Reset pagination when filter or view changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filter, viewMode]);
-
   const fetchBookings = async () => {
     setLoading(true);
     try {
       const data = await apiRequest("/api/admin/bookings", "GET");
-      setBookings(data.bookings || []);
+      const normalized = (data.bookings || []).map((b: any) => ({
+        ...b,
+        listingName: b.listingName || b.vehicleName || "Unknown Property",
+        customerName: b.customerName || b.customer?.name || "Guest",
+        checkIn: b.checkIn || b.startDate,
+        checkOut: b.checkOut || b.endDate,
+        amount: Number(b.amount || b.totalPrice || 0),
+        createdAt: b.createdAt,
+      }));
+      setBookings(normalized);
     } catch (err) {
       console.error(err);
     } finally {
@@ -60,299 +79,349 @@ export default function AdminBookingsPage() {
     }
   };
 
-  const getValidDate = (dateVal: any): Date | null => {
-    if (!dateVal) return null;
-    if (typeof dateVal === 'object' && dateVal.seconds) return new Date(dateVal.seconds * 1000);
-    if (typeof dateVal === 'string') {
-      const d = parseISO(dateVal);
-      return isValid(d) ? d : null;
-    }
-    if (dateVal instanceof Date) return dateVal;
-    return null;
-  };
+  // --- GROUPING LOGIC ---
+  const groupedData = useMemo(() => {
+    const groups: Record<string, GroupedData> = {};
 
-  const checkPaymentStatus = async (e: React.MouseEvent, bookingId: string) => {
-    e.stopPropagation();
-    setRefreshingIds(prev => new Set(prev).add(bookingId));
-    setFailedIds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(bookingId);
-      return newSet;
-    });
+    bookings.forEach((b) => {
+      let key = "";
+      let title = "";
+      let subtitle = "";
 
-    try {
-      const res = await fetch(`/api/payment/check/${bookingId}`);
-      const data = await res.json();
-      if (data.success) {
-        await fetchBookings();
+      if (viewMode === "hotel") {
+        key = b.listingName;
+        title = b.listingName;
+        subtitle = "Property";
       } else {
-        setFailedIds(prev => new Set(prev).add(bookingId));
-        alert(`Status: ${data.status || "Still Pending"}`);
-      }
-    } catch (err) {
-      console.error(err);
-      setFailedIds(prev => new Set(prev).add(bookingId));
-    } finally {
-      setRefreshingIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(bookingId);
-        return newSet;
-      });
-    }
-  };
-
-  // --- FILTERING & SORTING ---
-  const filteredBookings = bookings.filter(b => {
-    if (filter === "all") return true;
-    if (filter === "confirmed") return b.status === "confirmed";
-    if (filter === "pending") return b.status === "pending";
-    if (filter === "cancelled") return b.status === "cancelled";
-    return true;
-  });
-
-  // Always sort Newest First
-  filteredBookings.sort((a, b) => {
-    const dateA = getValidDate(a.createdAt)?.getTime() || 0;
-    const dateB = getValidDate(b.createdAt)?.getTime() || 0;
-    return dateB - dateA;
-  });
-
-  // --- PAGINATION LOGIC ---
-  const totalPages = Math.ceil(filteredBookings.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const currentItems = filteredBookings.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  // --- GROUPING LOGIC (Only applies to current page items) ---
-  const groupedBookings: { [key: string]: Booking[] } = {};
-
-  if (viewMode === 'date-group') {
-    currentItems.forEach((booking) => {
-      const date = getValidDate(booking.createdAt);
-      let key = "Unknown Date";
-
-      if (date) {
+        // Date Grouping
+        const date = parseISO(b.checkIn);
         if (isToday(date)) key = "Today";
+        else if (isTomorrow(date)) key = "Tomorrow";
         else if (isYesterday(date)) key = "Yesterday";
         else key = format(date, "dd MMM yyyy");
+
+        title = key;
+        subtitle = format(date, "EEEE"); // Day of week
       }
 
-      if (!groupedBookings[key]) groupedBookings[key] = [];
-      groupedBookings[key].push(booking);
-    });
-  }
+      if (!groups[key]) {
+        groups[key] = { title, subtitle, count: 0, revenue: 0, bookings: [] };
+      }
 
+      groups[key].count++;
+      groups[key].revenue += b.amount;
+      groups[key].bookings.push(b);
+    });
+
+    // Sort: Date view sorts by date, Hotel view sorts by active count
+    return Object.values(groups).sort(
+      (a, b) => b.bookings.length - a.bookings.length,
+    );
+  }, [bookings, viewMode]);
+
+  // --- FILTERED DETAILS ---
+  const filteredDetailBookings = useMemo(() => {
+    if (!selectedGroup) return [];
+    return selectedGroup.bookings.filter((b) => {
+      const matchSearch =
+        b.customerName.toLowerCase().includes(detailSearch.toLowerCase()) ||
+        b.id.includes(detailSearch);
+      const matchStatus = detailFilter === "all" || b.status === detailFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [selectedGroup, detailSearch, detailFilter]);
+
+  // --- HELPER: Status Color ---
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case "confirmed": return "bg-green-100 text-green-700 border-green-200";
-      case "paid": return "bg-green-100 text-green-700 border-green-200";
-      case "pending": return "bg-yellow-50 text-yellow-700 border-yellow-200";
-      case "cancelled": return "bg-red-50 text-red-600 border-red-200";
-      case "failed": return "bg-red-100 text-red-700 border-red-200";
-      default: return "bg-gray-100 text-gray-600 border-gray-200";
+      case "confirmed":
+        return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
+      case "pending":
+        return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
+      case "cancelled":
+        return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+      default:
+        return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400";
     }
   };
 
-  // --- RENDER ROW HELPER ---
-  const renderBookingRow = (booking: Booking) => {
-    const isRefreshing = refreshingIds.has(booking.id);
-    const isFailed = failedIds.has(booking.id);
-    const bookingDate = getValidDate(booking.date);
-    const updatedDate = getValidDate(booking.updatedAt);
-    const createdDate = getValidDate(booking.createdAt);
-
+  if (loading)
     return (
-      <tr key={booking.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-        <td className="p-4">
-          <div className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            {booking.type === 'Hotel' ? <BedDouble size={16} className="text-rose-500" /> : <Car size={16} className="text-indigo-500" />}
-            <span className="truncate max-w-[180px]">{booking.listingName || "Unknown"}</span>
-          </div>
-          <div className="text-[10px] text-gray-400 font-mono mt-1 uppercase flex gap-2">
-            <span>#{booking.id.slice(0, 6)}</span>
-            {viewMode === 'list' && createdDate && (
-              <span>• {format(createdDate, "dd MMM, HH:mm")}</span>
-            )}
-          </div>
-        </td>
-        <td className="p-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 shrink-0">
-              <User size={14} />
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{booking.customerName}</div>
-              <div className="text-xs text-gray-500 truncate">{booking.customerContact}</div>
-            </div>
-          </div>
-        </td>
-        <td className="p-4 text-sm text-gray-600 dark:text-gray-400">
-          {bookingDate ? format(bookingDate, "dd MMM") : "-"}
-        </td>
-        <td className="p-4">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(booking.paymentStatus)} uppercase`}>
-                {booking.paymentStatus}
-              </span>
-              {booking.paymentStatus !== 'paid' && (
-                <button
-                  onClick={(e) => checkPaymentStatus(e, booking.id)}
-                  disabled={isRefreshing}
-                  className={`p-1 rounded-full transition-all ${isFailed ? "bg-red-100 text-red-600" : "bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-rose-600"}`}
-                >
-                  <RefreshCcw size={12} className={isRefreshing ? "animate-spin text-rose-600" : ""} />
-                </button>
-              )}
-            </div>
-            {updatedDate && (
-              <span className="text-[10px] text-gray-400">
-                {formatDistanceToNow(updatedDate)} ago
-              </span>
-            )}
-          </div>
-        </td>
-        <td className="p-4">
-          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(booking.status)} uppercase`}>
-            {booking.status}
-          </span>
-        </td>
-        <td className="p-4 text-right font-bold text-gray-900 dark:text-white">
-          ₹{Number(booking.amount).toLocaleString('en-IN')}
-        </td>
-      </tr>
+      <div className="h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin text-rose-600" size={40} />
+      </div>
     );
-  };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-8">
-      <div className="max-w-7xl mx-auto pb-20">
-
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-8 font-sans transition-colors">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* 1. HEADER & VIEW SWITCHER */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">All Bookings</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">Track payments and reservations.</p>
+            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
+              Operations
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+              {bookings.length} total bookings found.
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* VIEW TOGGLE */}
-            <div className="flex bg-gray-200 dark:bg-gray-800 p-1 rounded-lg">
-              <button
-                onClick={() => setViewMode('date-group')}
-                className={`p-2 rounded-md flex items-center gap-2 text-xs font-bold transition-all ${viewMode === 'date-group' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                <CalendarDays size={16} /> <span className="hidden sm:inline">Date Group</span>
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-md flex items-center gap-2 text-xs font-bold transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                <LayoutList size={16} /> <span className="hidden sm:inline">List View</span>
-              </button>
-            </div>
-
-            {/* FILTER */}
-            <div className="flex items-center gap-2 bg-white dark:bg-gray-900 p-1 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm h-[38px]">
-              <Filter size={16} className="ml-2 text-gray-400" />
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="bg-transparent text-sm font-medium outline-none p-1 pr-4 text-gray-700 dark:text-gray-300 h-full"
-              >
-                <option value="all">All Status</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="pending">Pending</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
+          {/* Tab View Switcher */}
+          <div className="bg-white dark:bg-gray-900 p-1 rounded-xl border border-gray-200 dark:border-gray-800 flex shadow-sm">
+            <button
+              onClick={() => setViewMode("hotel")}
+              className={`px-4 py-2.5 text-sm font-bold rounded-lg flex items-center gap-2 transition-all ${viewMode === "hotel" ? "bg-black dark:bg-white text-white dark:text-black shadow-md" : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
+            >
+              <LayoutGrid size={16} /> By Property
+            </button>
+            <button
+              onClick={() => setViewMode("date")}
+              className={`px-4 py-2.5 text-sm font-bold rounded-lg flex items-center gap-2 transition-all ${viewMode === "date" ? "bg-black dark:bg-white text-white dark:text-black shadow-md" : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
+            >
+              <CalendarDays size={16} /> By Date
+            </button>
           </div>
         </div>
 
-        {/* LOADING STATE */}
-        {loading ? (
-          <div className="flex justify-center py-20"><Loader2 className="animate-spin text-rose-600" size={32} /></div>
-        ) : (
-          <div className="space-y-8">
-            {filteredBookings.length === 0 ? (
-              <div className="text-center py-20 bg-white dark:bg-gray-900 rounded-xl border border-dashed border-gray-200 dark:border-gray-800">
-                <p className="text-gray-500">No bookings found.</p>
-              </div>
-            ) : (
-              <>
-                {/* --- DATE GROUP MODE --- */}
-                {viewMode === 'date-group' && Object.keys(groupedBookings).length > 0 && (
-                  Object.entries(groupedBookings).map(([dateLabel, group]) => (
-                    <div key={dateLabel}>
-                      <div className="flex items-center gap-2 mb-3 px-1">
-                        <Calendar size={16} className="text-rose-500" />
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{dateLabel}</h3>
-                        <div className="h-[1px] flex-1 bg-gray-200 dark:bg-gray-800 ml-2"></div>
-                      </div>
+        {/* 2. MAIN CARD GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {groupedData.map((group, idx) => (
+            <div
+              key={idx}
+              onClick={() => {
+                setSelectedGroup(group);
+                setDetailSearch("");
+                setDetailFilter("all");
+              }}
+              className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group relative overflow-hidden"
+            >
+              {/* Highlight Bar */}
+              <div
+                className={`absolute top-0 left-0 bottom-0 w-1.5 ${viewMode === "hotel" ? "bg-rose-500" : "bg-indigo-500"}`}
+              ></div>
 
-                      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-50 dark:bg-gray-800/50 text-xs font-bold uppercase text-gray-500 border-b border-gray-200 dark:border-gray-800">
-                              <tr>
-                                <th className="p-4 w-1/4">Listing</th>
-                                <th className="p-4 w-1/4">Customer</th>
-                                <th className="p-4 w-1/6">Trip Date</th>
-                                <th className="p-4 w-1/6">Payment</th>
-                                <th className="p-4 w-1/6">Status</th>
-                                <th className="p-4 w-1/6 text-right">Amount</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                              {group.map((booking) => renderBookingRow(booking))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
+              <div className="pl-3">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center ${viewMode === "hotel" ? "bg-rose-50 dark:bg-rose-900/20 text-rose-600" : "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600"}`}
+                    >
+                      {viewMode === "hotel" ? (
+                        <Hotel size={24} />
+                      ) : (
+                        <Calendar size={24} />
+                      )}
                     </div>
-                  ))
-                )}
-
-                {/* --- LIST MODE --- */}
-                {viewMode === 'list' && (
-                  <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead className="bg-gray-50 dark:bg-gray-800/50 text-xs font-bold uppercase text-gray-500 border-b border-gray-200 dark:border-gray-800">
-                          <tr>
-                            <th className="p-4 w-1/4">
-                              <div className="flex items-center gap-1"><ArrowDownUp size={12} /> Listing</div>
-                            </th>
-                            <th className="p-4 w-1/4">Customer</th>
-                            <th className="p-4 w-1/6">Trip Date</th>
-                            <th className="p-4 w-1/6">Payment</th>
-                            <th className="p-4 w-1/6">Status</th>
-                            <th className="p-4 w-1/6 text-right">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                          {currentItems.map((booking) => renderBookingRow(booking))}
-                        </tbody>
-                      </table>
+                    <div>
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-white leading-tight group-hover:text-blue-600 transition-colors">
+                        {group.title}
+                      </h3>
+                      <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mt-1">
+                        {group.subtitle}
+                      </p>
                     </div>
                   </div>
-                )}
+                  <div className="bg-gray-100 dark:bg-gray-800 rounded-full p-2 group-hover:bg-black group-hover:text-white dark:group-hover:bg-white dark:group-hover:text-black transition-colors">
+                    <ChevronRight size={16} />
+                  </div>
+                </div>
 
-                {/* --- PAGINATION --- */}
-                <div className="mt-8">
-                  <Pagination
-                    currentPage={currentPage}
-                    totalItems={filteredBookings.length}
-                    itemsPerPage={ITEMS_PER_PAGE}
-                    onPageChange={handlePageChange}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800">
+                    <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">
+                      Bookings
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {group.count}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800">
+                    <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">
+                      Revenue
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      ₹{(group.revenue / 1000).toFixed(1)}k
+                    </p>
+                  </div>
+                </div>
+
+                {/* Recent Guest Preview */}
+                {group.bookings.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500 flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-[9px] font-bold">
+                      {group.bookings[0].customerName[0]}
+                    </div>
+                    <span>
+                      Latest:{" "}
+                      <span className="font-bold text-gray-700 dark:text-gray-300">
+                        {group.bookings[0].customerName}
+                      </span>
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 3. DETAILS OVERLAY (FULL SCREEN / DRAWER) */}
+        {selectedGroup && (
+          <div className="fixed inset-0 z-[100] flex justify-end">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+              onClick={() => setSelectedGroup(null)}
+            ></div>
+
+            <div className="relative w-full max-w-4xl bg-white dark:bg-black h-full shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-right duration-300">
+              {/* Drawer Header */}
+              <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-black z-10">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    {viewMode === "hotel" ? (
+                      <Hotel size={24} className="text-rose-500" />
+                    ) : (
+                      <Calendar size={24} className="text-indigo-500" />
+                    )}
+                    {selectedGroup.title}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Managing {selectedGroup.bookings.length} bookings
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedGroup(null)}
+                  className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              {/* Toolbar inside Drawer */}
+              <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search
+                    className="absolute left-3 top-3 text-gray-400"
+                    size={18}
+                  />
+                  <input
+                    placeholder="Search guest inside this group..."
+                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all dark:text-white"
+                    value={detailSearch}
+                    onChange={(e) => setDetailSearch(e.target.value)}
                   />
                 </div>
-              </>
-            )}
+                <div className="flex items-center gap-2 min-w-[150px]">
+                  <Filter size={18} className="text-gray-400" />
+                  <select
+                    className="w-full p-2.5 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl outline-none text-sm font-medium dark:text-white"
+                    value={detailFilter}
+                    onChange={(e) => setDetailFilter(e.target.value)}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="pending">Pending</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Scrollable Booking List */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50/50 dark:bg-black">
+                {filteredDetailBookings.length === 0 ? (
+                  <div className="text-center py-20 text-gray-500">
+                    No bookings match your search.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredDetailBookings.map((b) => (
+                      <div
+                        key={b.id}
+                        className="bg-white dark:bg-gray-900 rounded-xl p-5 border border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 transition-colors shadow-sm group"
+                      >
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                          {/* Guest Info */}
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-lg">
+                              {b.customerName[0]}
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-gray-900 dark:text-white text-lg">
+                                {b.customerName}
+                              </h4>
+                              <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
+                                <span className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded font-mono">
+                                  #{b.id.slice(0, 6)}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Phone size={10} /> {b.customerContact}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons (Desktop) */}
+                          <div className="flex gap-2">
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${getStatusColor(b.status)}`}
+                            >
+                              {b.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Details Grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">
+                              Check In
+                            </p>
+                            <p className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1">
+                              <Calendar size={14} className="text-gray-400" />{" "}
+                              {format(parseISO(b.checkIn), "dd MMM, HH:mm")}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">
+                              Check Out
+                            </p>
+                            <p className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1">
+                              <Calendar size={14} className="text-gray-400" />{" "}
+                              {format(parseISO(b.checkOut), "dd MMM")}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">
+                              Payment
+                            </p>
+                            <p className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1">
+                              <CreditCard
+                                size={14}
+                                className={
+                                  b.paymentStatus === "paid"
+                                    ? "text-green-500"
+                                    : "text-red-500"
+                                }
+                              />
+                              <span className="capitalize">
+                                {b.paymentStatus}
+                              </span>
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">
+                              Total
+                            </p>
+                            <p className="font-bold text-xl text-gray-900 dark:text-white">
+                              ₹{b.amount.toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
