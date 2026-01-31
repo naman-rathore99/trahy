@@ -34,6 +34,7 @@
     "@types/react": "^19.2.8",
     "@types/react-date-range": "^1.4.10",
     "@types/react-dom": "^19.2.3",
+    "@types/serve-static": "^2.2.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.7",
     "tailwindcss": "^4",

@@ -1,4 +1,3 @@
-// 👇 1. THIS IS THE MISSING LINE! (Must be at the top)
 import "../global.css";
 
 import {
@@ -21,7 +20,6 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      {/* 2. Added screenOptions to hide default headers for a cleaner look */}
       <Stack screenOptions={{ headerShown: false }}>
         {/* Main Tabs */}
         <Stack.Screen name="(tabs)" />
