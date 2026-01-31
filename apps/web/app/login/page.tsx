@@ -6,28 +6,33 @@ import LoginButton from "@/components/LoginButton";
 import {
   getAuth,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  updateProfile,
   onAuthStateChanged,
   IdTokenResult,
 } from "firebase/auth";
 import { app } from "@/lib/firebase";
 import Link from "next/link";
-import { Loader2, ArrowRight, Mail, Lock, Eye, EyeOff, CheckCircle2, User, Globe } from "lucide-react";
+import {
+  Loader2,
+  ArrowRight,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  Globe,
+} from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
 
   // State
-  const [isLogin, setIsLogin] = useState(true); // Toggle Login vs Signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState(""); // Only for Signup
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
-  // --- 1. SMART REDIRECT LOGIC (Detects Admin/Partner/User) ---
+  // --- 1. SMART REDIRECT LOGIC ---
   useEffect(() => {
     const auth = getAuth(app);
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -38,7 +43,7 @@ export default function LoginPage() {
 
           if (role === "admin") router.push("/admin");
           else if (role === "partner") router.push("/partner/dashboard");
-          else router.push("/"); // Normal User goes Home
+          else router.push("/"); // Normal User
         } catch (error) {
           console.error("Error fetching role:", error);
           setChecking(false);
@@ -50,30 +55,18 @@ export default function LoginPage() {
     return () => unsub();
   }, [router]);
 
-  // --- 2. AUTH HANDLER ---
-  const handleAuth = async (e: React.FormEvent) => {
+  // --- 2. AUTH HANDLER (LOGIN ONLY) ---
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     const auth = getAuth(app);
 
     try {
-      if (isLogin) {
-        // LOGIN
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        // SIGNUP (Users Only - Partners use /join)
-        const res = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(res.user, { displayName: name });
-
-        // Optional: Save to DB via API if needed
-        await fetch("/api/auth/register", {
-          method: "POST",
-          body: JSON.stringify({ uid: res.user.uid, email, name, role: "user" })
-        });
-      }
-      // Redirect handled by useEffect
+      // We ONLY handle Login here. Signup is handled in /signup
+      await signInWithEmailAndPassword(auth, email, password);
+      // Redirect is handled automatically by useEffect above
     } catch (err: any) {
-      alert("Authentication Failed: " + err.message);
+      alert("Login Failed: " + err.message);
       setLoading(false);
     }
   };
@@ -87,10 +80,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex bg-white dark:bg-black">
-
-      {/* --- LEFT SIDE: UNIVERSAL BRANDING (Hidden on Mobile) --- */}
+      {/* --- LEFT SIDE: BRANDING --- */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-black items-center justify-center overflow-hidden">
-        {/* Background Image - Mathura/Travel Theme */}
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1598890777032-bde66e4477c5?q=80&w=2940&auto=format&fit=crop')] bg-cover bg-center opacity-50"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
 
@@ -101,10 +92,11 @@ export default function LoginPage() {
             </span>
           </div>
           <h1 className="text-5xl font-extrabold leading-tight mb-6">
-            Your Journey, <br />Simplified.
+            Your Journey, <br />
+            Simplified.
           </h1>
           <p className="text-lg text-gray-300 mb-8 leading-relaxed">
-            Whether you are a traveler exploring Braj, a partner managing stays, or an administrator—welcome to your gateway.
+            Welcome back to your gateway for premium stays and spiritual tours.
           </p>
           <div className="space-y-4">
             <div className="flex items-center gap-4">
@@ -126,40 +118,21 @@ export default function LoginPage() {
       {/* --- RIGHT SIDE: LOGIN FORM --- */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center items-center p-6 sm:p-12 lg:p-24 bg-gray-50 dark:bg-black transition-colors">
         <div className="w-full max-w-md space-y-8">
-
           <div className="text-center lg:text-left">
             <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-2">
-              {isLogin ? "Welcome Back" : "Create Account"}
+              Welcome Back
             </h2>
             <p className="text-gray-500 dark:text-gray-400">
-              {isLogin ? "Enter your details to access your account." : "Sign up to start booking your spiritual journey."}
+              Enter your details to access your account.
             </p>
           </div>
 
-          <form onSubmit={handleAuth} className="space-y-5">
-
-            {/* Name Field (Signup Only) */}
-            {!isLogin && (
-              <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
-                <label className="block text-xs font-bold uppercase text-gray-500 ml-1">Full Name</label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-gray-400 group-focus-within:text-rose-600 transition-colors" />
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    className="block w-full pl-10 pr-3 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
-                    placeholder="John Doe"
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-
+          <form onSubmit={handleLogin} className="space-y-5">
             {/* Email Field */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase text-gray-500 ml-1">Email Address</label>
+              <label className="block text-xs font-bold uppercase text-gray-500 ml-1">
+                Email Address
+              </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Mail className="h-5 w-5 text-gray-400 group-focus-within:text-rose-600 transition-colors" />
@@ -177,8 +150,9 @@ export default function LoginPage() {
             {/* Password Field */}
             <div className="space-y-1.5">
               <div className="flex justify-between items-center ml-1">
-                <label className="block text-xs font-bold uppercase text-gray-500">Password</label>
-
+                <label className="block text-xs font-bold uppercase text-gray-500">
+                  Password
+                </label>
               </div>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -199,7 +173,10 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              <Link href="/forgot-password" className="text-xs font-bold text-rose-600 hover:text-rose-500 transition-colors">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-bold text-rose-600 hover:text-rose-500 transition-colors"
+              >
                 Forgot password?
               </Link>
             </div>
@@ -209,7 +186,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full flex justify-center py-4 px-4 border border-transparent rounded-xl shadow-lg shadow-rose-500/20 text-sm font-bold text-white bg-black dark:bg-white dark:text-black hover:opacity-90 focus:outline-none transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? <Loader2 className="animate-spin" /> : (isLogin ? "Continue" : "Create Account")}
+              {loading ? <Loader2 className="animate-spin" /> : "Log In"}
             </button>
           </form>
 
@@ -227,26 +204,30 @@ export default function LoginPage() {
           <LoginButton onLoginSuccess={() => router.push("/")} />
 
           <div className="space-y-4 text-center">
-            {/* Toggle Login/Signup */}
+            {/* Redirect to Secure Signup Page */}
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {isLogin ? "New to Shubh Yatra? " : "Already have an account? "}
-              <button
-                onClick={() => setIsLogin(!isLogin)}
+              New to Shubh Yatra?{" "}
+              <Link
+                href="/signup"
                 className="font-bold text-rose-600 hover:text-rose-500 transition-colors"
               >
-                {isLogin ? "Sign Up" : "Log In"}
-              </button>
+                Sign Up
+              </Link>
             </p>
 
-            {/* Partner Link - Distinct from User Signup */}
+            {/* Partner Link */}
             <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
-              <p className="text-xs text-gray-400 mb-2 uppercase font-bold">Business Owner?</p>
-              <Link href="/join" className="inline-flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white hover:text-rose-600 transition-colors">
+              <p className="text-xs text-gray-400 mb-2 uppercase font-bold">
+                Business Owner?
+              </p>
+              <Link
+                href="/join"
+                className="inline-flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white hover:text-rose-600 transition-colors"
+              >
                 Apply as a Partner <ArrowRight size={16} />
               </Link>
             </div>
           </div>
-
         </div>
       </div>
     </div>

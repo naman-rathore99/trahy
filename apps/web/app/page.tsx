@@ -123,7 +123,7 @@ export default function HomePage() {
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const currentItems = filteredHotels.slice(
     startIndex,
-    startIndex + ITEMS_PER_PAGE
+    startIndex + ITEMS_PER_PAGE,
   );
 
   const handlePageChange = (page: number) => {
