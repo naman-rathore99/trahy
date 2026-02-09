@@ -5,7 +5,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // 🛡️ CRITICAL FIX: Fallback to Resend's testing domain if your env variable is broken or missing.
 // If you have a verified domain (e.g., info@shubhyatra.world), set RESEND_FROM_EMAIL in your .env file.
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "onboarding@shubhyatra.world";
 
 /**
  * 1. Send OTP Verification Email
