@@ -5,7 +5,8 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // 🛡️ CRITICAL FIX: Fallback to Resend's testing domain if your env variable is broken or missing.
 // If you have a verified domain (e.g., info@shubhyatra.world), set RESEND_FROM_EMAIL in your .env file.
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "onboarding@shubhyatra.world";
+const FROM_EMAIL =
+  process.env.RESEND_FROM_EMAIL || "onboarding@shubhyatra.world";
 
 /**
  * 1. Send OTP Verification Email
@@ -160,6 +161,49 @@ export async function sendInvoiceEmail(
     return { success: true };
   } catch (error) {
     console.error("Invoice Email Failed:", error);
+    return { success: false, error };
+  }
+}
+export async function sendPasswordResetEmail(to: string, resetLink: string) {
+  if (!to) return;
+
+  try {
+    await resend.emails.send({
+      from: `Shubh Yatra Security <${FROM_EMAIL}>`,
+      to: [to],
+      subject: "Reset your Shubh Yatra Password",
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eaeaea; border-radius: 10px; padding: 40px 20px;">
+          <h2 style="color: #e11d48; text-align: center; margin-bottom: 20px;">Shubh Yatra</h2>
+          
+          <div style="text-align: center;">
+             <img src="https://img.icons8.com/clouds/100/000000/lock-landscape.png" alt="Reset Password" style="margin-bottom: 20px;" />
+          </div>
+
+          <p style="text-align: center; color: #333; font-size: 16px;">
+            Hello,
+          </p>
+          <p style="text-align: center; color: #555; font-size: 14px; line-height: 1.5;">
+            We received a request to reset the password for your Shubh Yatra account.<br/>
+            If you didn't ask for this, you can safely ignore this email.
+          </p>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetLink}" style="background-color: #e11d48; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">
+              Reset Password
+            </a>
+          </div>
+
+          <p style="text-align: center; color: #999; font-size: 12px; margin-top: 30px;">
+            Or copy this link: <br/>
+            <a href="${resetLink}" style="color: #e11d48;">${resetLink}</a>
+          </p>
+        </div>
+      `,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Reset Email Failed:", error);
     return { success: false, error };
   }
 }

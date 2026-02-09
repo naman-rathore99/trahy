@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Navbar from "@/components/Navbar"; // ✅ Navbar Restored
+import Navbar from "@/components/Navbar";
 import {
   Loader2,
   Mail,
@@ -12,12 +12,15 @@ import {
   ArrowRight,
   X,
   ShieldCheck,
+  Eye, // ✅ Added Icon
+  EyeOff, // ✅ Added Icon
 } from "lucide-react";
 import {
   getAuth,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  fetchSignInMethodsForEmail, // ✅ Added for Validation
 } from "firebase/auth";
 import { app } from "@/lib/firebase";
 
@@ -25,12 +28,16 @@ export default function SignupPage() {
   const router = useRouter();
   const auth = getAuth(app);
 
-  // --- LOGIC STATES (Working Logic) ---
+  // --- LOGIC STATES ---
   const [isSessionClearing, setIsSessionClearing] = useState(true);
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [showOtpPanel, setShowOtpPanel] = useState(false);
   const [error, setError] = useState("");
+
+  // ✅ VISIBILITY STATES
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -41,14 +48,12 @@ export default function SignupPage() {
 
   const [otp, setOtp] = useState("");
 
-  // 1. FORCE LOGOUT (Safety Logic)
+  // 1. FORCE LOGOUT ON MOUNT (To ensure clean state)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log("Ghost user found. Killing session...");
-        signOut(auth).then(() => {
-          setIsSessionClearing(false);
-        });
+        // If a user is found on mount, sign them out first
+        signOut(auth).then(() => setIsSessionClearing(false));
       } else {
         setIsSessionClearing(false);
       }
@@ -56,11 +61,12 @@ export default function SignupPage() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Initial Submit -> Send OTP
+  // 2. Initial Submit -> Validate User -> Send OTP
   const handleInitialSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
+    // Basic Validation
     if (!formData.name || !formData.email || !formData.password) {
       setError("Please fill in all fields.");
       return;
@@ -69,10 +75,25 @@ export default function SignupPage() {
       setError("Passwords do not match.");
       return;
     }
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
 
     setLoading(true);
 
     try {
+      // ✅ CHECK IF USER EXISTS
+      // Note: Ensure "Email Enumeration Protection" is DISABLED in Firebase Console -> Auth -> Settings
+      const methods = await fetchSignInMethodsForEmail(auth, formData.email);
+
+      if (methods.length > 0) {
+        setError("This email is already registered. Please log in.");
+        setLoading(false);
+        return; // Stop execution
+      }
+
+      // ✅ SEND OTP (If user doesn't exist)
       const res = await fetch("/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -86,12 +107,16 @@ export default function SignupPage() {
       setShowOtpPanel(true);
     } catch (err: any) {
       console.error(err);
-      setError(err.message);
+      if (err.code === "auth/invalid-email") {
+        setError("Invalid email address.");
+      } else {
+        setError(err.message || "Failed to initiate signup.");
+      }
       setLoading(false);
     }
   };
 
-  // 3. Final Verify
+  // 3. Final Verify -> Create User -> Auto Login
   const handleVerifyAndRegister = async () => {
     setError("");
     if (!otp || otp.length !== 6) {
@@ -102,6 +127,7 @@ export default function SignupPage() {
     setVerifying(true);
 
     try {
+      // 1. Create User in Backend (Verifies OTP & Creates Firebase Account)
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -117,7 +143,11 @@ export default function SignupPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Signup failed");
 
+      // 2. ✅ AUTO LOGIN (Stay Logged In)
+      // We manually sign them in immediately after creation
       await signInWithEmailAndPassword(auth, formData.email, formData.password);
+
+      // 3. Redirect to Home
       router.push("/");
     } catch (err: any) {
       alert(err.message || "Verification failed. Try again.");
@@ -136,7 +166,6 @@ export default function SignupPage() {
   }
 
   return (
-    // ✅ ORIGINAL LAYOUT RESTORED
     <main className="min-h-screen bg-gray-50 dark:bg-black font-sans text-gray-900 dark:text-gray-100">
       {/* 1. Navbar */}
       <Navbar variant="default" />
@@ -218,15 +247,24 @@ export default function SignupPage() {
                   size={18}
                 />
                 <input
-                  type="password"
+                  // ✅ Dynamic Type
+                  type={showPassword ? "text" : "password"}
                   required
                   placeholder="••••••"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
+                  className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
                   value={formData.password}
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
                 />
+                {/* ✅ Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
@@ -241,10 +279,11 @@ export default function SignupPage() {
                   size={18}
                 />
                 <input
-                  type="password"
+                  // ✅ Dynamic Type
+                  type={showConfirmPassword ? "text" : "password"}
                   required
                   placeholder="••••••"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
+                  className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
                   value={formData.confirmPassword}
                   onChange={(e) =>
                     setFormData({
@@ -253,6 +292,18 @@ export default function SignupPage() {
                     })
                   }
                 />
+                {/* ✅ Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff size={18} />
+                  ) : (
+                    <Eye size={18} />
+                  )}
+                </button>
               </div>
             </div>
 
