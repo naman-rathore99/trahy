@@ -12,17 +12,28 @@ import {
   ArrowRight,
   X,
   ShieldCheck,
-  Eye, // ✅ Added Icon
-  EyeOff, // ✅ Added Icon
+  Eye,
+  EyeOff,
+  Phone,
 } from "lucide-react";
 import {
   getAuth,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  fetchSignInMethodsForEmail, // ✅ Added for Validation
+  fetchSignInMethodsForEmail,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  ConfirmationResult,
 } from "firebase/auth";
 import { app } from "@/lib/firebase";
+
+// Add Type Definition for Window
+declare global {
+  interface Window {
+    recaptchaVerifier: any;
+  }
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -35,24 +46,25 @@ export default function SignupPage() {
   const [showOtpPanel, setShowOtpPanel] = useState(false);
   const [error, setError] = useState("");
 
-  // ✅ VISIBILITY STATES
+  // VISIBILITY STATES
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // New: Auth Method State (Only Email for now as per your request to keep logic, but Phone field added below)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
+    phone: "", // Added phone field
   });
 
   const [otp, setOtp] = useState("");
 
-  // 1. FORCE LOGOUT ON MOUNT (To ensure clean state)
+  // 1. FORCE LOGOUT ON MOUNT
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // If a user is found on mount, sign them out first
         signOut(auth).then(() => setIsSessionClearing(false));
       } else {
         setIsSessionClearing(false);
@@ -66,8 +78,12 @@ export default function SignupPage() {
     e.preventDefault();
     setError("");
 
-    // Basic Validation
-    if (!formData.name || !formData.email || !formData.password) {
+    if (
+      !formData.name ||
+      !formData.email ||
+      !formData.password ||
+      !formData.phone
+    ) {
       setError("Please fill in all fields.");
       return;
     }
@@ -83,17 +99,15 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      // ✅ CHECK IF USER EXISTS
-      // Note: Ensure "Email Enumeration Protection" is DISABLED in Firebase Console -> Auth -> Settings
+      // Check if User Exists
       const methods = await fetchSignInMethodsForEmail(auth, formData.email);
-
       if (methods.length > 0) {
         setError("This email is already registered. Please log in.");
         setLoading(false);
-        return; // Stop execution
+        return;
       }
 
-      // ✅ SEND OTP (If user doesn't exist)
+      // Send Email OTP (Using your custom API)
       const res = await fetch("/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -107,11 +121,7 @@ export default function SignupPage() {
       setShowOtpPanel(true);
     } catch (err: any) {
       console.error(err);
-      if (err.code === "auth/invalid-email") {
-        setError("Invalid email address.");
-      } else {
-        setError(err.message || "Failed to initiate signup.");
-      }
+      setError(err.message || "Failed to initiate signup.");
       setLoading(false);
     }
   };
@@ -127,7 +137,7 @@ export default function SignupPage() {
     setVerifying(true);
 
     try {
-      // 1. Create User in Backend (Verifies OTP & Creates Firebase Account)
+      // Create User in Backend
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -137,17 +147,15 @@ export default function SignupPage() {
           password: formData.password,
           role: "user",
           otp: otp,
+          phone: formData.phone, // Passing phone number to backend
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Signup failed");
 
-      // 2. ✅ AUTO LOGIN (Stay Logged In)
-      // We manually sign them in immediately after creation
+      // Auto Login
       await signInWithEmailAndPassword(auth, formData.email, formData.password);
-
-      // 3. Redirect to Home
       router.push("/");
     } catch (err: any) {
       alert(err.message || "Verification failed. Try again.");
@@ -155,7 +163,6 @@ export default function SignupPage() {
     }
   };
 
-  // BLOCK RENDER UNTIL LOGOUT IS DONE
   if (isSessionClearing) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
@@ -167,12 +174,9 @@ export default function SignupPage() {
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-black font-sans text-gray-900 dark:text-gray-100">
-      {/* 1. Navbar */}
       <Navbar variant="default" />
 
-      {/* 2. Main Content */}
       <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden pt-24">
-        {/* --- FORM CARD --- */}
         <div className="bg-white dark:bg-gray-900 w-full max-w-md p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-10 animate-in fade-in zoom-in-95 duration-500">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -190,7 +194,7 @@ export default function SignupPage() {
           )}
 
           <form onSubmit={handleInitialSubmit} className="space-y-4">
-            {/* FULL NAME */}
+            {/* NAME */}
             <div>
               <label className="block text-xs font-bold uppercase text-gray-500 mb-1 ml-1">
                 Full Name
@@ -236,6 +240,30 @@ export default function SignupPage() {
               </div>
             </div>
 
+            {/* PHONE (Added) */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-500 mb-1 ml-1">
+                Phone Number
+              </label>
+              <div className="relative group">
+                <Phone
+                  className="absolute left-3 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
+                  size={18}
+                />
+                <input
+                  type="tel"
+                  required
+                  placeholder="+91 98765 43210"
+                  maxLength={10}
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
+                  value={formData.phone}
+                  onChange={(e) =>
+                    setFormData({ ...formData, phone: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
             {/* PASSWORD */}
             <div>
               <label className="block text-xs font-bold uppercase text-gray-500 mb-1 ml-1">
@@ -247,7 +275,6 @@ export default function SignupPage() {
                   size={18}
                 />
                 <input
-                  // ✅ Dynamic Type
                   type={showPassword ? "text" : "password"}
                   required
                   placeholder="••••••"
@@ -257,7 +284,6 @@ export default function SignupPage() {
                     setFormData({ ...formData, password: e.target.value })
                   }
                 />
-                {/* ✅ Toggle Button */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -279,7 +305,6 @@ export default function SignupPage() {
                   size={18}
                 />
                 <input
-                  // ✅ Dynamic Type
                   type={showConfirmPassword ? "text" : "password"}
                   required
                   placeholder="••••••"
@@ -292,7 +317,6 @@ export default function SignupPage() {
                     })
                   }
                 />
-                {/* ✅ Toggle Button */}
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -335,7 +359,7 @@ export default function SignupPage() {
           </div>
         </div>
 
-        {/* --- OTP PANEL (Slide Over) --- */}
+        {/* OTP PANEL */}
         {showOtpPanel && (
           <>
             <div
@@ -368,7 +392,6 @@ export default function SignupPage() {
                       {formData.email}
                     </span>
                   </p>
-
                   <input
                     type="text"
                     placeholder="000000"
@@ -377,7 +400,6 @@ export default function SignupPage() {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
                   />
-
                   <button
                     onClick={handleVerifyAndRegister}
                     disabled={verifying}
