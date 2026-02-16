@@ -3,8 +3,7 @@ import { Resend } from "resend";
 // Initialize Resend with your API Key
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// 🛡️ CRITICAL FIX: Fallback to Resend's testing domain if your env variable is broken or missing.
-// If you have a verified domain (e.g., info@shubhyatra.world), set RESEND_FROM_EMAIL in your .env file.
+// Fallback to Resend's testing domain if env var is missing
 const FROM_EMAIL =
   process.env.RESEND_FROM_EMAIL || "onboarding@shubhyatra.world";
 
@@ -43,38 +42,82 @@ export async function sendOtpEmail(to: string, code: string) {
 
 /**
  * 2. Send Welcome Email (User or Partner)
+ * ✅ UPDATED: Handles "Default Password" vs "Custom Password" logic
  */
 export async function sendWelcomeEmail(
   to: string,
   name: string,
   role: "user" | "partner",
+  password?: string,
 ) {
   if (!to) return;
 
   const isPartner = role === "partner";
-
   const subject = isPartner
-    ? "Welcome to Shubh Yatra Partner Program! 🤝"
+    ? "🎉 Partner Account Approved - Shubh Yatra"
     : "Welcome to Shubh Yatra! 🙏";
 
-  const message = isPartner
-    ? `
-      <p>Namaste <strong>${name}</strong>,</p>
-      <p>Welcome to the <strong>Shubh Yatra Partner Family</strong>.</p>
-      <p>We are thrilled to have you onboard. Your account is currently <strong>Pending Verification</strong>.</p>
-      <p>Our team will review your details and approve your account shortly so you can start listing your properties/vehicles.</p>
-      <p>If you have any questions, reply to this email.</p>
-    `
-    : `
+  let message = "";
+
+  if (isPartner) {
+    // 🔴 LOGIC: Check if using Default Password or Custom
+    const isDefaultPassword = password === "Partner@123";
+
+    if (isDefaultPassword) {
+      // CASE A: Default Password -> Show it with RED WARNING
+      message = `
+        <p>Namaste <strong>${name}</strong>,</p>
+        <p>Congratulations! Your request to join <strong>Shubh Yatra</strong> has been <strong>APPROVED</strong>.</p>
+        
+        <p>You can now login to your dashboard using the temporary credentials below:</p>
+
+        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0; color: #333;"><strong>Login Details:</strong></p>
+          <p style="margin: 0;">📧 Email: ${to}</p>
+          <p style="margin: 5px 0 0 0;">🔑 Password: <strong>${password}</strong></p>
+        </div>
+
+        <div style="background-color: #fef2f2; color: #b91c1c; padding: 15px; border-radius: 8px; border: 1px solid #fca5a5; text-align: center; margin-bottom: 20px;">
+          <strong>⚠️ IMPORTANT: Please change this password immediately after your first login.</strong>
+        </div>
+
+        <div style="text-align: center;">
+          <a href="https://admin.shubhyatra.world/login" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Login to Partner Dashboard</a>
+        </div>
+      `;
+    } else {
+      // CASE B: Custom Password -> Hide it, say "We will text you"
+      message = `
+        <p>Namaste <strong>${name}</strong>,</p>
+        <p>Congratulations! Your request to join <strong>Shubh Yatra</strong> has been <strong>APPROVED</strong>.</p>
+        
+        <p>Your partner account is ready. For security reasons, we do not send custom passwords via email.</p>
+
+        <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; border: 1px solid #bfdbfe; margin: 20px 0; text-align: center;">
+          <p style="color: #1e40af; margin: 0; font-weight: bold; font-size: 16px;">
+            📱 We will text or WhatsApp you the login details shortly.
+          </p>
+        </div>
+
+        <p>Once you receive your credentials, please login to complete your property setup.</p>
+        
+        <div style="text-align: center; margin-top: 20px;">
+          <a href="https://admin.shubhyatra.world/login" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Go to Dashboard</a>
+        </div>
+      `;
+    }
+  } else {
+    // Standard User Welcome
+    message = `
       <p>Namaste <strong>${name}</strong>,</p>
       <p>Welcome to <strong>Shubh Yatra</strong> — your gateway to a spiritual journey in Mathura & Vrindavan.</p>
       <p>You can now book the best stays, rental vehicles, and spiritual experiences directly from our platform.</p>
-      <p>We are here to make your yatra comfortable and memorable.</p>
       <br/>
-      <div style="text-align: center; margin-top: 20px;">
+      <div style="text-align: center;">
         <a href="https://shubhyatra.world" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Explore Stays</a>
       </div>
     `;
+  }
 
   try {
     await resend.emails.send({
@@ -155,15 +198,16 @@ export async function sendInvoiceEmail(
         </div>
       `,
     });
-    console.log(
-      `Invoice email sent to ${to} for booking #${bookingDetails.id}`,
-    );
     return { success: true };
   } catch (error) {
     console.error("Invoice Email Failed:", error);
     return { success: false, error };
   }
 }
+
+/**
+ * 4. Send Password Reset Email
+ */
 export async function sendPasswordResetEmail(to: string, resetLink: string) {
   if (!to) return;
 

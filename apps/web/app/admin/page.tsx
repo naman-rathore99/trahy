@@ -12,69 +12,150 @@ import {
   Loader2,
   PlusCircle,
   ShieldCheck,
+  RefreshCcw,
+  Bell,
+  X,
+  CheckCircle2,
+  Info,
 } from "lucide-react";
 import Link from "next/link";
 
+// --- TYPES ---
+interface Notification {
+  id: string;
+  title: string;
+  desc: string;
+  link: string;
+  type: "alert" | "info" | "success";
+  time: string;
+}
+
+interface ToastMsg {
+  id: number;
+  message: string;
+  type: "success" | "error" | "info";
+}
+
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Stats State
   const [stats, setStats] = useState({
     travelers: 0,
     partners: 0,
     activeListings: 0,
     pendingRequests: 0,
     pendingProperties: 0,
-    revenue: 124500, // Mock revenue
+    revenue: 124500,
   });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch all necessary data in parallel
-        // ✅ FIX: Use /api/admin/approve-request for requests
-        const [usersData, reqData, propData] = await Promise.all([
-          apiRequest("/api/admin/users", "GET"),
-          apiRequest("/api/admin/approve-request", "GET"),
-          apiRequest("/api/admin/hotels", "GET"),
-        ]);
+  // Notification & Toast State
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+  const [toasts, setToasts] = useState<ToastMsg[]>([]);
 
-        // 1. User Stats
-        const allUsers = usersData.users || [];
-        const travelers = allUsers.filter(
-          (u: any) => u.role !== "partner" && u.role !== "admin",
-        ).length;
-        const partners = allUsers.filter(
-          (u: any) => u.role === "partner",
-        ).length;
+  // --- HELPERS ---
 
-        // 2. Property Stats
-        const allProperties = propData.hotels || [];
-        const activeListings = allProperties.filter(
-          (p: any) => p.status === "APPROVED", // Ensure match with uppercase
-        ).length;
-        const pendingProperties = allProperties.filter(
-          (p: any) => p.status === "PENDING",
-        ).length;
+  const addToast = (
+    message: string,
+    type: "success" | "error" | "info" = "info",
+  ) => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(
+      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
+      3000,
+    );
+  };
 
-        // 3. Request Stats
-        const allRequests = reqData.requests || [];
-        const pendingRequests = allRequests.filter(
-          (r: any) => r.status === "pending" || !r.status,
-        ).length;
+  const fetchData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const [usersData, reqData, propData] = await Promise.all([
+        apiRequest("/api/admin/users", "GET"),
+        apiRequest("/api/admin/approve-request", "GET"),
+        apiRequest("/api/admin/hotels", "GET"),
+      ]);
 
-        setStats({
-          travelers,
-          partners,
-          activeListings,
-          pendingRequests,
-          pendingProperties,
-          revenue: 124500,
+      // 1. Process Stats
+      const allUsers = usersData.users || [];
+      const travelers = allUsers.filter(
+        (u: any) => u.role !== "partner" && u.role !== "admin",
+      ).length;
+      const partners = allUsers.filter((u: any) => u.role === "partner").length;
+
+      const allProperties = propData.hotels || [];
+      const activeListings = allProperties.filter(
+        (p: any) => (p.status || "").toUpperCase() === "APPROVED",
+      ).length;
+      const pendingProperties = allProperties.filter(
+        (p: any) => (p.status || "").toUpperCase() === "PENDING",
+      ).length;
+
+      const allRequests = reqData.requests || [];
+      const pendingRequests = allRequests.filter(
+        (r: any) => !r.status || (r.status || "").toLowerCase() === "pending",
+      ).length;
+
+      setStats({
+        travelers,
+        partners,
+        activeListings,
+        pendingRequests,
+        pendingProperties,
+        revenue: 124500,
+      });
+
+      // 2. Generate Notifications dynamically
+      const newNotifs: Notification[] = [];
+
+      if (pendingRequests > 0) {
+        newNotifs.push({
+          id: "req-1",
+          title: "New Partner Requests",
+          desc: `${pendingRequests} partners are waiting for approval.`,
+          link: "/admin/requests",
+          type: "alert",
+          time: "Action Required",
         });
-      } catch (err) {
-        console.error("Dashboard Load Failed", err);
-      } finally {
-        setLoading(false);
       }
-    };
+
+      if (pendingProperties > 0) {
+        newNotifs.push({
+          id: "prop-1",
+          title: "Property Reviews",
+          desc: `${pendingProperties} hotels waiting to be published.`,
+          link: "/admin/hotels",
+          type: "alert",
+          time: "Action Required",
+        });
+      }
+
+      if (activeListings > 0 && !isRefresh) {
+        newNotifs.push({
+          id: "sys-1",
+          title: "System Status",
+          desc: `System running smoothly with ${activeListings} active listings.`,
+          link: "#",
+          type: "success",
+          time: "Just now",
+        });
+      }
+
+      setNotifications(newNotifs);
+
+      if (isRefresh) addToast("Dashboard updated successfully", "success");
+    } catch (err) {
+      console.error("Dashboard Load Failed", err);
+      addToast("Failed to load data", "error");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -85,9 +166,45 @@ export default function AdminDashboard() {
       </div>
     );
 
+  const totalAlerts = stats.pendingRequests + stats.pendingProperties;
+
   return (
-    <div className="max-w-7xl mx-auto p-6 bg-gray-50 dark:bg-black min-h-screen">
-      {/* 1. HEADER & FINANCIALS */}
+    <div
+      className="max-w-7xl mx-auto p-6 bg-gray-50 dark:bg-black min-h-screen relative"
+      onClick={() => setShowNotifMenu(false)}
+    >
+      {/* --- TOASTER CONTAINER --- */}
+      <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className="pointer-events-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-xl rounded-xl p-4 flex items-center gap-3 animate-in slide-in-from-right duration-300"
+          >
+            {toast.type === "success" && (
+              <CheckCircle2 className="text-green-500" size={20} />
+            )}
+            {toast.type === "error" && (
+              <AlertCircle className="text-red-500" size={20} />
+            )}
+            {toast.type === "info" && (
+              <Info className="text-blue-500" size={20} />
+            )}
+            <span className="text-sm font-medium text-gray-900 dark:text-white">
+              {toast.message}
+            </span>
+            <button
+              onClick={() =>
+                setToasts((t) => t.filter((x) => x.id !== toast.id))
+              }
+              className="ml-2 text-gray-400 hover:text-gray-600"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* 1. HEADER */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -97,12 +214,97 @@ export default function AdminDashboard() {
             Platform overview and required actions.
           </p>
         </div>
-        <div className="bg-green-50 dark:bg-green-900/20 px-6 py-3 rounded-2xl border border-green-100 dark:border-green-800 text-right">
-          <div className="text-xs text-green-600 dark:text-green-400 font-bold uppercase tracking-wider">
-            Total Revenue
+
+        <div className="flex gap-3">
+          {/* Refresh Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              fetchData(true);
+            }}
+            disabled={refreshing}
+            className="p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <RefreshCcw
+              size={20}
+              className={`text-gray-600 dark:text-gray-400 ${refreshing ? "animate-spin" : ""}`}
+            />
+          </button>
+
+          {/* Notification Bell */}
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowNotifMenu(!showNotifMenu);
+              }}
+              className="p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors relative"
+            >
+              <Bell size={20} className="text-gray-600 dark:text-gray-400" />
+              {notifications.length > 0 && (
+                <span className="absolute top-2 right-2.5 w-2.5 h-2.5 bg-rose-600 rounded-full border border-white dark:border-gray-900"></span>
+              )}
+            </button>
+
+            {/* Dropdown Menu */}
+            {showNotifMenu && (
+              <div
+                className="absolute right-0 mt-3 w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl z-40 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                  <h3 className="font-bold text-gray-900 dark:text-white">
+                    Notifications
+                  </h3>
+                  <span className="text-xs font-bold bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md text-gray-500">
+                    {notifications.length} New
+                  </span>
+                </div>
+                <div className="max-h-[300px] overflow-y-auto">
+                  {notifications.length > 0 ? (
+                    notifications.map((note) => (
+                      <Link
+                        href={note.link}
+                        key={note.id}
+                        onClick={() => setShowNotifMenu(false)}
+                        className="block p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-50 dark:border-gray-800/50 last:border-0"
+                      >
+                        <div className="flex gap-3">
+                          <div
+                            className={`mt-1 w-2 h-2 rounded-full shrink-0 ${note.type === "alert" ? "bg-orange-500" : "bg-blue-500"}`}
+                          />
+                          <div>
+                            <p className="text-sm font-bold text-gray-900 dark:text-white">
+                              {note.title}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                              {note.desc}
+                            </p>
+                            <p className="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">
+                              {note.time}
+                            </p>
+                          </div>
+                        </div>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center text-gray-400 text-sm">
+                      No new notifications
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="text-3xl font-bold text-gray-900 dark:text-white">
-            ₹{stats.revenue.toLocaleString()}
+
+          {/* Revenue Badge */}
+          <div className="hidden md:block bg-green-50 dark:bg-green-900/20 px-6 py-3 rounded-xl border border-green-100 dark:border-green-800 text-right">
+            <div className="text-xs text-green-600 dark:text-green-400 font-bold uppercase tracking-wider">
+              Total Revenue
+            </div>
+            <div className="text-xl font-bold text-gray-900 dark:text-white">
+              ₹{stats.revenue.toLocaleString()}
+            </div>
           </div>
         </div>
       </div>
@@ -135,30 +337,34 @@ export default function AdminDashboard() {
         />
         <StatCard
           label="Action Needed"
-          value={stats.pendingRequests + stats.pendingProperties}
+          value={totalAlerts}
           icon={AlertCircle}
-          color="orange"
-          link="/admin/requests"
+          color={totalAlerts > 0 ? "orange" : "gray"}
+          link={stats.pendingRequests > 0 ? "/admin/requests" : "/admin/hotels"}
           sub="Approvals Pending"
-          isAlert
+          isAlert={totalAlerts > 0}
         />
       </div>
 
-      {/* 3. SPLIT VIEW: ALERTS vs ACTIONS */}
+      {/* 3. SPLIT VIEW */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* LEFT (2 Cols): ATTENTION NEEDED */}
         <div className="lg:col-span-2 space-y-6">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Activity className="text-orange-500" size={20} />
+            <Activity
+              className={totalAlerts > 0 ? "text-orange-500" : "text-gray-400"}
+              size={20}
+            />
             Requires Attention
           </h3>
 
           <div className="space-y-4">
+            {/* PENDING REQUESTS */}
             {stats.pendingRequests > 0 ? (
               <Link
                 href="/admin/requests"
-                className="flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-2xl border border-orange-200 dark:border-orange-900/50 shadow-sm hover:shadow-md transition-all group"
+                className="flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-2xl border border-orange-200 dark:border-orange-900/50 shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
               >
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-500"></div>
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 flex items-center justify-center font-bold">
                     {stats.pendingRequests}
@@ -176,25 +382,25 @@ export default function AdminDashboard() {
                   Review <ChevronRight size={16} />
                 </div>
               </Link>
-            ) : (
-              <EmptyState message="No pending partner requests" />
-            )}
+            ) : null}
 
+            {/* PENDING PROPERTIES */}
             {stats.pendingProperties > 0 ? (
               <Link
-                href="/admin/properties"
-                className="flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-2xl border border-yellow-200 dark:border-yellow-900/50 shadow-sm hover:shadow-md transition-all group"
+                href="/admin/hotels"
+                className="flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-2xl border border-yellow-200 dark:border-yellow-900/50 shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
               >
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-yellow-500"></div>
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 flex items-center justify-center font-bold">
                     {stats.pendingProperties}
                   </div>
                   <div>
                     <div className="font-bold text-gray-900 dark:text-white group-hover:text-yellow-600 transition-colors">
-                      Pending Property Reviews
+                      Pending Listing Approvals
                     </div>
                     <div className="text-xs text-gray-500">
-                      Listings waiting for approval
+                      Hotels or Vehicles waiting for verification
                     </div>
                   </div>
                 </div>
@@ -202,13 +408,15 @@ export default function AdminDashboard() {
                   Review <ChevronRight size={16} />
                 </div>
               </Link>
-            ) : (
-              <EmptyState message="No pending Hotels" />
+            ) : null}
+
+            {/* EMPTY STATE */}
+            {totalAlerts === 0 && (
+              <EmptyState message="All caught up! No pending actions." />
             )}
           </div>
         </div>
 
-        {/* RIGHT (1 Col): QUICK ACTIONS */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm h-fit">
           <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">
             Quick Management
@@ -239,7 +447,7 @@ export default function AdminDashboard() {
   );
 }
 
-// --- HELPER COMPONENTS ---
+// --- SUB COMPONENTS ---
 
 function StatCard({
   label,
@@ -258,6 +466,7 @@ function StatCard({
       "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400",
     orange:
       "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400",
+    gray: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
   };
 
   return (

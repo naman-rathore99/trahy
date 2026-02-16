@@ -162,6 +162,7 @@ export default function JoinPage() {
                     required
                     className="w-full pl-11 p-3.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-rose-600 dark:text-white font-medium transition-all"
                     placeholder="+91 98765 43210"
+                    maxLength={10}
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   />
