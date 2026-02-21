@@ -1,24 +1,58 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebaseAdmin";
-import { StandardCheckoutClient, Env, StandardCheckoutPayRequest } from "pg-sdk-node";
-import { getAuth } from "firebase-admin/auth";
+import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import {
+    StandardCheckoutClient,
+    Env,
+    StandardCheckoutPayRequest,
+} from "pg-sdk-node";
 
-const clientId = process.env.PHONEPE_MERCHANT_ID || "PGTESTPAYUAT";
-const clientSecret = process.env.PHONEPE_SALT_KEY || "099eb0cd-02cf-4e2a-8aca-3e6c6aff0399";
-const env = Env.SANDBOX;
+const clientId = process.env.PHONEPE_MERCHANT_ID!;
+const clientSecret = process.env.PHONEPE_SALT_KEY!;
+const env = Env.SANDBOX; // Change to Env.PRODUCTION when going live
 
 export async function POST(request: Request) {
     try {
-        // 1. Verify Firebase Auth token
+        // 1. Verify Firebase Auth Token
         const authHeader = request.headers.get("Authorization");
-        if (!authHeader?.startsWith("Bearer ")) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-        const idToken = authHeader.split("Bearer ")[1];
-        const decodedToken = await getAuth().verifyIdToken(idToken);
-        const userId = decodedToken.uid;
 
-        // 2. Parse body (matches what your app sends)
+        if (!authHeader?.startsWith("Bearer ")) {
+            console.error("❌ No Authorization header found");
+            return NextResponse.json(
+                { error: "Unauthorized: No token provided" },
+                { status: 401 }
+            );
+        }
+
+        const idToken = authHeader.split("Bearer ")[1];
+
+        // Decode token for debugging (remove in production)
+        try {
+            const tokenParts = idToken.split(".");
+            const payload = JSON.parse(
+                Buffer.from(tokenParts[1], "base64").toString()
+            );
+            console.log("🔍 Token project (aud):", payload.aud);
+            console.log("🔍 Token issuer:", payload.iss);
+            console.log("🔍 Expected project:", process.env.FIREBASE_PROJECT_ID);
+        } catch (decodeErr) {
+            console.error("Could not decode token for debugging:", decodeErr);
+        }
+
+        let userId: string;
+        try {
+            const decodedToken = await adminAuth.verifyIdToken(idToken);
+            userId = decodedToken.uid;
+            console.log("✅ Token verified for user:", userId);
+        } catch (authError: any) {
+            console.error("❌ Token verification failed:", authError.message);
+            return NextResponse.json(
+                { error: "Unauthorized", details: authError.message },
+                { status: 401 }
+            );
+        }
+
+        // 2. Parse Request Body
+        const body = await request.json();
         const {
             listingId,
             listingName,
@@ -29,36 +63,62 @@ export async function POST(request: Request) {
             customerName,
             customerEmail,
             customerPhone,
-        } = await request.json();
+        } = body;
 
+        console.log("📦 Request body:", {
+            listingId,
+            listingName,
+            checkIn,
+            checkOut,
+            totalAmount,
+            serviceType,
+            customerName,
+            customerEmail,
+            customerPhone,
+        });
+
+        // 3. Validate Required Fields
         if (!listingId || !totalAmount) {
+            console.error("❌ Missing required fields:", { listingId, totalAmount });
             return NextResponse.json(
-                { error: "Missing Booking ID or Amount" },
+                { error: "Missing required fields: listingId and totalAmount" },
                 { status: 400 }
             );
         }
 
-        // 3. Create booking doc in Firestore FIRST
+        const parsedAmount = Number(totalAmount);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+            console.error("❌ Invalid amount:", totalAmount);
+            return NextResponse.json(
+                { error: "Invalid amount provided" },
+                { status: 400 }
+            );
+        }
+
+        // 4. Create Booking Document in Firestore FIRST
         const bookingRef = adminDb.collection("bookings").doc();
         const bookingId = bookingRef.id;
 
         await bookingRef.set({
             userId,
             listingId,
-            listingName,
-            checkIn,
-            checkOut,
-            totalAmount,
+            listingName: listingName || "Hotel Booking",
+            checkIn: checkIn || null,
+            checkOut: checkOut || null,
+            totalAmount: parsedAmount,
             serviceType: serviceType || "hotel_stay",
-            customerName,
-            customerEmail,
-            customerPhone,
+            customerName: customerName || "",
+            customerEmail: customerEmail || "",
+            customerPhone: customerPhone || "",
             status: "pending",
             paymentStatus: "pending",
+            source: "mobile_app",
             createdAt: new Date().toISOString(),
         });
 
-        // 4. Init PhonePe
+        console.log("✅ Booking document created:", bookingId);
+
+        // 5. Initialize PhonePe Client
         const client = StandardCheckoutClient.getInstance(
             clientId,
             clientSecret,
@@ -66,10 +126,18 @@ export async function POST(request: Request) {
             env
         );
 
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://shubhyatra.world";
+        // 6. Build Payment Request
+        const baseUrl =
+            process.env.NEXT_PUBLIC_BASE_URL || "https://shubhyatra.world";
         const callbackRoute = `${baseUrl}/api/payment/callback?id=${bookingId}`;
-        const amountInPaise = Math.round(Number(totalAmount) * 100);
+        const amountInPaise = Math.round(parsedAmount * 100);
         const transactionId = bookingId.substring(0, 34);
+
+        console.log("💳 Initiating PhonePe payment:", {
+            transactionId,
+            amountInPaise,
+            callbackRoute,
+        });
 
         const payRequest = StandardCheckoutPayRequest.builder()
             .merchantOrderId(transactionId)
@@ -77,25 +145,31 @@ export async function POST(request: Request) {
             .redirectUrl(callbackRoute)
             .build();
 
-        const response = await client.pay(payRequest);
-        const checkoutPageUrl = response?.redirectUrl;
+        // 7. Execute Payment with PhonePe
+        const phonepeResponse = await client.pay(payRequest);
+        const checkoutPageUrl = phonepeResponse?.redirectUrl;
 
         if (!checkoutPageUrl) {
             // Cleanup the pending booking if PhonePe fails
+            console.error("❌ No redirect URL from PhonePe");
             await bookingRef.delete();
             throw new Error("Redirect URL missing from PhonePe response");
         }
 
-        // 5. Return BOTH url and bookingId (app needs both)
+        console.log("✅ PhonePe payment initiated. URL:", checkoutPageUrl);
+
+        // 8. Return URL and Booking ID to the app
         return NextResponse.json({
             url: checkoutPageUrl,
             bookingId: bookingId,
         });
-
     } catch (error: any) {
         console.error("❌ App Payment Init Error:", error);
         return NextResponse.json(
-            { error: "Payment initiation failed", details: error.message },
+            {
+                error: "Payment initiation failed",
+                details: error.message || "Unknown error",
+            },
             { status: 500 }
         );
     }
