@@ -12,32 +12,40 @@ const env = Env.SANDBOX; // Change to Env.PRODUCTION when going live
 
 export async function POST(request: Request) {
     try {
-        // 1. Verify Firebase Auth Token
-        const authHeader = request.headers.get("Authorization");
+        // 1. Parse body first
+        const body = await request.json();
 
-        if (!authHeader?.startsWith("Bearer ")) {
-            console.error("❌ No Authorization header found");
+        // 2. Get token from header OR body (fallback for Vercel header stripping)
+        const authHeader = request.headers.get("Authorization");
+        const idToken = authHeader?.startsWith("Bearer ")
+            ? authHeader.split("Bearer ")[1]
+            : body._authToken;
+
+        console.log("🔍 Auth header:", authHeader ? "present" : "missing");
+        console.log("🔍 Body token:", body._authToken ? "present" : "missing");
+        console.log("🔍 Using token:", idToken ? idToken.substring(0, 20) : "NONE");
+
+        if (!idToken) {
+            console.error("❌ No token in header or body");
             return NextResponse.json(
                 { error: "Unauthorized: No token provided" },
                 { status: 401 }
             );
         }
 
-        const idToken = authHeader.split("Bearer ")[1];
-
-        // Decode token for debugging (remove in production)
+        // 3. Decode token for debugging
         try {
             const tokenParts = idToken.split(".");
             const payload = JSON.parse(
                 Buffer.from(tokenParts[1], "base64").toString()
             );
             console.log("🔍 Token project (aud):", payload.aud);
-            console.log("🔍 Token issuer:", payload.iss);
             console.log("🔍 Expected project:", process.env.FIREBASE_PROJECT_ID);
         } catch (decodeErr) {
             console.error("Could not decode token for debugging:", decodeErr);
         }
 
+        // 4. Verify token
         let userId: string;
         try {
             const decodedToken = await adminAuth.verifyIdToken(idToken);
@@ -51,8 +59,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // 2. Parse Request Body
-        const body = await request.json();
+        // 5. Destructure body
         const {
             listingId,
             listingName,
@@ -77,7 +84,7 @@ export async function POST(request: Request) {
             customerPhone,
         });
 
-        // 3. Validate Required Fields
+        // 6. Validate required fields
         if (!listingId || !totalAmount) {
             console.error("❌ Missing required fields:", { listingId, totalAmount });
             return NextResponse.json(
@@ -95,7 +102,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // 4. Create Booking Document in Firestore FIRST
+        // 7. Create booking in Firestore FIRST
         const bookingRef = adminDb.collection("bookings").doc();
         const bookingId = bookingRef.id;
 
@@ -118,7 +125,7 @@ export async function POST(request: Request) {
 
         console.log("✅ Booking document created:", bookingId);
 
-        // 5. Initialize PhonePe Client
+        // 8. Initialize PhonePe
         const client = StandardCheckoutClient.getInstance(
             clientId,
             clientSecret,
@@ -126,7 +133,7 @@ export async function POST(request: Request) {
             env
         );
 
-        // 6. Build Payment Request
+        // 9. Build payment request
         const baseUrl =
             process.env.NEXT_PUBLIC_BASE_URL || "https://shubhyatra.world";
         const callbackRoute = `${baseUrl}/api/payment/callback?id=${bookingId}`;
@@ -145,12 +152,11 @@ export async function POST(request: Request) {
             .redirectUrl(callbackRoute)
             .build();
 
-        // 7. Execute Payment with PhonePe
+        // 10. Execute payment
         const phonepeResponse = await client.pay(payRequest);
         const checkoutPageUrl = phonepeResponse?.redirectUrl;
 
         if (!checkoutPageUrl) {
-            // Cleanup the pending booking if PhonePe fails
             console.error("❌ No redirect URL from PhonePe");
             await bookingRef.delete();
             throw new Error("Redirect URL missing from PhonePe response");
@@ -158,7 +164,7 @@ export async function POST(request: Request) {
 
         console.log("✅ PhonePe payment initiated. URL:", checkoutPageUrl);
 
-        // 8. Return URL and Booking ID to the app
+        // 11. Return both URL and bookingId to app
         return NextResponse.json({
             url: checkoutPageUrl,
             bookingId: bookingId,
@@ -174,6 +180,7 @@ export async function POST(request: Request) {
         );
     }
 }
+
 export async function OPTIONS() {
     return new NextResponse(null, {
         status: 200,
