@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebaseAdmin";;
-``
+import { adminDb } from "@/lib/firebaseAdmin";
 import crypto from "crypto";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
-        const bookingId = searchParams.get("id");
+        const bookingId = searchParams.get("id"); // This is the Firestore Doc ID
 
         if (!bookingId) {
             return NextResponse.json({ error: "Missing Booking ID" }, { status: 400 });
         }
 
-        // initAdmin auto-initialized
         const db = adminDb;
 
         // --- 1. SMART CHECK (Look in both collections) ---
@@ -20,7 +20,6 @@ export async function GET(request: Request) {
         let docSnap = await docRef.get();
 
         if (!docSnap.exists) {
-            // Not found in 'bookings', check 'vehicle_bookings'
             docRef = db.collection("vehicle_bookings").doc(bookingId);
             docSnap = await docRef.get();
         }
@@ -39,22 +38,29 @@ export async function GET(request: Request) {
             });
         }
 
-        // --- 3. If still pending, ASK PHONEPE (Server-to-Server Check) ---
-        // Only needed if you want real-time updates without waiting for the callback
+        // --- 3. ASK PHONEPE (Server-to-Server Check) ---
         const merchantId = process.env.PHONEPE_MERCHANT_ID;
         const saltKey = process.env.PHONEPE_SALT_KEY;
         const saltIndex = process.env.PHONEPE_SALT_INDEX;
 
         if (!merchantId || !saltKey || !saltIndex) {
-            // If env vars missing, just return current DB status
+            console.error("Missing PhonePe Environment Variables!");
             return NextResponse.json({ status: bookingData?.status || "pending" });
         }
 
-        // Check PhonePe Status API
-        const statusUrl = `https://api-preprod.phonepe.com/apis/pg-sandbox/pg/v1/status/${merchantId}/${bookingId}`;
-        // (Use 'https://api.phonepe.com/apis/hermes/pg/v1/status/...' for PROD)
+        // 🚨 CRITICAL FIX: Use the actual transactionId stored in the database, NOT the bookingId!
+        const actualTransactionId = bookingData?.transactionId;
 
-        const stringToSign = `/pg/v1/status/${merchantId}/${bookingId}` + saltKey;
+        if (!actualTransactionId) {
+            console.error("No transactionId found in the database document!");
+            return NextResponse.json({ status: "failed", paymentStatus: "failed" });
+        }
+
+        // Use 'actualTransactionId' for PhonePe URL
+        const statusUrl = `https://api-preprod.phonepe.com/apis/pg-sandbox/pg/v1/status/${merchantId}/${actualTransactionId}`;
+
+        // Create checksum using 'actualTransactionId'
+        const stringToSign = `/pg/v1/status/${merchantId}/${actualTransactionId}` + saltKey;
         const sha256 = crypto.createHash("sha256").update(stringToSign).digest("hex");
         const checksum = `${sha256}###${saltIndex}`;
 
@@ -65,9 +71,12 @@ export async function GET(request: Request) {
                 "X-VERIFY": checksum,
                 "X-MERCHANT-ID": merchantId,
             },
+            cache: "no-store" // Prevent Next.js from caching this call
         });
 
         const paymentData = await phonePeRes.json();
+
+        console.log("PhonePe Response:", paymentData); // Check your terminal to see what PhonePe says!
 
         // --- 4. UPDATE DB IF CHANGED ---
         if (paymentData.code === "PAYMENT_SUCCESS") {
@@ -77,7 +86,7 @@ export async function GET(request: Request) {
                 updatedAt: new Date().toISOString()
             });
             return NextResponse.json({ status: "confirmed", paymentStatus: "paid" });
-        } else if (paymentData.code === "PAYMENT_ERROR") {
+        } else if (paymentData.code === "PAYMENT_ERROR" || paymentData.code === "PAYMENT_DECLINED") {
             await docRef.update({
                 status: "failed",
                 paymentStatus: "failed",
