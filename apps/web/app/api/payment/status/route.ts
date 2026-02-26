@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
-        const bookingId = searchParams.get("id"); // This is the Firestore Doc ID
+        const bookingId = searchParams.get("id");
 
         if (!bookingId) {
             return NextResponse.json({ error: "Missing Booking ID" }, { status: 400 });
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
         const db = adminDb;
 
-        // --- 1. SMART CHECK (Look in both collections) ---
+        // Check both collections
         let docRef = db.collection("bookings").doc(bookingId);
         let docSnap = await docRef.get();
 
@@ -30,36 +30,30 @@ export async function GET(request: Request) {
 
         const bookingData = docSnap.data();
 
-        // --- 2. If status is already final, return it immediately ---
+        // Already final — return immediately
         if (bookingData?.status === "confirmed" || bookingData?.status === "failed") {
             return NextResponse.json({
                 status: bookingData.status,
-                paymentStatus: bookingData.paymentStatus
+                paymentStatus: bookingData.paymentStatus,
             });
         }
 
-        // --- 3. ASK PHONEPE (Server-to-Server Check) ---
         const merchantId = process.env.PHONEPE_MERCHANT_ID;
         const saltKey = process.env.PHONEPE_SALT_KEY;
         const saltIndex = process.env.PHONEPE_SALT_INDEX;
 
         if (!merchantId || !saltKey || !saltIndex) {
-            console.error("Missing PhonePe Environment Variables!");
             return NextResponse.json({ status: bookingData?.status || "pending" });
         }
 
-        // 🚨 CRITICAL FIX: Use the actual transactionId stored in the database, NOT the bookingId!
+        // ✅ FIX: Use stored transactionId, not bookingId
         const actualTransactionId = bookingData?.transactionId;
 
         if (!actualTransactionId) {
-            console.error("No transactionId found in the database document!");
             return NextResponse.json({ status: "failed", paymentStatus: "failed" });
         }
 
-        // Use 'actualTransactionId' for PhonePe URL
         const statusUrl = `https://api-preprod.phonepe.com/apis/pg-sandbox/pg/v1/status/${merchantId}/${actualTransactionId}`;
-
-        // Create checksum using 'actualTransactionId'
         const stringToSign = `/pg/v1/status/${merchantId}/${actualTransactionId}` + saltKey;
         const sha256 = crypto.createHash("sha256").update(stringToSign).digest("hex");
         const checksum = `${sha256}###${saltIndex}`;
@@ -71,35 +65,34 @@ export async function GET(request: Request) {
                 "X-VERIFY": checksum,
                 "X-MERCHANT-ID": merchantId,
             },
-            cache: "no-store" // Prevent Next.js from caching this call
+            cache: "no-store",
         });
 
         const paymentData = await phonePeRes.json();
 
-        console.log("PhonePe Response:", paymentData); // Check your terminal to see what PhonePe says!
-
-        // --- 4. UPDATE DB IF CHANGED ---
         if (paymentData.code === "PAYMENT_SUCCESS") {
             await docRef.update({
                 status: "confirmed",
                 paymentStatus: "paid",
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
             });
             return NextResponse.json({ status: "confirmed", paymentStatus: "paid" });
-        } else if (paymentData.code === "PAYMENT_ERROR" || paymentData.code === "PAYMENT_DECLINED") {
+        } else if (
+            paymentData.code === "PAYMENT_ERROR" ||
+            paymentData.code === "PAYMENT_DECLINED"
+        ) {
             await docRef.update({
                 status: "failed",
                 paymentStatus: "failed",
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
             });
             return NextResponse.json({ status: "failed", paymentStatus: "failed" });
         }
 
-        // Still pending
         return NextResponse.json({ status: "pending", paymentStatus: "pending" });
 
     } catch (error) {
-        console.error("Payment Status Check Error:", error);
+        console.error("Status Check Error:", error);
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

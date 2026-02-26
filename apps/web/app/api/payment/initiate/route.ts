@@ -1,79 +1,116 @@
 import { NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebaseAdmin";
 import {
   StandardCheckoutClient,
   Env,
   StandardCheckoutPayRequest,
 } from "pg-sdk-node";
 
-// 1. Initialize SDK Config
-const clientId = process.env.PHONEPE_MERCHANT_ID || "PGTESTPAYUAT";
-const clientSecret =
-  process.env.PHONEPE_SALT_KEY || "099eb0cd-02cf-4e2a-8aca-3e6c6aff0399";
-const clientVersion = 1;
-const env = Env.SANDBOX;
+const clientId = process.env.PHONEPE_MERCHANT_ID!;
+const clientSecret = process.env.PHONEPE_SALT_KEY!;
+const env = Env.SANDBOX; // Change to Env.PRODUCTION when going live
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { bookingId, amount, mobile } = body;
+    const {
+      listingId,
+      listingName,
+      checkIn,
+      checkOut,
+      totalAmount,
+      serviceType,
+      customerName,
+      customerEmail,
+      customerPhone,
+      userId,
+      source, // "web" or "mobile" — sent by the client
+    } = body;
 
-    if (!bookingId || !amount) {
+    if (!listingId || !totalAmount || !source) {
       return NextResponse.json(
-        { error: "Missing Booking ID or Amount" },
+        { error: "Missing required fields (listingId, totalAmount, or source)" },
         { status: 400 }
       );
     }
 
-    // 2. Initialize the Client
-    const client = StandardCheckoutClient.getInstance(
-      clientId,
-      clientSecret,
-      clientVersion,
-      env
-    );
-
-    // 3. Define Redirect URL
-    // PhonePe will redirect the user here after payment (Success or Failure)
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const callbackRoute = `${baseUrl}/api/payment/callback?id=${bookingId}`;
-
-    const amountInPaise = Math.round(Number(amount) * 100);
-
-    // Ensure ID is a string and strictly within limits (34 chars max to be safe)
-    const transactionId = String(bookingId).substring(0, 34);
-
-    // 4. Build Request (Strictly matching documentation)
-    // - uses merchantOrderId
-    // - uses redirectUrl
-    // - NO callbackUrl
-    const payRequest = StandardCheckoutPayRequest.builder()
-      .merchantOrderId(transactionId)
-      .amount(amountInPaise)
-      .redirectUrl(callbackRoute)
-
-      .build();
-
-    // 5. Execute Payment
-    const response = await client.pay(payRequest);
-
-    // 6. Get Page URL
-    const checkoutPageUrl = response?.redirectUrl;
-
-    if (!checkoutPageUrl) {
-      throw new Error("Redirect URL missing from Payment Gateway response");
+    const parsedAmount = Number(totalAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
     }
 
-    console.log("✅ SDK Payment Init Success. URL:", checkoutPageUrl);
+    // 1. Create Firestore booking
+    const bookingRef = adminDb.collection("bookings").doc();
+    const bookingId = bookingRef.id;
 
-    return NextResponse.json({ url: checkoutPageUrl });
+    // ✅ FIX: Truncate BEFORE storing so status-check API can match it
+    const transactionId = bookingId.substring(0, 34);
+
+    await bookingRef.set({
+      customer: { userId: userId || "guest" }, // ✅ Matches CustomerBookings query
+      userId: userId || "guest",
+      listingId,
+      listingName: listingName || "Booking",
+      checkIn: checkIn || null,
+      checkOut: checkOut || null,
+      totalAmount: parsedAmount,
+      serviceType: serviceType || "hotel_stay",
+      customerName: customerName || "",
+      customerEmail: customerEmail || "",
+      customerPhone: customerPhone || "",
+      transactionId,        // ✅ Store truncated ID for status-check API
+      status: "pending",
+      paymentStatus: "pending",
+      source,               // "web" or "mobile"
+      createdAt: new Date().toISOString(),
+    });
+
+    // 2. Init PhonePe
+    const client = StandardCheckoutClient.getInstance(clientId, clientSecret, 1, env);
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL!;
+
+    // 3. Pick the right callback based on source
+    const callbackUrl =
+      source === "mobile"
+        ? `${baseUrl}/api/payment/callback-app?id=${bookingId}`
+        : `${baseUrl}/api/payment/callback?id=${bookingId}`;
+
+    const payRequest = StandardCheckoutPayRequest.builder()
+      .merchantOrderId(transactionId)
+      .amount(Math.round(parsedAmount * 100))
+      .redirectUrl(callbackUrl)
+      .build();
+
+    // 4. Get PhonePe checkout URL
+    const phonepeResponse = await client.pay(payRequest);
+    const checkoutPageUrl = phonepeResponse?.redirectUrl;
+
+    if (!checkoutPageUrl) {
+      await bookingRef.delete();
+      throw new Error("No redirect URL from PhonePe");
+    }
+
+    return NextResponse.json({
+      url: checkoutPageUrl,
+      bookingId,
+    });
+
   } catch (error: any) {
-    console.error("❌ SDK Error Details:", error);
+    console.error("❌ Initiate Error:", error);
     return NextResponse.json(
-      {
-        error: "Payment initiation failed",
-        details: error.message || "Unknown SDK Error",
-      },
+      { error: "Payment initiation failed", details: error.message },
       { status: 500 }
     );
   }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
 }

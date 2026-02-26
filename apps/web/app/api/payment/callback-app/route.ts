@@ -3,48 +3,67 @@ import { adminDb } from "@/lib/firebaseAdmin";
 
 export async function POST(request: Request) {
     try {
-        // 1. Extract the booking ID and the Mobile Deep Link from the URL
         const url = new URL(request.url);
         const bookingId = url.searchParams.get("id");
-        const redirectUrl = url.searchParams.get("redirect");
 
-        if (!bookingId || !redirectUrl) {
-            console.error("❌ Callback App: Missing bookingId or redirectUrl");
-            return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+        if (!bookingId) {
+            return NextResponse.json({ error: "Missing booking ID" }, { status: 400 });
         }
 
-        // 2. Read PhonePe's response code (Sent as FormData)
         const formData = await request.formData();
         const code = formData.get("code")?.toString() || "";
-        const transactionId = formData.get("transactionId")?.toString() || "";
-
-        console.log(`🔔 App Callback Received: Status [${code}] for Booking [${bookingId}]`);
 
         const bookingRef = adminDb.collection("bookings").doc(bookingId);
+        const isSuccess = code === "PAYMENT_SUCCESS";
 
-        // 3. Update Firestore 
-        if (code === "PAYMENT_SUCCESS") {
+        if (isSuccess) {
             await bookingRef.update({
                 status: "confirmed",
                 paymentStatus: "paid",
-                transactionId: transactionId || null,
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
             });
-            console.log("✅ Booking marked as confirmed.");
         } else {
             await bookingRef.update({
                 status: "failed",
                 paymentStatus: "failed",
-                updatedAt: new Date().toISOString()
+                failureReason: code || "unknown",
+                updatedAt: new Date().toISOString(),
             });
-            console.log("❌ Booking marked as failed.");
         }
 
-        // 4. 🔥 REDIRECT TO APP: This closes the mobile browser instantly
-        return NextResponse.redirect(redirectUrl, 302);
+        // ✅ Just a simple page — no deep links
+        // The mobile app's onSnapshot listener will detect the Firestore change automatically
+        return new NextResponse(
+            `<!DOCTYPE html>
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: sans-serif; display: flex; justify-content: center; 
+                   align-items: center; height: 100vh; background: #f9fafb; margin: 0; }
+            .card { background: white; padding: 2rem; border-radius: 12px; 
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; max-width: 320px; }
+            .icon { font-size: 48px; margin-bottom: 1rem; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="icon">${isSuccess ? "✅" : "❌"}</div>
+            <h2>${isSuccess ? "Payment Successful!" : "Payment Failed"}</h2>
+            <p style="color: gray;">You can close this window and return to the app.</p>
+          </div>
+        </body>
+      </html>`,
+            { status: 200, headers: { "Content-Type": "text/html" } }
+        );
 
     } catch (error) {
-        console.error("Callback App Error:", error);
-        return NextResponse.json({ error: "Callback processing failed" }, { status: 500 });
+        console.error("Mobile Callback Error:", error);
+        return NextResponse.json({ error: "Callback failed" }, { status: 500 });
     }
+}
+
+// PhonePe sometimes sends GET too
+export async function GET(request: Request) {
+    return POST(request);
 }
