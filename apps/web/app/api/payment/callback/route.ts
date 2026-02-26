@@ -22,7 +22,28 @@ async function handleCallback(request: Request) {
     }
 
     const bookingRef = adminDb.collection("bookings").doc(bookingId);
-    const isSuccess = code === "PAYMENT_SUCCESS" || !code;
+    const bookingSnap = await bookingRef.get();
+
+    if (!bookingSnap.exists) {
+      console.error(`Booking ${bookingId} not found in callback`);
+      return NextResponse.redirect(new URL("/trips?error=not_found", request.url), 303);
+    }
+
+    // Prevent processing an already-finalized booking
+    const currentStatus = bookingSnap.data()?.status;
+    if (currentStatus === "confirmed" || currentStatus === "failed") {
+      return NextResponse.redirect(
+        new URL(
+          currentStatus === "confirmed"
+            ? `/book/success/${bookingId}`
+            : `/book/failure/${bookingId}`,
+          request.url
+        ),
+        303
+      );
+    }
+
+    const isSuccess = code === "PAYMENT_SUCCESS";
 
     if (isSuccess) {
       await bookingRef.update({
@@ -30,7 +51,6 @@ async function handleCallback(request: Request) {
         paymentStatus: "paid",
         updatedAt: new Date().toISOString(),
       });
-      // ✅ Redirect to your Next.js success page
       return NextResponse.redirect(
         new URL(`/book/success/${bookingId}`, request.url),
         303
@@ -42,7 +62,6 @@ async function handleCallback(request: Request) {
         failureReason: code || "unknown",
         updatedAt: new Date().toISOString(),
       });
-      // ✅ Redirect to your Next.js failure page
       return NextResponse.redirect(
         new URL(`/book/failure/${bookingId}`, request.url),
         303
@@ -58,9 +77,5 @@ async function handleCallback(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
-  return handleCallback(request);
-}
-export async function GET(request: Request) {
-  return handleCallback(request);
-}
+export async function POST(request: Request) { return handleCallback(request); }
+export async function GET(request: Request) { return handleCallback(request); }

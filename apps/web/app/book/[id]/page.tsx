@@ -259,14 +259,23 @@ function HotelBookingContent() {
     setLoading(true);
 
     try {
+      const user = auth.currentUser;
+      if (!user) {
+        return alert("Please log in to continue.");
+      }
+
+      // Get Firebase auth token for secure API calls
+      const idToken = await user.getIdToken();
+
       const bookingPayload = {
         listingId,
         listingName,
-        totalAmount: totalPrice, // This now includes the discount
-        discountApplied: discount, // Save discount info to DB
+        totalAmount: totalPrice,
+        discountApplied: discount,
         couponCode: discount > 0 ? couponCode : null,
         checkIn: startParam,
         checkOut: endParam,
+        guests: totalGuests,
         includeBanquet,
         serviceType: includeBanquet ? "banquet_booking" : "hotel_stay",
         vehicleIncluded: !!vehicleId,
@@ -277,12 +286,13 @@ function HotelBookingContent() {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
-          userId: auth.currentUser?.uid || "guest",
+          userId: user.uid,
         },
         paymentMethod,
         status: paymentMethod === "online" ? "pending_payment" : "confirmed",
       };
 
+      // Step 1: Create booking
       const createRes = await apiRequest(
         "/api/bookings/create",
         "POST",
@@ -290,19 +300,39 @@ function HotelBookingContent() {
       );
 
       if (!createRes?.success || !createRes.bookingId) {
-        throw new Error("Failed to generate Booking ID.");
+        throw new Error("Failed to create booking.");
       }
 
+      // Step 2a: Pay at hotel — go straight to success
       if (paymentMethod === "pay_at_pickup") {
         router.push(`/book/success/${createRes.bookingId}`);
-      } else {
-        const paymentRes = await apiRequest("/api/payment/initiate", "POST", {
-          bookingId: createRes.bookingId,
-          amount: totalPrice,
+        return;
+      }
+
+      // Step 2b: Online payment — initiate PhonePe with existing bookingId
+      const paymentRes = await fetch("/api/payment/initiate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`, // ✅ Secure auth header
+        },
+        body: JSON.stringify({
+          bookingId: createRes.bookingId, // ✅ Pass existing bookingId, no duplicate created
           mobile: formData.phone,
-        });
-        if (paymentRes.url) window.location.href = paymentRes.url;
-        else throw new Error("Payment Gateway Error.");
+          source: "web",
+        }),
+      });
+
+      const paymentData = await paymentRes.json();
+
+      if (!paymentRes.ok) {
+        throw new Error(paymentData.error || "Payment Gateway Error.");
+      }
+
+      if (paymentData.url) {
+        window.location.href = paymentData.url;
+      } else {
+        throw new Error("No payment URL received.");
       }
     } catch (error: any) {
       console.error("Booking Error:", error);
