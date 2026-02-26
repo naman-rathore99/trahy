@@ -238,11 +238,11 @@ function HotelBookingContent() {
   const updateGuests = (type: "adults" | "children", op: "inc" | "dec") => {
     if (type === "adults") {
       setEditAdults((prev) =>
-        op === "inc" ? prev + 1 : Math.max(1, prev - 1)
+        op === "inc" ? prev + 1 : Math.max(1, prev - 1),
       );
     } else {
       setEditChildren((prev) =>
-        op === "inc" ? prev + 1 : Math.max(0, prev - 1)
+        op === "inc" ? prev + 1 : Math.max(0, prev - 1),
       );
     }
   };
@@ -286,7 +286,7 @@ function HotelBookingContent() {
       const createRes = await apiRequest(
         "/api/bookings/create",
         "POST",
-        bookingPayload
+        bookingPayload,
       );
 
       if (!createRes?.success || !createRes.bookingId) {
@@ -319,7 +319,6 @@ function HotelBookingContent() {
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-black pb-20 transition-colors duration-300">
       <Navbar variant="default" />
-
 
       <div className="max-w-6xl mx-auto px-4 pt-28 md:pt-32">
         <h1 className="text-3xl font-bold mb-8 text-gray-900 dark:text-white">
@@ -392,6 +391,7 @@ function HotelBookingContent() {
                   placeholder="Phone Number"
                   className="w-full p-3.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none dark:text-white font-medium"
                   value={formData.phone}
+                  max={10}
                   onChange={(e) =>
                     setFormData({ ...formData, phone: e.target.value })
                   }
