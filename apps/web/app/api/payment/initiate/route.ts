@@ -8,7 +8,8 @@ import {
 import { getAuth } from "firebase-admin/auth";
 
 const clientId = process.env.PHONEPE_MERCHANT_ID || "PGTESTPAYUAT";
-const clientSecret = process.env.PHONEPE_SALT_KEY || "099eb0cd-02cf-4e2a-8aca-3e6c6aff0399";
+const clientSecret =
+  process.env.PHONEPE_SALT_KEY || "099eb0cd-02cf-4e2a-8aca-3e6c6aff0399";
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
 export async function POST(request: Request) {
@@ -28,29 +29,46 @@ export async function POST(request: Request) {
     const source: string = body.source || "web";
 
     // ─────────────────────────────────────────────
-    // WEB FLOW: booking already created by /api/bookings/create
-    // Just initiate payment for the existing booking
+    // WEB + MOBILE FLOW: booking already created, just initiate payment
     // ─────────────────────────────────────────────
     if (body.bookingId) {
       const bookingRef = adminDb.collection("bookings").doc(body.bookingId);
       const bookingSnap = await bookingRef.get();
 
       if (!bookingSnap.exists) {
-        return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+        return NextResponse.json(
+          { error: "Booking not found" },
+          { status: 404 }
+        );
       }
 
       const bookingData = bookingSnap.data()!;
 
-      // Security: make sure this booking belongs to the authenticated user
-      if (bookingData.userId !== userId) {
+      // ✅ Check both userId locations — create route may store it differently
+      const bookingOwner =
+        bookingData.userId || bookingData.customer?.userId;
+
+      if (bookingOwner !== userId) {
+        console.error(
+          `Forbidden: token userId=${userId}, bookingOwner=${bookingOwner}`
+        );
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
 
       const transactionId = body.bookingId.substring(0, 34);
       await bookingRef.update({ transactionId });
 
-      const callbackUrl = `${baseUrl}/api/payment/callback?id=${body.bookingId}`;
-      const client = StandardCheckoutClient.getInstance(clientId, clientSecret, 1, Env.SANDBOX);
+      const callbackUrl =
+        source === "mobile"
+          ? `${baseUrl}/api/payment/callback-app?id=${body.bookingId}`
+          : `${baseUrl}/api/payment/callback?id=${body.bookingId}`;
+
+      const client = StandardCheckoutClient.getInstance(
+        clientId,
+        clientSecret,
+        1,
+        Env.SANDBOX
+      );
 
       const requestBuilder = StandardCheckoutPayRequest.builder()
         .merchantOrderId(transactionId)
@@ -79,7 +97,7 @@ export async function POST(request: Request) {
     }
 
     // ─────────────────────────────────────────────
-    // MOBILE FLOW: create booking + initiate payment in one step
+    // FALLBACK: create booking + initiate in one step (legacy mobile support)
     // ─────────────────────────────────────────────
     const {
       listingId,
@@ -112,7 +130,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
     }
 
-    // Create booking in Firestore
     const bookingRef = await adminDb.collection("bookings").add({
       userId,
       customer: { userId },
@@ -142,7 +159,12 @@ export async function POST(request: Request) {
     await bookingRef.update({ transactionId });
 
     const callbackUrl = `${baseUrl}/api/payment/callback-app?id=${bookingId}`;
-    const client = StandardCheckoutClient.getInstance(clientId, clientSecret, 1, Env.SANDBOX);
+    const client = StandardCheckoutClient.getInstance(
+      clientId,
+      clientSecret,
+      1,
+      Env.SANDBOX
+    );
 
     const requestBuilder = StandardCheckoutPayRequest.builder()
       .merchantOrderId(transactionId)
@@ -169,7 +191,6 @@ export async function POST(request: Request) {
       url: response.redirectUrl,
       bookingId,
     });
-
   } catch (error: any) {
     console.error("❌ Payment Initiate Error:", error);
     return NextResponse.json(
