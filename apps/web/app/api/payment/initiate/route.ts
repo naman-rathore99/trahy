@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const source: string = body.source || "web";
 
     // ─────────────────────────────────────────────
-    // WEB + MOBILE FLOW: booking already created, just initiate payment
+    // WEB + MOBILE: booking already exists, just initiate payment
     // ─────────────────────────────────────────────
     if (body.bookingId) {
       const bookingRef = adminDb.collection("bookings").doc(body.bookingId);
@@ -44,10 +44,8 @@ export async function POST(request: Request) {
 
       const bookingData = bookingSnap.data()!;
 
-      // ✅ Check both userId locations — create route may store it differently
-      const bookingOwner =
-        bookingData.userId || bookingData.customer?.userId;
-
+      // ✅ Check both userId locations
+      const bookingOwner = bookingData.userId || bookingData.customer?.userId;
       if (bookingOwner !== userId) {
         console.error(
           `Forbidden: token userId=${userId}, bookingOwner=${bookingOwner}`
@@ -70,20 +68,12 @@ export async function POST(request: Request) {
         Env.SANDBOX
       );
 
-      const requestBuilder = StandardCheckoutPayRequest.builder()
+      const payRequest = StandardCheckoutPayRequest.builder()
         .merchantOrderId(transactionId)
         .amount(Math.round(Number(bookingData.totalAmount) * 100))
-        .redirectUrl(callbackUrl);
+        .redirectUrl(callbackUrl)
+        .build();
 
-      (requestBuilder as any).redirectMode("POST");
-      (requestBuilder as any).merchantUserId(userId);
-      (requestBuilder as any).callbackUrl(callbackUrl);
-
-      if (body.mobile) {
-        (requestBuilder as any).mobileNumber(body.mobile);
-      }
-
-      const payRequest = requestBuilder.build();
       const response = await client.pay(payRequest);
 
       if (!response.redirectUrl) {
@@ -97,7 +87,7 @@ export async function POST(request: Request) {
     }
 
     // ─────────────────────────────────────────────
-    // FALLBACK: create booking + initiate in one step (legacy mobile support)
+    // FALLBACK: create booking + initiate in one step
     // ─────────────────────────────────────────────
     const {
       listingId,
@@ -159,6 +149,7 @@ export async function POST(request: Request) {
     await bookingRef.update({ transactionId });
 
     const callbackUrl = `${baseUrl}/api/payment/callback-app?id=${bookingId}`;
+
     const client = StandardCheckoutClient.getInstance(
       clientId,
       clientSecret,
@@ -166,20 +157,12 @@ export async function POST(request: Request) {
       Env.SANDBOX
     );
 
-    const requestBuilder = StandardCheckoutPayRequest.builder()
+    const payRequest = StandardCheckoutPayRequest.builder()
       .merchantOrderId(transactionId)
       .amount(Math.round(parsedAmount * 100))
-      .redirectUrl(callbackUrl);
+      .redirectUrl(callbackUrl)
+      .build();
 
-    (requestBuilder as any).redirectMode("POST");
-    (requestBuilder as any).merchantUserId(userId);
-    (requestBuilder as any).callbackUrl(callbackUrl);
-
-    if (mobile) {
-      (requestBuilder as any).mobileNumber(mobile);
-    }
-
-    const payRequest = requestBuilder.build();
     const response = await client.pay(payRequest);
 
     if (!response.redirectUrl) {
@@ -191,6 +174,7 @@ export async function POST(request: Request) {
       url: response.redirectUrl,
       bookingId,
     });
+
   } catch (error: any) {
     console.error("❌ Payment Initiate Error:", error);
     return NextResponse.json(
