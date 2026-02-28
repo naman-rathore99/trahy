@@ -103,9 +103,3 @@ export async function GET(
     );
   }
 }
-```
-
-The key fix is this:
-```
-Before: getOrderStatus(id)          ← passing bookingId (wrong)
-After:  getOrderStatus(transactionId) ← passing the 34-char PhonePe ID (correct)
