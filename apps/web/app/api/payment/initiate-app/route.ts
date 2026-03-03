@@ -1,148 +1,200 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
+import {
+    StandardCheckoutClient,
+    Env,
+    StandardCheckoutPayRequest,
+} from "pg-sdk-node";
+import { getAuth } from "firebase-admin/auth";
+
+const clientId = process.env.PHONEPE_MERCHANT_ID || "PGTESTPAYUAT";
+const clientSecret =
+    process.env.PHONEPE_SALT_KEY || "099eb0cd-02cf-4e2a-8aca-3e6c6aff0399";
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://shubhyatra.world";
 
 export async function POST(request: Request) {
     try {
-        const url = new URL(request.url);
-        const bookingId = url.searchParams.get("id");
-        // This is the deep link (e.g., shubhyatraapk://payment-complete)
-        const redirectUrl = url.searchParams.get("redirect");
+        // ✅ MOVED INSIDE TRY-BLOCK: This prevents the "500 Empty Body" fatal crash!
+        const auth = getAuth();
 
-        if (!bookingId || !redirectUrl) {
-            return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+        // 1. Verify Auth
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader?.startsWith("Bearer ")) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const token = authHeader.split("Bearer ")[1];
+        const decodedToken = await auth.verifyIdToken(token);
+        const userId = decodedToken.uid;
+
+        const body = await request.json();
+
+        // ✅ Check if it's coming from mobile using 'source' OR 'appReturnUrl'
+        const isMobile = body.source === "mobile" || body.appReturnUrl !== undefined;
+
+        // ─────────────────────────────────────────────
+        // WEB + MOBILE: booking already exists, just initiate payment
+        // ─────────────────────────────────────────────
+        if (body.bookingId) {
+            const bookingRef = adminDb.collection("bookings").doc(body.bookingId);
+            const bookingSnap = await bookingRef.get();
+
+            if (!bookingSnap.exists) {
+                return NextResponse.json(
+                    { error: "Booking not found" },
+                    { status: 404 }
+                );
+            }
+
+            const bookingData = bookingSnap.data()!;
+
+            // Check both userId locations
+            const bookingOwner = bookingData.userId || bookingData.customer?.userId;
+            if (bookingOwner !== userId) {
+                console.error(`Forbidden: token userId=${userId}, bookingOwner=${bookingOwner}`);
+                return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+            }
+
+            const transactionId = body.bookingId.substring(0, 34);
+            await bookingRef.update({ transactionId });
+
+            // ✅ Dynamically pick the right callback so our WebView closes perfectly!
+            const callbackUrl = isMobile
+                ? `${baseUrl}/api/payment/callback-app?id=${body.bookingId}`
+                : `${baseUrl}/api/payment/callback?id=${body.bookingId}`;
+
+            const client = StandardCheckoutClient.getInstance(
+                clientId,
+                clientSecret,
+                1,
+                Env.SANDBOX
+            );
+
+            const payRequest = StandardCheckoutPayRequest.builder()
+                .merchantOrderId(transactionId)
+                .amount(Math.round(Number(bookingData.totalAmount) * 100))
+                .redirectUrl(callbackUrl)
+                .build();
+
+            const response = await client.pay(payRequest);
+
+            if (!response.redirectUrl) {
+                throw new Error("Failed to generate payment link");
+            }
+
+            return NextResponse.json({
+                url: response.redirectUrl,
+                bookingId: body.bookingId,
+            });
         }
 
-        const formData = await request.formData();
-        const code = formData.get("code")?.toString() || "";
+        // ─────────────────────────────────────────────
+        // FALLBACK: create booking + initiate in one step
+        // ─────────────────────────────────────────────
+        const {
+            listingId,
+            listingName,
+            listingImage,
+            checkIn,
+            checkOut,
+            guests,
+            totalAmount,
+            serviceType,
+            vehicleIncluded,
+            vehicleType,
+            vehiclePricePerDay,
+            vehicleTotalAmount,
+            customerName,
+            customerEmail,
+            customerPhone,
+            mobile,
+        } = body;
 
-        const bookingRef = adminDb.collection("bookings").doc(bookingId);
-
-        let isSuccess = false;
-
-        if (code === "PAYMENT_SUCCESS") {
-            isSuccess = true;
-            await bookingRef.update({
-                status: "confirmed",
-                paymentStatus: "paid",
-                updatedAt: new Date().toISOString()
-            });
-        } else {
-            await bookingRef.update({
-                status: "failed",
-                paymentStatus: "failed",
-                updatedAt: new Date().toISOString()
-            });
+        if (!listingId || !totalAmount) {
+            return NextResponse.json(
+                { error: "Missing required fields (listingId or totalAmount)" },
+                { status: 400 }
+            );
         }
 
-        // 🎨 YOUR CUSTOM SHUBH YATRA UI
-        const html = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-            <title>Shubh Yatra - Transaction Status</title>
-            <style>
-                body {
-                    margin: 0;
-                    padding: 0;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                    background-color: #f9fafb;
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    text-align: center;
-                }
-                .container {
-                    background: white;
-                    padding: 40px 30px;
-                    border-radius: 24px;
-                    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-                    width: 85%;
-                    max-width: 400px;
-                }
-                .icon {
-                    width: 80px;
-                    height: 80px;
-                    border-radius: 50%;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    margin: 0 auto 20px auto;
-                    font-size: 40px;
-                }
-                .success-icon { background-color: #d1fae5; color: #10b981; }
-                .failed-icon { background-color: #fee2e2; color: #ef4444; }
-                
-                h1 { margin: 0 0 10px 0; font-size: 24px; color: #111827; }
-                p { margin: 0 0 30px 0; color: #6b7280; font-size: 15px; line-height: 1.5; }
-                
-                .btn {
-                    background-color: #5f259f;
-                    color: white;
-                    border: none;
-                    padding: 16px 0;
-                    width: 100%;
-                    border-radius: 16px;
-                    font-size: 16px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    text-decoration: none;
-                    display: inline-block;
-                    box-sizing: border-box;
-                    box-shadow: 0 4px 12px rgba(95, 37, 159, 0.3);
-                    transition: transform 0.2s;
-                }
-                .btn:active { transform: scale(0.98); }
-                
-                .auto-redirect-text {
-                    margin-top: 20px;
-                    font-size: 13px;
-                    color: #9ca3af;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                ${isSuccess 
-                    ? `<div class="icon success-icon">✓</div>
-                       <h1>Payment Successful!</h1>
-                       <p>Your Shubh Yatra booking is confirmed. You can now return to the app.</p>`
-                    : `<div class="icon failed-icon">✕</div>
-                       <h1>Payment Failed</h1>
-                       <p>We couldn't process your payment. Please return to the app to try again.</p>`
-                }
-                
-                <a href="${redirectUrl}" class="btn">Return to App</a>
-                
-                <div class="auto-redirect-text">
-                    Attempting to redirect automatically...
-                </div>
-            </div>
+        const parsedAmount = Number(totalAmount);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+            return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+        }
 
-            <script>
-                // Try to automatically click the link after 2 seconds
-                setTimeout(function() {
-                    window.location.href = "${redirectUrl}";
-                }, 2000);
-            </script>
-        </body>
-        </html>
-        `;
-
-        return new NextResponse(html, {
-            status: 200,
-            headers: {
-                "Content-Type": "text/html",
-                // This prevents caching so the user always sees fresh status
-                "Cache-Control": "no-store, max-age=0", 
-            },
+        const bookingRef = await adminDb.collection("bookings").add({
+            userId,
+            customer: { userId },
+            listingId,
+            listingName,
+            listingImage: listingImage || "",
+            serviceType: serviceType || "hotel_stay",
+            checkIn: checkIn || null,
+            checkOut: checkOut || null,
+            guests: guests || 1,
+            totalAmount: parsedAmount,
+            vehicleIncluded: vehicleIncluded || false,
+            vehicleType: vehicleType || null,
+            vehiclePrice: vehiclePricePerDay || 0,
+            vehicleTotalAmount: vehicleTotalAmount || 0,
+            customerName: customerName || "",
+            customerEmail: customerEmail || "",
+            customerPhone: customerPhone || mobile || "",
+            status: "pending",
+            paymentStatus: "pending",
+            source: isMobile ? "mobile" : "web",
+            createdAt: new Date().toISOString(),
         });
 
-    } catch (error) {
-        console.error("Callback App Error:", error);
-        return NextResponse.json({ error: "Callback processing failed" }, { status: 500 });
+        const bookingId = bookingRef.id;
+        const transactionId = bookingId.substring(0, 34);
+        await bookingRef.update({ transactionId });
+
+        // ✅ Map to the correct callback route
+        const callbackUrl = isMobile
+            ? `${baseUrl}/api/payment/callback-app?id=${bookingId}`
+            : `${baseUrl}/api/payment/callback?id=${bookingId}`;
+
+        const client = StandardCheckoutClient.getInstance(
+            clientId,
+            clientSecret,
+            1,
+            Env.SANDBOX
+        );
+
+        const payRequest = StandardCheckoutPayRequest.builder()
+            .merchantOrderId(transactionId)
+            .amount(Math.round(parsedAmount * 100))
+            .redirectUrl(callbackUrl)
+            .build();
+
+        const response = await client.pay(payRequest);
+
+        if (!response.redirectUrl) {
+            await bookingRef.delete();
+            throw new Error("Failed to generate payment link");
+        }
+
+        return NextResponse.json({
+            url: response.redirectUrl,
+            bookingId,
+        });
+
+    } catch (error: any) {
+        console.error("❌ Payment Initiate Error:", error);
+        return NextResponse.json(
+            { error: "Payment initiation failed", details: error.message },
+            { status: 500 }
+        );
     }
+}
+
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        status: 200,
+        headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
+    });
 }
