@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebaseAdmin"; // Ensure this path matches your project
-import { getAuth } from "firebase-admin/auth";
+import { adminDb, adminAuth } from "@/lib/firebaseAdmin"; // ✅ Use proxied adminAuth
 
 export async function POST(request: Request) {
-  const db = adminDb;
-  const auth = getAuth();
-
   try {
-    // Expect email, otp, and the NEW password
     const { email, otp, password } = await request.json();
 
     if (!email || !otp || !password) {
@@ -18,9 +13,9 @@ export async function POST(request: Request) {
     }
 
     // =====================================================
-    // 🔐 STEP 1: VERIFY OTP (Exact same logic as Signup)
+    // 🔐 STEP 1: VERIFY OTP
     // =====================================================
-    const otpRef = db.collection("otps").doc(email);
+    const otpRef = adminDb.collection("otps").doc(email);
     const otpDoc = await otpRef.get();
 
     if (!otpDoc.exists) {
@@ -32,9 +27,8 @@ export async function POST(request: Request) {
 
     const otpData = otpDoc.data();
     const now = new Date();
-    const expiresAt = new Date(otpData?.expiresAt); // Ensure your OTP saver stores this as ISO string or Timestamp
+    const expiresAt = new Date(otpData?.expiresAt);
 
-    // Check if OTP matches
     if (otpData?.code !== otp) {
       return NextResponse.json(
         { error: "Incorrect OTP code" },
@@ -42,7 +36,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if OTP is expired
     if (now > expiresAt) {
       return NextResponse.json(
         { error: "OTP has expired. Please request a new one." },
@@ -50,24 +43,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // OTP is valid! Delete it immediately to prevent reuse
     await otpRef.delete();
 
     // =====================================================
-    // 🔄 STEP 2: UPDATE PASSWORD (Admin SDK)
+    // 🔄 STEP 2: UPDATE PASSWORD
     // =====================================================
+    const userRecord = await adminAuth.getUserByEmail(email);
 
-    // 1. Get the user by email to find their UID
-    const userRecord = await auth.getUserByEmail(email);
+    await adminAuth.updateUser(userRecord.uid, { password });
 
-    // 2. Update the password
-    await auth.updateUser(userRecord.uid, {
-      password: password,
-    });
-
-    // 3. Security: Revoke all refresh tokens
-    // This forces the user to log in again on all devices with the new password
-    await auth.revokeRefreshTokens(userRecord.uid);
+    await adminAuth.revokeRefreshTokens(userRecord.uid);
 
     return NextResponse.json({
       success: true,
@@ -76,7 +61,6 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("Reset Password Error:", error);
 
-    // Handle case where user doesn't exist
     if (error.code === "auth/user-not-found") {
       return NextResponse.json(
         { error: "No user found with this email" },
