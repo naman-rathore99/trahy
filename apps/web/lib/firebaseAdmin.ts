@@ -3,72 +3,62 @@ import { initializeApp, getApps, cert, getApp, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
 
-// 1. Service Account Config
-const serviceAccount = {
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  privateKey: process.env.FIREBASE_PRIVATE_KEY
-    ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
-    : undefined,
-};
 
-// 2. Global variable to cache the instances
-let app: App | undefined;
-let firestoreInstance: Firestore | undefined;
-let authInstance: Auth | undefined;
+function getServiceAccount() {
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
-// 3. Helper to initialize ONLY when needed
-function getAdminApp(): App {
-  if (app) return app;
-
-  if (getApps().length > 0) {
-    app = getApp();
-  } else {
-    if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
-      throw new Error('❌ FIREBASE ENV VARIABLES MISSING');
-    }
-    app = initializeApp({
-      credential: cert(serviceAccount),
-    });
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error(
+      `❌ Missing Firebase env variables: ${[
+        !projectId && 'FIREBASE_PROJECT_ID',
+        !clientEmail && 'FIREBASE_CLIENT_EMAIL',
+        !privateKey && 'FIREBASE_PRIVATE_KEY',
+      ]
+        .filter(Boolean)
+        .join(', ')}`
+    );
   }
 
-  return app;
+  return { projectId, clientEmail, privateKey };
 }
 
-function getHelperFirestore(): Firestore {
-  if (firestoreInstance) return firestoreInstance;
-  firestoreInstance = getFirestore(getAdminApp());
-  return firestoreInstance;
+
+function getAdminApp(): App {
+  const existingApps = getApps();
+
+  if (existingApps.length > 0) {
+    return getApp();
+  }
+
+  // First call — initialize with credentials.
+  return initializeApp({ credential: cert(getServiceAccount()) });
 }
 
-function getHelperAuth(): Auth {
-  if (authInstance) return authInstance;
-  authInstance = getAuth(getAdminApp());
-  return authInstance;
+
+function getAdminFirestore(): Firestore {
+  return getFirestore(getAdminApp());
 }
 
-// 4. Proxied Firestore (same as before)
+function getAdminAuth(): Auth {
+  return getAuth(getAdminApp());
+}
+
+
+
 export const adminDb = new Proxy({} as Firestore, {
-  get: (_target, prop) => {
-    const db = getHelperFirestore();
-    // @ts-ignore
+  get(_target, prop) {
+    const db = getAdminFirestore();
     const value = db[prop as keyof Firestore];
-    if (typeof value === 'function') {
-      return value.bind(db);
-    }
-    return value;
+    return typeof value === 'function' ? (value as Function).bind(db) : value;
   },
 });
 
-// 5. Proxied Auth (same pattern)
 export const adminAuth = new Proxy({} as Auth, {
-  get: (_target, prop) => {
-    const auth = getHelperAuth();
-    // @ts-ignore
+  get(_target, prop) {
+    const auth = getAdminAuth();
     const value = auth[prop as keyof Auth];
-    if (typeof value === 'function') {
-      return value.bind(auth);
-    }
-    return value;
+    return typeof value === 'function' ? (value as Function).bind(auth) : value;
   },
 });
