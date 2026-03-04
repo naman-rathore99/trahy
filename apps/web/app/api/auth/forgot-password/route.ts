@@ -1,9 +1,21 @@
 import { NextResponse } from "next/server";
-import { adminDb, adminAuth } from "@/lib/firebaseAdmin"; // ✅ Use proxied adminAuth
+import { adminDb, adminAuth } from "@/lib/firebaseAdmin";
 
 export async function POST(request: Request) {
   try {
-    const { email, otp, password } = await request.json();
+    let body: any;
+
+    // ✅ Safe body parsing — catches empty body before anything else
+    try {
+      body = await request.json();
+    } catch (e) {
+      console.error("❌ Failed to parse request body:", e);
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    const { email, otp, password } = body;
+
+    console.log("🔐 Reset password attempt for:", email);
 
     if (!email || !otp || !password) {
       return NextResponse.json(
@@ -12,17 +24,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // =====================================================
-    // 🔐 STEP 1: VERIFY OTP
-    // =====================================================
+    // STEP 1: VERIFY OTP
+    console.log("📦 Fetching OTP from Firestore...");
     const otpRef = adminDb.collection("otps").doc(email);
     const otpDoc = await otpRef.get();
 
     if (!otpDoc.exists) {
-      return NextResponse.json(
-        { error: "Invalid or expired OTP" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });
     }
 
     const otpData = otpDoc.data();
@@ -30,10 +38,7 @@ export async function POST(request: Request) {
     const expiresAt = new Date(otpData?.expiresAt);
 
     if (otpData?.code !== otp) {
-      return NextResponse.json(
-        { error: "Incorrect OTP code" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Incorrect OTP code" }, { status: 400 });
     }
 
     if (now > expiresAt) {
@@ -44,28 +49,27 @@ export async function POST(request: Request) {
     }
 
     await otpRef.delete();
+    console.log("✅ OTP verified and deleted");
 
-    // =====================================================
-    // 🔄 STEP 2: UPDATE PASSWORD
-    // =====================================================
+    // STEP 2: UPDATE PASSWORD
+    console.log("🔄 Updating password in Firebase Auth...");
     const userRecord = await adminAuth.getUserByEmail(email);
-
     await adminAuth.updateUser(userRecord.uid, { password });
-
     await adminAuth.revokeRefreshTokens(userRecord.uid);
+
+    console.log("✅ Password reset complete for:", email);
 
     return NextResponse.json({
       success: true,
       message: "Password reset successfully. Please log in.",
     });
+
   } catch (error: any) {
-    console.error("Reset Password Error:", error);
+    // ✅ Always returns JSON, never an empty body
+    console.error("❌ Reset Password Error:", error?.code, error?.message, error?.stack);
 
     if (error.code === "auth/user-not-found") {
-      return NextResponse.json(
-        { error: "No user found with this email" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "No user found with this email" }, { status: 404 });
     }
 
     return NextResponse.json(

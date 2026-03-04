@@ -1,8 +1,6 @@
-import 'server-only';
 import { initializeApp, getApps, cert, getApp, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
-
 
 function getServiceAccount() {
   const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -15,27 +13,17 @@ function getServiceAccount() {
         !projectId && 'FIREBASE_PROJECT_ID',
         !clientEmail && 'FIREBASE_CLIENT_EMAIL',
         !privateKey && 'FIREBASE_PRIVATE_KEY',
-      ]
-        .filter(Boolean)
-        .join(', ')}`
+      ].filter(Boolean).join(', ')}`
     );
   }
 
   return { projectId, clientEmail, privateKey };
 }
 
-
 function getAdminApp(): App {
-  const existingApps = getApps();
-
-  if (existingApps.length > 0) {
-    return getApp();
-  }
-
-  // First call — initialize with credentials.
+  if (getApps().length > 0) return getApp();
   return initializeApp({ credential: cert(getServiceAccount()) });
 }
-
 
 function getAdminFirestore(): Firestore {
   return getFirestore(getAdminApp());
@@ -44,8 +32,6 @@ function getAdminFirestore(): Firestore {
 function getAdminAuth(): Auth {
   return getAuth(getAdminApp());
 }
-
-
 
 export const adminDb = new Proxy({} as Firestore, {
   get(_target, prop) {
