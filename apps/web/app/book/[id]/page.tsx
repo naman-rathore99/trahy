@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
 import { app } from "@/lib/firebase";
@@ -24,6 +24,7 @@ import {
   Zap,
   Users,
   Tag,
+  AlertCircle,
 } from "lucide-react";
 import { differenceInDays, format, parseISO, isValid } from "date-fns";
 import { DayPicker, DateRange } from "react-day-picker";
@@ -33,6 +34,45 @@ declare global {
   interface Window {
     Razorpay: any;
   }
+}
+
+// ─── Validators ───────────────────────────────────────────────────────────────
+const validatePhone = (phone: string) => {
+  const cleaned = phone.replace(/\s/g, "");
+  // Indian mobile: 10 digits, starting with 6-9
+  return /^[6-9]\d{9}$/.test(cleaned);
+};
+
+const validateEmail = (email: string) => {
+  // Standard email regex + block disposable-looking domains
+  if (!email) return true; // email is optional
+  const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(email)) return false;
+  // Block obviously fake domains
+  const blocked = [
+    "test.com",
+    "fake.com",
+    "example.com",
+    "tempmail.com",
+    "mailinator.com",
+    "guerrillamail.com",
+    "yopmail.com",
+  ];
+  const domain = email.split("@")[1]?.toLowerCase();
+  return !blocked.includes(domain);
+};
+
+const validateName = (name: string) => {
+  return name.trim().length >= 3 && /^[a-zA-Z\s.'-]+$/.test(name.trim());
+};
+
+// ─── Field Error Component ────────────────────────────────────────────────────
+function FieldError({ msg }: { msg: string }) {
+  return (
+    <p className="flex items-center gap-1 text-xs text-red-500 mt-1.5 font-medium">
+      <AlertCircle size={11} /> {msg}
+    </p>
+  );
 }
 
 const VEHICLE_OPTIONS = [
@@ -89,6 +129,11 @@ function HotelBookingContent() {
   >("online");
   const [includeBanquet, setIncludeBanquet] = useState(false);
   const [formData, setFormData] = useState({ name: "", email: "", phone: "" });
+  const [touched, setTouched] = useState({
+    name: false,
+    email: false,
+    phone: false,
+  });
   const [couponCode, setCouponCode] = useState("");
   const [discount, setDiscount] = useState(0);
   const [couponMessage, setCouponMessage] = useState<{
@@ -103,7 +148,27 @@ function HotelBookingContent() {
   const [nights, setNights] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
 
-  // Load Razorpay script
+  // ─── Derived field errors ──────────────────────────────────────────────────
+  const errors = {
+    name:
+      touched.name && !validateName(formData.name)
+        ? "Enter a valid full name (min 3 characters, letters only)"
+        : null,
+    phone:
+      touched.phone && !validatePhone(formData.phone)
+        ? "Enter a valid 10-digit Indian mobile number (starts with 6-9)"
+        : null,
+    email:
+      touched.email && formData.email && !validateEmail(formData.email)
+        ? "Enter a valid email address"
+        : null,
+  };
+
+  const isFormValid =
+    validateName(formData.name) &&
+    validatePhone(formData.phone) &&
+    validateEmail(formData.email);
+
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
@@ -151,6 +216,16 @@ function HotelBookingContent() {
     includeBanquet,
     discount,
   ]);
+
+  // ─── Input handler with touch tracking ───────────────────────────────────
+  const handleInput = (field: keyof typeof formData, value: string) => {
+    // Phone: only allow digits, max 10
+    if (field === "phone") {
+      value = value.replace(/\D/g, "").slice(0, 10);
+    }
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  };
 
   const handleApplyCoupon = () => {
     if (!couponCode) return;
@@ -227,20 +302,24 @@ function HotelBookingContent() {
       );
   };
 
-  // ✅ Razorpay payment handler
   const handleConfirm = async () => {
-    if (!formData.name || !formData.phone)
-      return alert("Please enter your Name and Phone Number.");
+    // ✅ Mark all fields as touched to show all errors
+    setTouched({ name: true, phone: true, email: true });
+
+    if (!isFormValid) return;
     if (!startParam || !endParam)
       return alert("Invalid Dates. Please select dates.");
 
     setLoading(true);
     try {
       const user = auth.currentUser;
-      if (!user) return alert("Please log in to continue.");
+      if (!user) {
+        alert("Please log in to continue.");
+        setLoading(false);
+        return;
+      }
       const idToken = await user.getIdToken();
 
-      // Step 1: Create booking
       const createRes = await apiRequest("/api/bookings/create", "POST", {
         listingId,
         listingName,
@@ -269,13 +348,11 @@ function HotelBookingContent() {
       if (!createRes?.success || !createRes.bookingId)
         throw new Error("Failed to create booking.");
 
-      // Step 2a: Pay at hotel
       if (paymentMethod === "pay_at_pickup") {
         router.push(`/book/success/${createRes.bookingId}`);
         return;
       }
 
-      // Step 2b: Online — get Razorpay order
       const paymentRes = await fetch("/api/payment/initiate", {
         method: "POST",
         headers: {
@@ -289,7 +366,6 @@ function HotelBookingContent() {
       if (!paymentRes.ok)
         throw new Error(paymentData.error || "Payment Gateway Error.");
 
-      // Step 3: Open Razorpay checkout
       const options = {
         key: paymentData.keyId,
         amount: paymentData.amount,
@@ -304,7 +380,6 @@ function HotelBookingContent() {
         },
         theme: { color: "#e11d48" },
         handler: async (response: any) => {
-          // Step 4: Verify payment on backend
           const verifyRes = await fetch("/api/payment/callback", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -316,11 +391,9 @@ function HotelBookingContent() {
             }),
           });
           const verifyData = await verifyRes.json();
-          if (verifyData.success) {
+          if (verifyData.success)
             router.push(`/book/success/${createRes.bookingId}`);
-          } else {
-            router.push(`/book/failure/${createRes.bookingId}`);
-          }
+          else router.push(`/book/failure/${createRes.bookingId}`);
         },
         modal: {
           ondismiss: () => {
@@ -394,39 +467,90 @@ function HotelBookingContent() {
               </div>
             </div>
 
-            {/* Traveler Details */}
+            {/* Traveler Details — with validation */}
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
               <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">
                 Traveler Details
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <input
-                  type="text"
-                  placeholder="Full Name"
-                  className="w-full p-3.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none dark:text-white font-medium"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                />
-                <input
-                  type="tel"
-                  placeholder="Phone Number"
-                  className="w-full p-3.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none dark:text-white font-medium"
-                  value={formData.phone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
-                  }
-                />
-                <input
-                  type="email"
-                  placeholder="Email Address (Optional)"
-                  className="w-full p-3.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none dark:text-white md:col-span-2 font-medium"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                />
+                {/* Name */}
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Full Name *"
+                    className={`w-full p-3.5 bg-gray-50 dark:bg-slate-800 border rounded-xl outline-none dark:text-white font-medium transition-colors ${
+                      errors.name
+                        ? "border-red-400 dark:border-red-500 focus:border-red-500"
+                        : touched.name && !errors.name
+                          ? "border-green-400 dark:border-green-500"
+                          : "border-gray-200 dark:border-slate-700 focus:border-rose-400"
+                    }`}
+                    value={formData.name}
+                    onChange={(e) => handleInput("name", e.target.value)}
+                    onBlur={() => setTouched((p) => ({ ...p, name: true }))}
+                  />
+                  {errors.name && <FieldError msg={errors.name} />}
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <div
+                    className={`flex items-center bg-gray-50 dark:bg-slate-800 border rounded-xl overflow-hidden transition-colors ${
+                      errors.phone
+                        ? "border-red-400 dark:border-red-500"
+                        : touched.phone && !errors.phone && formData.phone
+                          ? "border-green-400 dark:border-green-500"
+                          : "border-gray-200 dark:border-slate-700 focus-within:border-rose-400"
+                    }`}
+                  >
+                    <span className="px-3 py-3.5 text-sm font-bold text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-700">
+                      +91
+                    </span>
+                    <input
+                      type="tel"
+                      placeholder="10-digit mobile number *"
+                      className="flex-1 p-3.5 bg-transparent outline-none dark:text-white font-medium"
+                      value={formData.phone}
+                      onChange={(e) => handleInput("phone", e.target.value)}
+                      onBlur={() => setTouched((p) => ({ ...p, phone: true }))}
+                      maxLength={10}
+                      inputMode="numeric"
+                    />
+                    {touched.phone &&
+                      formData.phone.length === 10 &&
+                      !errors.phone && (
+                        <CheckCircle
+                          size={16}
+                          className="text-green-500 mr-3"
+                        />
+                      )}
+                  </div>
+                  {errors.phone && <FieldError msg={errors.phone} />}
+                  {touched.phone && formData.phone && !errors.phone && (
+                    <p className="text-xs text-green-600 mt-1.5 font-medium flex items-center gap-1">
+                      <CheckCircle size={11} /> Valid mobile number
+                    </p>
+                  )}
+                </div>
+
+                {/* Email */}
+                <div className="md:col-span-2">
+                  <input
+                    type="email"
+                    placeholder="Email Address (Optional)"
+                    className={`w-full p-3.5 bg-gray-50 dark:bg-slate-800 border rounded-xl outline-none dark:text-white font-medium transition-colors ${
+                      errors.email
+                        ? "border-red-400 dark:border-red-500"
+                        : touched.email && formData.email && !errors.email
+                          ? "border-green-400 dark:border-green-500"
+                          : "border-gray-200 dark:border-slate-700 focus:border-rose-400"
+                    }`}
+                    value={formData.email}
+                    onChange={(e) => handleInput("email", e.target.value)}
+                    onBlur={() => setTouched((p) => ({ ...p, email: true }))}
+                  />
+                  {errors.email && <FieldError msg={errors.email} />}
+                </div>
               </div>
             </div>
 
@@ -557,12 +681,14 @@ function HotelBookingContent() {
                   </span>
                 </div>
               </div>
+
+              {/* Coupon */}
               {!discount ? (
                 <div className="flex gap-2 mb-6">
                   <input
                     type="text"
                     placeholder="Have a Coupon?"
-                    className="flex-1 p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm uppercase"
+                    className="flex-1 p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm uppercase bg-transparent dark:text-white"
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value)}
                   />
@@ -588,10 +714,23 @@ function HotelBookingContent() {
                   {couponMessage.text}
                 </p>
               )}
+
+              {/* ✅ Show which fields are incomplete */}
+              {!isFormValid && touched.name && touched.phone && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 text-center mb-3 font-medium flex items-center justify-center gap-1">
+                  <AlertCircle size={12} /> Please fix the errors above to
+                  continue
+                </p>
+              )}
+
               <button
                 onClick={handleConfirm}
                 disabled={loading}
-                className="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 rounded-xl font-bold shadow-lg flex justify-center items-center gap-2 disabled:opacity-50 transition-all active:scale-95"
+                className={`w-full py-4 rounded-xl font-bold shadow-lg flex justify-center items-center gap-2 transition-all active:scale-95 ${
+                  loading
+                    ? "bg-rose-400 text-white cursor-not-allowed"
+                    : "bg-rose-600 hover:bg-rose-700 text-white"
+                }`}
               >
                 {loading ? (
                   <Loader2 className="animate-spin" />
@@ -619,7 +758,9 @@ function HotelBookingContent() {
             >
               <X size={20} />
             </button>
-            <h3 className="text-xl font-bold mb-6">Edit Your Trip</h3>
+            <h3 className="text-xl font-bold mb-6 dark:text-white">
+              Edit Your Trip
+            </h3>
             <div className="mb-6">
               <p className="text-sm font-bold text-gray-500 mb-2 uppercase">
                 Dates
@@ -650,7 +791,7 @@ function HotelBookingContent() {
               ].map(({ label, sub, type, val }) => (
                 <div key={type} className="flex justify-between items-center">
                   <div>
-                    <p className="font-bold">{label}</p>
+                    <p className="font-bold dark:text-white">{label}</p>
                     <p className="text-xs text-gray-500">{sub}</p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -660,7 +801,9 @@ function HotelBookingContent() {
                     >
                       <Minus size={16} />
                     </button>
-                    <span className="font-bold w-4 text-center">{val}</span>
+                    <span className="font-bold w-4 text-center dark:text-white">
+                      {val}
+                    </span>
                     <button
                       onClick={() => updateGuests(type, "inc")}
                       className="p-2 rounded-full bg-gray-100 dark:bg-gray-800"
@@ -682,7 +825,7 @@ function HotelBookingContent() {
                     onClick={() =>
                       setEditVehicleId(editVehicleId === v.id ? null : v.id)
                     }
-                    className={`p-2 rounded-lg border text-center cursor-pointer transition-all ${editVehicleId === v.id ? "border-rose-600 bg-rose-50 text-rose-700" : "border-gray-200"}`}
+                    className={`p-2 rounded-lg border text-center cursor-pointer transition-all ${editVehicleId === v.id ? "border-rose-600 bg-rose-50 text-rose-700" : "border-gray-200 dark:border-gray-700 dark:text-gray-300"}`}
                   >
                     <div className="flex justify-center mb-1">{v.icon}</div>
                     <div className="text-[10px] font-bold">{v.label}</div>

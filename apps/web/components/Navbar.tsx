@@ -27,12 +27,9 @@ interface NavbarProps {
 }
 
 export default function Navbar({ variant = "transparent" }: NavbarProps) {
-  // UI State
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-
-  // Auth State
   const [firebaseUser, setFirebaseUser] = useState<any | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,30 +38,24 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
   const router = useRouter();
   const auth = getAuth(app);
 
-  // Detect login & role
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setFirebaseUser(currentUser);
-
       if (currentUser) {
         try {
           const token: IdTokenResult = await currentUser.getIdTokenResult();
           setUserRole((token.claims.role as string) || "user");
-        } catch (err) {
-          console.error("Failed to fetch user role", err);
+        } catch {
           setUserRole("user");
         }
       } else {
         setUserRole(null);
       }
-
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, [auth]);
 
-  // Scroll effect
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
     handleScroll();
@@ -72,7 +63,6 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Click outside profile dropdown
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (
@@ -82,7 +72,6 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
         setIsProfileOpen(false);
       }
     };
-
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
@@ -95,7 +84,6 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
     router.push("/login");
   };
 
-  // Style logic
   const isSolidState = isScrolled || isMobileMenuOpen || variant === "default";
 
   const navBackground = isSolidState
@@ -161,11 +149,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                 {!firebaseUser ? (
                   <Link
                     href="/login"
-                    className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 ${
-                      isSolidState
-                        ? "bg-black text-white"
-                        : "bg-white text-black"
-                    }`}
+                    className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 ${isSolidState ? "bg-black text-white" : "bg-white text-black"}`}
                   >
                     <UserIcon size={18} /> Login
                   </Link>
@@ -182,8 +166,11 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                           className="w-6 h-6 rounded-full"
                         />
                       ) : (
-                        <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
-                          <UserIcon size={14} />
+                        <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center">
+                          <UserIcon
+                            size={14}
+                            className="text-gray-600 dark:text-gray-300"
+                          />
                         </div>
                       )}
                       <span className="hidden lg:block max-w-[100px] truncate">
@@ -192,64 +179,94 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                     </button>
 
                     {isProfileOpen && (
-                      <div className="absolute right-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-xl shadow-xl border">
-                        <div className="px-4 py-3 border-b">
-                          <p className="font-bold">
+                      // ✅ Always white in light, always slate-900 in dark — never transparent
+                      <div className="absolute right-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+                        {/* Header */}
+                        <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800">
+                          <p className="font-bold text-gray-900 dark:text-white">
                             {firebaseUser.displayName || "My Account"}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                             {firebaseUser.email}
                           </p>
                         </div>
 
-                        <div className="py-2">
+                        {/* Menu Items */}
+                        <div className="py-1">
                           <Link
                             href="/profile"
                             onClick={() => setIsProfileOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 dark:hover:bg-slate-800"
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                           >
-                            <UserIcon size={16} /> My Profile
+                            <UserIcon
+                              size={16}
+                              className="text-gray-500 dark:text-gray-400"
+                            />{" "}
+                            My Profile
                           </Link>
 
                           {userRole === "partner" && (
                             <Link
                               href="/partner/dashboard"
-                              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 dark:hover:bg-slate-800"
+                              onClick={() => setIsProfileOpen(false)}
+                              className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                             >
-                              <Hotel size={16} /> Partner Dashboard
+                              <Hotel
+                                size={16}
+                                className="text-gray-500 dark:text-gray-400"
+                              />{" "}
+                              Partner Dashboard
                             </Link>
                           )}
 
                           {userRole === "admin" && (
                             <Link
                               href="/admin"
-                              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 dark:hover:bg-slate-800"
+                              onClick={() => setIsProfileOpen(false)}
+                              className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                             >
-                              <ShieldCheck size={16} /> Admin Panel
+                              <ShieldCheck
+                                size={16}
+                                className="text-gray-500 dark:text-gray-400"
+                              />{" "}
+                              Admin Panel
                             </Link>
                           )}
 
                           <Link
                             href="/trips"
-                            className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 dark:hover:bg-slate-800"
+                            onClick={() => setIsProfileOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                           >
-                            <Briefcase size={16} /> My Trips
+                            <Briefcase
+                              size={16}
+                              className="text-gray-500 dark:text-gray-400"
+                            />{" "}
+                            My Trips
                           </Link>
 
                           <Link
                             href="/transactions"
-                            className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 dark:hover:bg-slate-800"
+                            onClick={() => setIsProfileOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                           >
-                            <Receipt size={16} /> Transactions
+                            <Receipt
+                              size={16}
+                              className="text-gray-500 dark:text-gray-400"
+                            />{" "}
+                            Transactions
                           </Link>
                         </div>
 
-                        <button
-                          onClick={handleLogout}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50"
-                        >
-                          <LogOut size={16} /> Log Out
-                        </button>
+                        {/* Logout */}
+                        <div className="border-t border-gray-100 dark:border-slate-700">
+                          <button
+                            onClick={handleLogout}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          >
+                            <LogOut size={16} /> Log Out
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -262,7 +279,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
           <div className="md:hidden">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-full"
+              className={`p-2 rounded-full ${textColor}`}
             >
               {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -270,41 +287,116 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
         </div>
       </nav>
 
-      {/* Mobile Menu */}
+      {/* ✅ Mobile Menu — always solid background, always readable */}
       <div
-        className={`fixed inset-0 bg-white dark:bg-slate-950 z-[50] pt-28 px-6 transition-transform md:hidden ${
-          isMobileMenuOpen ? "translate-y-0" : "-translate-y-full"
-        }`}
+        className={`fixed inset-0 bg-white dark:bg-slate-950 z-[50] pt-28 px-6 flex flex-col transition-transform duration-300 md:hidden ${isMobileMenuOpen ? "translate-y-0" : "-translate-y-full"}`}
       >
-        <ul className="flex flex-col gap-6 text-xl font-bold">
-          <Link href="/" onClick={() => setIsMobileMenuOpen(false)}>
-            Home
-          </Link>
-          <Link href="/vehicles" onClick={() => setIsMobileMenuOpen(false)}>
-            Vehicles
-          </Link>
-          {!firebaseUser && (
-            <Link href="/join" onClick={() => setIsMobileMenuOpen(false)}>
-              Become a Partner
+        <ul className="flex flex-col gap-6 text-xl font-bold text-gray-900 dark:text-white">
+          <li>
+            <Link
+              href="/"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="hover:text-indigo-500 transition-colors"
+            >
+              Home
             </Link>
+          </li>
+          <li>
+            <Link
+              href="/vehicles"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="hover:text-indigo-500 transition-colors"
+            >
+              Vehicles
+            </Link>
+          </li>
+          {!firebaseUser && (
+            <li>
+              <Link
+                href="/join"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="hover:text-indigo-500 transition-colors"
+              >
+                Become a Partner
+              </Link>
+            </li>
+          )}
+          {firebaseUser && (
+            <>
+              <li>
+                <Link
+                  href="/profile"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 hover:text-indigo-500 transition-colors"
+                >
+                  <UserIcon size={20} /> My Profile
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/trips"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 hover:text-indigo-500 transition-colors"
+                >
+                  <Briefcase size={20} /> My Trips
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/transactions"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 hover:text-indigo-500 transition-colors"
+                >
+                  <Receipt size={20} /> Transactions
+                </Link>
+              </li>
+              {userRole === "partner" && (
+                <li>
+                  <Link
+                    href="/partner/dashboard"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center gap-2 hover:text-indigo-500 transition-colors"
+                  >
+                    <Hotel size={20} /> Partner Dashboard
+                  </Link>
+                </li>
+              )}
+              {userRole === "admin" && (
+                <li>
+                  <Link
+                    href="/admin"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center gap-2 hover:text-indigo-500 transition-colors"
+                  >
+                    <ShieldCheck size={20} /> Admin Panel
+                  </Link>
+                </li>
+              )}
+            </>
           )}
         </ul>
 
-        <div className="mt-auto mb-10">
+        <div className="mt-auto mb-10 pt-8 border-t border-gray-100 dark:border-slate-800">
           {!firebaseUser ? (
             <Link
               href="/login"
-              className="block w-full bg-black text-white py-4 rounded-full text-center font-bold"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-full text-center font-bold"
             >
               Login / Sign Up
             </Link>
           ) : (
-            <button
-              onClick={handleLogout}
-              className="w-full text-red-600 py-3 font-semibold"
-            >
-              Log Out
-            </button>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {firebaseUser.email}
+              </p>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center gap-2 text-red-600 dark:text-red-400 py-3 font-semibold border border-red-200 dark:border-red-900 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20"
+              >
+                <LogOut size={18} /> Log Out
+              </button>
+            </div>
           )}
         </div>
       </div>
