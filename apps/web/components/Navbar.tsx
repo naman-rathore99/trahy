@@ -21,6 +21,7 @@ import {
 } from "firebase/auth";
 import { app } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 interface NavbarProps {
   variant?: "transparent" | "default";
@@ -110,7 +111,13 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             className={`text-2xl font-bold uppercase tracking-wide ${textColor}`}
             onClick={() => setIsMobileMenuOpen(false)}
           >
-            shubyatra<span className="text-indigo-500">.</span>world
+            {/* shubyatra<span className="text-indigo-500">.</span>world */}
+            <Image
+              src="/unnamed-removebg-preview.png"
+              alt="Logo"
+              width={200}
+              height={200}
+            />
           </Link>
 
           {/* Desktop Menu */}
