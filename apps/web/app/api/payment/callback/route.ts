@@ -1,81 +1,52 @@
+// app/api/payment/callback/route.ts
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
+import crypto from "crypto";
 
-async function handleCallback(request: Request) {
+export async function POST(request: Request) {
   try {
-    const url = new URL(request.url);
-    let bookingId = url.searchParams.get("id");
-    let code: string | null = null;
+    const body = await request.json();
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, bookingId } = body;
 
-    if (request.method === "POST") {
-      try {
-        const formData = await request.formData();
-        code = formData.get("code")?.toString() || null;
-        if (!bookingId) {
-          bookingId = formData.get("merchantTransactionId")?.toString() || null;
-        }
-      } catch (e) { }
+    // 1. Verify Razorpay signature
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
+
+    const isValid = expectedSignature === razorpay_signature;
+
+    if (!isValid) {
+      console.error("❌ Invalid Razorpay signature");
+      return NextResponse.json({ error: "Invalid payment signature" }, { status: 400 });
     }
 
-    if (!bookingId) {
-      return NextResponse.json({ error: "Missing booking ID" }, { status: 400 });
-    }
-
-    const bookingRef = adminDb.collection("bookings").doc(bookingId);
-    const bookingSnap = await bookingRef.get();
+    // 2. Find booking
+    let bookingRef = adminDb.collection("bookings").doc(bookingId);
+    let bookingSnap = await bookingRef.get();
 
     if (!bookingSnap.exists) {
-      console.error(`Booking ${bookingId} not found in callback`);
-      return NextResponse.redirect(new URL("/trips?error=not_found", request.url), 303);
+      bookingRef = adminDb.collection("vehicle_bookings").doc(bookingId);
+      bookingSnap = await bookingRef.get();
     }
 
-    // Prevent processing an already-finalized booking
-    const currentStatus = bookingSnap.data()?.status;
-    if (currentStatus === "confirmed" || currentStatus === "failed") {
-      return NextResponse.redirect(
-        new URL(
-          currentStatus === "confirmed"
-            ? `/book/success/${bookingId}`
-            : `/book/failure/${bookingId}`,
-          request.url
-        ),
-        303
-      );
+    if (!bookingSnap.exists) {
+      return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
-    const isSuccess = code === "PAYMENT_SUCCESS";
+    // 3. Update booking status
+    await bookingRef.update({
+      status: "confirmed",
+      paymentStatus: "paid",
+      razorpayPaymentId: razorpay_payment_id,
+      razorpayOrderId: razorpay_order_id,
+      updatedAt: new Date().toISOString(),
+    });
 
-    if (isSuccess) {
-      await bookingRef.update({
-        status: "confirmed",
-        paymentStatus: "paid",
-        updatedAt: new Date().toISOString(),
-      });
-      return NextResponse.redirect(
-        new URL(`/book/success/${bookingId}`, request.url),
-        303
-      );
-    } else {
-      await bookingRef.update({
-        status: "failed",
-        paymentStatus: "failed",
-        failureReason: code || "unknown",
-        updatedAt: new Date().toISOString(),
-      });
-      return NextResponse.redirect(
-        new URL(`/book/failure/${bookingId}`, request.url),
-        303
-      );
-    }
+    return NextResponse.json({ success: true });
 
-  } catch (error) {
-    console.error("Web Callback Error:", error);
-    return NextResponse.redirect(
-      new URL("/trips?error=server_error", request.url),
-      303
-    );
+  } catch (error: any) {
+    console.error("❌ Callback Error:", error?.message);
+    return NextResponse.json({ error: "Callback failed" }, { status: 500 });
   }
 }
-
-export async function POST(request: Request) { return handleCallback(request); }
-export async function GET(request: Request) { return handleCallback(request); }

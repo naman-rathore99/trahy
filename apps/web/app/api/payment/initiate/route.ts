@@ -1,182 +1,84 @@
+// app/api/payment/initiate/route.ts
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebaseAdmin";
-import {
-  StandardCheckoutClient,
-  Env,
-  StandardCheckoutPayRequest,
-} from "pg-sdk-node";
-import { getAuth } from "firebase-admin/auth";
+import { adminDb, adminAuth } from "@/lib/firebaseAdmin";
+import Razorpay from "razorpay";
 
-const clientId = process.env.PHONEPE_MERCHANT_ID || "PGTESTPAYUAT";
-const clientSecret =
-  process.env.PHONEPE_SALT_KEY || "099eb0cd-02cf-4e2a-8aca-3e6c6aff0399";
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID!,
+  key_secret: process.env.RAZORPAY_KEY_SECRET!,
+});
 
 export async function POST(request: Request) {
-  const auth = getAuth();
-
   try {
     // 1. Verify Auth
     const authHeader = request.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
     const token = authHeader.split("Bearer ")[1];
-    const decodedToken = await auth.verifyIdToken(token);
+    const decodedToken = await adminAuth.verifyIdToken(token);
     const userId = decodedToken.uid;
 
-    const body = await request.json();
-    const source: string = body.source || "web";
-
-    // ─────────────────────────────────────────────
-    // WEB + MOBILE: booking already exists, just initiate payment
-    // ─────────────────────────────────────────────
-    if (body.bookingId) {
-      const bookingRef = adminDb.collection("bookings").doc(body.bookingId);
-      const bookingSnap = await bookingRef.get();
-
-      if (!bookingSnap.exists) {
-        return NextResponse.json(
-          { error: "Booking not found" },
-          { status: 404 }
-        );
-      }
-
-      const bookingData = bookingSnap.data()!;
-
-      // ✅ Check both userId locations
-      const bookingOwner = bookingData.userId || bookingData.customer?.userId;
-      if (bookingOwner !== userId) {
-        console.error(
-          `Forbidden: token userId=${userId}, bookingOwner=${bookingOwner}`
-        );
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-
-      const transactionId = body.bookingId.substring(0, 34);
-      await bookingRef.update({ transactionId });
-
-      const callbackUrl =
-        source === "mobile"
-          ? `${baseUrl}/api/payment/callback-app?id=${body.bookingId}`
-          : `${baseUrl}/api/payment/callback?id=${body.bookingId}`;
-
-      const client = StandardCheckoutClient.getInstance(
-        clientId,
-        clientSecret,
-        1,
-        Env.SANDBOX
-      );
-
-      const payRequest = StandardCheckoutPayRequest.builder()
-        .merchantOrderId(transactionId)
-        .amount(Math.round(Number(bookingData.totalAmount) * 100))
-        .redirectUrl(callbackUrl)
-        .build();
-
-      const response = await client.pay(payRequest);
-
-      if (!response.redirectUrl) {
-        throw new Error("Failed to generate payment link");
-      }
-
-      return NextResponse.json({
-        url: response.redirectUrl,
-        bookingId: body.bookingId,
-      });
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    // ─────────────────────────────────────────────
-    // FALLBACK: create booking + initiate in one step
-    // ─────────────────────────────────────────────
-    const {
-      listingId,
-      listingName,
-      listingImage,
-      checkIn,
-      checkOut,
-      guests,
-      totalAmount,
-      serviceType,
-      vehicleIncluded,
-      vehicleType,
-      vehiclePricePerDay,
-      vehicleTotalAmount,
-      customerName,
-      customerEmail,
-      customerPhone,
-      mobile,
-    } = body;
-
-    if (!listingId || !totalAmount) {
-      return NextResponse.json(
-        { error: "Missing required fields (listingId or totalAmount)" },
-        { status: 400 }
-      );
+    const { bookingId, source = "web" } = body;
+    if (!bookingId) {
+      return NextResponse.json({ error: "bookingId is required" }, { status: 400 });
     }
 
-    const parsedAmount = Number(totalAmount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+    // 2. Find booking (hotels or vehicles)
+    let bookingRef = adminDb.collection("bookings").doc(bookingId);
+    let bookingSnap = await bookingRef.get();
+
+    if (!bookingSnap.exists) {
+      bookingRef = adminDb.collection("vehicle_bookings").doc(bookingId);
+      bookingSnap = await bookingRef.get();
     }
 
-    const bookingRef = await adminDb.collection("bookings").add({
-      userId,
-      customer: { userId },
-      listingId,
-      listingName,
-      listingImage: listingImage || "",
-      serviceType: serviceType || "hotel_stay",
-      checkIn: checkIn || null,
-      checkOut: checkOut || null,
-      guests: guests || 1,
-      totalAmount: parsedAmount,
-      vehicleIncluded: vehicleIncluded || false,
-      vehicleType: vehicleType || null,
-      vehiclePrice: vehiclePricePerDay || 0,
-      vehicleTotalAmount: vehicleTotalAmount || 0,
-      customerName: customerName || "",
-      customerEmail: customerEmail || "",
-      customerPhone: customerPhone || mobile || "",
-      status: "pending",
-      paymentStatus: "pending",
-      source: "mobile",
-      createdAt: new Date().toISOString(),
+    if (!bookingSnap.exists) {
+      return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+    }
+
+    const bookingData = bookingSnap.data()!;
+    const bookingOwner = bookingData.userId || bookingData.customer?.userId;
+
+    if (bookingOwner !== userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const amount = Math.round(Number(bookingData.totalAmount || bookingData.totalPrice) * 100);
+
+    // 3. Create Razorpay Order
+    const order = await razorpay.orders.create({
+      amount,                      // in paise
+      currency: "INR",
+      receipt: bookingId.substring(0, 40),
+      notes: {
+        bookingId,
+        userId,
+        source,
+      },
     });
 
-    const bookingId = bookingRef.id;
-    const transactionId = bookingId.substring(0, 34);
-    await bookingRef.update({ transactionId });
-
-    const callbackUrl = `${baseUrl}/api/payment/callback-app?id=${bookingId}`;
-
-    const client = StandardCheckoutClient.getInstance(
-      clientId,
-      clientSecret,
-      1,
-      Env.SANDBOX
-    );
-
-    const payRequest = StandardCheckoutPayRequest.builder()
-      .merchantOrderId(transactionId)
-      .amount(Math.round(parsedAmount * 100))
-      .redirectUrl(callbackUrl)
-      .build();
-
-    const response = await client.pay(payRequest);
-
-    if (!response.redirectUrl) {
-      await bookingRef.delete();
-      throw new Error("Failed to generate payment link");
-    }
+    // 4. Save orderId to booking
+    await bookingRef.update({ razorpayOrderId: order.id });
 
     return NextResponse.json({
-      url: response.redirectUrl,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
       bookingId,
+      keyId: process.env.RAZORPAY_KEY_ID,
     });
 
   } catch (error: any) {
-    console.error("❌ Payment Initiate Error:", error);
+    console.error("❌ Payment Initiate Error:", error?.message);
     return NextResponse.json(
       { error: "Payment initiation failed", details: error.message },
       { status: 500 }

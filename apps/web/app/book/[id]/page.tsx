@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
 import { app } from "@/lib/firebase";
@@ -29,7 +29,12 @@ import { differenceInDays, format, parseISO, isValid } from "date-fns";
 import { DayPicker, DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 
-// --- CONFIGURATION ---
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 const VEHICLE_OPTIONS = [
   {
     id: "bike",
@@ -66,85 +71,75 @@ function HotelBookingContent() {
   const router = useRouter();
   const auth = getAuth(app);
 
-  // --- 1. GET TRIP DATA FROM URL ---
   const listingId = searchParams.get("id");
   const listingName = searchParams.get("name") || "Hotel Stay";
   const pricePerNight = Number(searchParams.get("price")) || 0;
-
   const startParam = searchParams.get("start");
   const endParam = searchParams.get("end");
-
-  // Guests
   const adultsParam = Number(searchParams.get("adults")) || 1;
   const childrenParam = Number(searchParams.get("children")) || 0;
   const totalGuests = adultsParam + childrenParam;
-
-  // Vehicle Data
   const vehicleId = searchParams.get("vehicleId");
   const vehicleName = searchParams.get("vehicleName");
   const vehiclePrice = Number(searchParams.get("vehiclePrice")) || 0;
 
-  // --- 2. STATE ---
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<
     "pay_at_pickup" | "online"
   >("online");
   const [includeBanquet, setIncludeBanquet] = useState(false);
   const [formData, setFormData] = useState({ name: "", email: "", phone: "" });
-
-  // Coupon State (NEW)
   const [couponCode, setCouponCode] = useState("");
   const [discount, setDiscount] = useState(0);
   const [couponMessage, setCouponMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
-
-  // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editDateRange, setEditDateRange] = useState<DateRange | undefined>();
   const [editAdults, setEditAdults] = useState(adultsParam);
   const [editChildren, setEditChildren] = useState(childrenParam);
   const [editVehicleId, setEditVehicleId] = useState<string | null>(vehicleId);
-
-  // Calculated Values
   const [nights, setNights] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
 
-  // Load User Profile
+  // Load Razorpay script
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
+      if (user)
         setFormData((prev) => ({
           ...prev,
           name: user.displayName || prev.name,
           email: user.email || prev.email,
         }));
-      }
     });
     return () => unsubscribe();
   }, [auth]);
 
-  // --- 3. CALCULATE TOTALS ---
   useEffect(() => {
     if (startParam && endParam) {
       const start = parseISO(startParam);
       const end = parseISO(endParam);
-
       if (isValid(start) && isValid(end)) {
         let numDays = differenceInDays(end, start);
         if (numDays === 0) numDays = 1;
         setNights(numDays);
-
         const roomTotal = numDays * pricePerNight;
         const vehicleTotal = vehicleId ? numDays * vehiclePrice : 0;
         const banquetTotal = includeBanquet ? 10000 : 0;
-
-        // Apply Discount
-        const baseTotal = roomTotal + vehicleTotal + banquetTotal;
-        const finalTotal = Math.max(0, baseTotal - discount);
-
-        setTotalPrice(finalTotal);
+        setTotalPrice(
+          Math.max(0, roomTotal + vehicleTotal + banquetTotal - discount),
+        );
       }
     }
   }, [
@@ -157,11 +152,8 @@ function HotelBookingContent() {
     discount,
   ]);
 
-  // --- 4. COUPON HANDLER ---
   const handleApplyCoupon = () => {
     if (!couponCode) return;
-
-    // DEMO COUPON LOGIC (Replace with API call later)
     if (couponCode.toUpperCase() === "WELCOME500") {
       if (totalPrice < 1000) {
         setCouponMessage({ type: "error", text: "Min booking ₹1000 required" });
@@ -170,7 +162,7 @@ function HotelBookingContent() {
       setDiscount(500);
       setCouponMessage({ type: "success", text: "₹500 Discount Applied!" });
     } else if (couponCode.toUpperCase() === "MATHURA10") {
-      const disc = Math.round(totalPrice * 0.1); // 10%
+      const disc = Math.round(totalPrice * 0.1);
       setDiscount(disc);
       setCouponMessage({
         type: "success",
@@ -188,14 +180,9 @@ function HotelBookingContent() {
     setCouponMessage(null);
   };
 
-  // --- 5. EDIT MODAL HANDLERS ---
   const openEditModal = () => {
-    if (startParam && endParam) {
-      setEditDateRange({
-        from: parseISO(startParam),
-        to: parseISO(endParam),
-      });
-    }
+    if (startParam && endParam)
+      setEditDateRange({ from: parseISO(startParam), to: parseISO(endParam) });
     setEditAdults(adultsParam);
     setEditChildren(childrenParam);
     setEditVehicleId(vehicleId);
@@ -207,17 +194,12 @@ function HotelBookingContent() {
       alert("Please select valid dates");
       return;
     }
-
-    const newStart = format(editDateRange.from, "yyyy-MM-dd");
-    const newEnd = format(editDateRange.to, "yyyy-MM-dd");
-
     const current = new URLSearchParams(Array.from(searchParams.entries()));
-    current.set("start", newStart);
-    current.set("end", newEnd);
+    current.set("start", format(editDateRange.from, "yyyy-MM-dd"));
+    current.set("end", format(editDateRange.to, "yyyy-MM-dd"));
     current.set("adults", editAdults.toString());
     current.set("children", editChildren.toString());
     current.set("guests", (editAdults + editChildren).toString());
-
     if (editVehicleId) {
       const v = VEHICLE_OPTIONS.find((opt) => opt.id === editVehicleId);
       if (v) {
@@ -230,44 +212,36 @@ function HotelBookingContent() {
       current.delete("vehicleName");
       current.delete("vehiclePrice");
     }
-
     router.replace(`/book/hotel?${current.toString()}`);
     setIsEditModalOpen(false);
   };
 
   const updateGuests = (type: "adults" | "children", op: "inc" | "dec") => {
-    if (type === "adults") {
+    if (type === "adults")
       setEditAdults((prev) =>
         op === "inc" ? prev + 1 : Math.max(1, prev - 1),
       );
-    } else {
+    else
       setEditChildren((prev) =>
         op === "inc" ? prev + 1 : Math.max(0, prev - 1),
       );
-    }
   };
 
-  // --- 6. SUBMIT HANDLER ---
+  // ✅ Razorpay payment handler
   const handleConfirm = async () => {
-    if (!formData.name || !formData.phone) {
+    if (!formData.name || !formData.phone)
       return alert("Please enter your Name and Phone Number.");
-    }
-    if (!startParam || !endParam) {
+    if (!startParam || !endParam)
       return alert("Invalid Dates. Please select dates.");
-    }
 
     setLoading(true);
-
     try {
       const user = auth.currentUser;
-      if (!user) {
-        return alert("Please log in to continue.");
-      }
-
-      // Get Firebase auth token for secure API calls
+      if (!user) return alert("Please log in to continue.");
       const idToken = await user.getIdToken();
 
-      const bookingPayload = {
+      // Step 1: Create booking
+      const createRes = await apiRequest("/api/bookings/create", "POST", {
         listingId,
         listingName,
         totalAmount: totalPrice,
@@ -290,50 +264,74 @@ function HotelBookingContent() {
         },
         paymentMethod,
         status: paymentMethod === "online" ? "pending_payment" : "confirmed",
-      };
+      });
 
-      // Step 1: Create booking
-      const createRes = await apiRequest(
-        "/api/bookings/create",
-        "POST",
-        bookingPayload,
-      );
-
-      if (!createRes?.success || !createRes.bookingId) {
+      if (!createRes?.success || !createRes.bookingId)
         throw new Error("Failed to create booking.");
-      }
 
-      // Step 2a: Pay at hotel — go straight to success
+      // Step 2a: Pay at hotel
       if (paymentMethod === "pay_at_pickup") {
         router.push(`/book/success/${createRes.bookingId}`);
         return;
       }
 
-      // Step 2b: Online payment — initiate PhonePe with existing bookingId
+      // Step 2b: Online — get Razorpay order
       const paymentRes = await fetch("/api/payment/initiate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`, // ✅ Secure auth header
+          Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({
-          bookingId: createRes.bookingId, // ✅ Pass existing bookingId, no duplicate created
-          mobile: formData.phone,
-          source: "web",
-        }),
+        body: JSON.stringify({ bookingId: createRes.bookingId, source: "web" }),
       });
 
       const paymentData = await paymentRes.json();
-
-      if (!paymentRes.ok) {
+      if (!paymentRes.ok)
         throw new Error(paymentData.error || "Payment Gateway Error.");
-      }
 
-      if (paymentData.url) {
-        window.location.href = paymentData.url;
-      } else {
-        throw new Error("No payment URL received.");
-      }
+      // Step 3: Open Razorpay checkout
+      const options = {
+        key: paymentData.keyId,
+        amount: paymentData.amount,
+        currency: paymentData.currency,
+        order_id: paymentData.orderId,
+        name: "Shubhyatra",
+        description: listingName,
+        prefill: {
+          name: formData.name,
+          email: formData.email,
+          contact: formData.phone,
+        },
+        theme: { color: "#e11d48" },
+        handler: async (response: any) => {
+          // Step 4: Verify payment on backend
+          const verifyRes = await fetch("/api/payment/callback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              bookingId: createRes.bookingId,
+            }),
+          });
+          const verifyData = await verifyRes.json();
+          if (verifyData.success) {
+            router.push(`/book/success/${createRes.bookingId}`);
+          } else {
+            router.push(`/book/failure/${createRes.bookingId}`);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setLoading(false);
+            router.push(`/book/failure/${createRes.bookingId}`);
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
     } catch (error: any) {
       console.error("Booking Error:", error);
       alert(error.message || "Booking Failed.");
@@ -349,16 +347,13 @@ function HotelBookingContent() {
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-black pb-20 transition-colors duration-300">
       <Navbar variant="default" />
-
       <div className="max-w-6xl mx-auto px-4 pt-28 md:pt-32">
         <h1 className="text-3xl font-bold mb-8 text-gray-900 dark:text-white">
           Review & Pay
         </h1>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* --- LEFT COLUMN: INPUTS --- */}
           <div className="lg:col-span-2 space-y-6">
-            {/* 1. Trip Details Summary */}
+            {/* Trip Details */}
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -372,24 +367,22 @@ function HotelBookingContent() {
                 </button>
               </div>
               <div className="flex gap-4 md:gap-8">
-                <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-xl flex-1">
-                  <p className="text-xs text-gray-500 uppercase font-bold mb-1">
-                    Check-in
-                  </p>
-                  <p className="font-bold text-gray-900 dark:text-white">
-                    {startParam
-                      ? format(parseISO(startParam), "dd MMM")
-                      : "N/A"}
-                  </p>
-                </div>
-                <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-xl flex-1">
-                  <p className="text-xs text-gray-500 uppercase font-bold mb-1">
-                    Check-out
-                  </p>
-                  <p className="font-bold text-gray-900 dark:text-white">
-                    {endParam ? format(parseISO(endParam), "dd MMM") : "N/A"}
-                  </p>
-                </div>
+                {[
+                  { label: "Check-in", val: startParam },
+                  { label: "Check-out", val: endParam },
+                ].map(({ label, val }) => (
+                  <div
+                    key={label}
+                    className="bg-gray-50 dark:bg-slate-800 p-3 rounded-xl flex-1"
+                  >
+                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">
+                      {label}
+                    </p>
+                    <p className="font-bold text-gray-900 dark:text-white">
+                      {val ? format(parseISO(val), "dd MMM") : "N/A"}
+                    </p>
+                  </div>
+                ))}
                 <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-xl flex-1">
                   <p className="text-xs text-gray-500 uppercase font-bold mb-1">
                     Guests
@@ -401,7 +394,7 @@ function HotelBookingContent() {
               </div>
             </div>
 
-            {/* 2. Traveler Details */}
+            {/* Traveler Details */}
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
               <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">
                 Traveler Details
@@ -421,7 +414,6 @@ function HotelBookingContent() {
                   placeholder="Phone Number"
                   className="w-full p-3.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none dark:text-white font-medium"
                   value={formData.phone}
-                  max={10}
                   onChange={(e) =>
                     setFormData({ ...formData, phone: e.target.value })
                   }
@@ -438,13 +430,13 @@ function HotelBookingContent() {
               </div>
             </div>
 
-            {/* 3. Add-ons */}
+            {/* Add-ons */}
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
               <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
                 Optional Add-ons
               </h2>
               <label
-                className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-all ${includeBanquet ? "border-rose-600 bg-rose-50 dark:bg-rose-900/10" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"}`}
+                className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-all ${includeBanquet ? "border-rose-600 bg-rose-50 dark:bg-rose-900/10" : "border-gray-200 dark:border-gray-700"}`}
               >
                 <div
                   className={`mt-1 w-5 h-5 border-2 rounded flex items-center justify-center ${includeBanquet ? "bg-rose-600 border-rose-600" : "border-gray-400"}`}
@@ -474,45 +466,47 @@ function HotelBookingContent() {
               </label>
             </div>
 
-            {/* 4. Payment Method */}
+            {/* Payment Method */}
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
               <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
                 Payment Method
               </h2>
               <div className="flex flex-col sm:flex-row gap-4">
-                <div
-                  onClick={() => setPaymentMethod("online")}
-                  className={`flex-1 p-4 border rounded-xl flex items-center justify-between cursor-pointer transition-all ${paymentMethod === "online" ? "border-rose-600 bg-rose-50 dark:bg-rose-900/10" : "border-gray-200 dark:border-slate-700 hover:border-gray-300"}`}
-                >
-                  <span className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <CreditCard size={18} /> Pay Online
-                  </span>
-                  {paymentMethod === "online" && (
-                    <CheckCircle size={18} className="text-rose-600" />
-                  )}
-                </div>
-                <div
-                  onClick={() => setPaymentMethod("pay_at_pickup")}
-                  className={`flex-1 p-4 border rounded-xl flex items-center justify-between cursor-pointer transition-all ${paymentMethod === "pay_at_pickup" ? "border-rose-600 bg-rose-50 dark:bg-rose-900/10" : "border-gray-200 dark:border-slate-700 hover:border-gray-300"}`}
-                >
-                  <span className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <Wallet size={18} /> Pay at Hotel
-                  </span>
-                  {paymentMethod === "pay_at_pickup" && (
-                    <CheckCircle size={18} className="text-rose-600" />
-                  )}
-                </div>
+                {[
+                  {
+                    id: "online",
+                    label: "Pay Online",
+                    icon: <CreditCard size={18} />,
+                  },
+                  {
+                    id: "pay_at_pickup",
+                    label: "Pay at Hotel",
+                    icon: <Wallet size={18} />,
+                  },
+                ].map(({ id, label, icon }) => (
+                  <div
+                    key={id}
+                    onClick={() => setPaymentMethod(id as any)}
+                    className={`flex-1 p-4 border rounded-xl flex items-center justify-between cursor-pointer transition-all ${paymentMethod === id ? "border-rose-600 bg-rose-50 dark:bg-rose-900/10" : "border-gray-200 dark:border-slate-700"}`}
+                  >
+                    <span className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      {icon} {label}
+                    </span>
+                    {paymentMethod === id && (
+                      <CheckCircle size={18} className="text-rose-600" />
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* --- RIGHT COLUMN: SUMMARY --- */}
+          {/* Summary */}
           <div className="relative">
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 sticky top-28">
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
                 <BedDouble className="text-rose-600" /> Booking Summary
               </h3>
-
               <div className="mb-6 pb-6 border-b border-gray-100 dark:border-gray-800">
                 <h4 className="text-xl font-extrabold text-gray-900 dark:text-white">
                   {listingName}
@@ -521,7 +515,6 @@ function HotelBookingContent() {
                   <MapPin size={12} /> Mathura, India
                 </p>
               </div>
-
               <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400 mb-6">
                 <div className="flex justify-between">
                   <span>Room (x{nights} nights)</span>
@@ -529,7 +522,6 @@ function HotelBookingContent() {
                     ₹{(pricePerNight * nights).toLocaleString("en-IN")}
                   </span>
                 </div>
-
                 {vehicleId && (
                   <div className="flex justify-between text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg">
                     <span className="flex items-center gap-1">
@@ -540,7 +532,6 @@ function HotelBookingContent() {
                     </span>
                   </div>
                 )}
-
                 {includeBanquet && (
                   <div className="flex justify-between text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 p-2 rounded-lg">
                     <span className="flex items-center gap-1">
@@ -549,17 +540,14 @@ function HotelBookingContent() {
                     <span className="font-bold">+₹10,000</span>
                   </div>
                 )}
-
-                {/* --- COUPON SECTION --- */}
                 {discount > 0 && (
                   <div className="flex justify-between text-rose-600 font-bold bg-rose-50 dark:bg-rose-900/20 p-2 rounded-lg">
                     <span className="flex items-center gap-1">
-                      <Tag size={14} /> Discount Applied
+                      <Tag size={14} /> Discount
                     </span>
                     <span>-₹{discount.toLocaleString("en-IN")}</span>
                   </div>
                 )}
-
                 <div className="border-t border-gray-200 dark:border-gray-800 pt-4 mt-2 flex justify-between items-end">
                   <span className="font-bold text-lg text-gray-900 dark:text-white">
                     Total Pay
@@ -569,8 +557,6 @@ function HotelBookingContent() {
                   </span>
                 </div>
               </div>
-
-              {/* Coupon Input */}
               {!discount ? (
                 <div className="flex gap-2 mb-6">
                   <input
@@ -602,11 +588,10 @@ function HotelBookingContent() {
                   {couponMessage.text}
                 </p>
               )}
-
               <button
                 onClick={handleConfirm}
                 disabled={loading}
-                className="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 rounded-xl font-bold shadow-lg flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+                className="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 rounded-xl font-bold shadow-lg flex justify-center items-center gap-2 disabled:opacity-50 transition-all active:scale-95"
               >
                 {loading ? (
                   <Loader2 className="animate-spin" />
@@ -616,7 +601,6 @@ function HotelBookingContent() {
                   "Confirm Booking"
                 )}
               </button>
-
               <p className="text-[10px] text-gray-400 text-center mt-3">
                 By confirming, you agree to our Terms & Conditions.
               </p>
@@ -625,20 +609,17 @@ function HotelBookingContent() {
         </div>
       </div>
 
-      {/* ✅ EDIT TRIP MODAL */}
+      {/* Edit Modal */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl w-full max-w-md shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar">
+          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl w-full max-w-md shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsEditModalOpen(false)}
               className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               <X size={20} />
             </button>
-
             <h3 className="text-xl font-bold mb-6">Edit Your Trip</h3>
-
-            {/* 1. Date Selection */}
             <div className="mb-6">
               <p className="text-sm font-bold text-gray-500 mb-2 uppercase">
                 Dates
@@ -652,58 +633,44 @@ function HotelBookingContent() {
                 />
               </div>
             </div>
-
-            {/* 2. Guest Selection */}
             <div className="mb-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-bold">Adults</p>
-                  <p className="text-xs text-gray-500">Age 13+</p>
+              {[
+                {
+                  label: "Adults",
+                  sub: "Age 13+",
+                  type: "adults" as const,
+                  val: editAdults,
+                },
+                {
+                  label: "Children",
+                  sub: "Ages 2-12",
+                  type: "children" as const,
+                  val: editChildren,
+                },
+              ].map(({ label, sub, type, val }) => (
+                <div key={type} className="flex justify-between items-center">
+                  <div>
+                    <p className="font-bold">{label}</p>
+                    <p className="text-xs text-gray-500">{sub}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => updateGuests(type, "dec")}
+                      className="p-2 rounded-full bg-gray-100 dark:bg-gray-800"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <span className="font-bold w-4 text-center">{val}</span>
+                    <button
+                      onClick={() => updateGuests(type, "inc")}
+                      className="p-2 rounded-full bg-gray-100 dark:bg-gray-800"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => updateGuests("adults", "dec")}
-                    className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <span className="font-bold w-4 text-center">
-                    {editAdults}
-                  </span>
-                  <button
-                    onClick={() => updateGuests("adults", "inc")}
-                    className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-              </div>
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-bold">Children</p>
-                  <p className="text-xs text-gray-500">Ages 2-12</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => updateGuests("children", "dec")}
-                    className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <span className="font-bold w-4 text-center">
-                    {editChildren}
-                  </span>
-                  <button
-                    onClick={() => updateGuests("children", "inc")}
-                    className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-              </div>
+              ))}
             </div>
-
-            {/* 3. Vehicle Selection (NEW) */}
             <div className="mb-8">
               <p className="text-sm font-bold text-gray-500 mb-3 uppercase">
                 Need a Ride?
@@ -715,7 +682,7 @@ function HotelBookingContent() {
                     onClick={() =>
                       setEditVehicleId(editVehicleId === v.id ? null : v.id)
                     }
-                    className={`p-2 rounded-lg border text-center cursor-pointer transition-all ${editVehicleId === v.id ? "border-rose-600 bg-rose-50 text-rose-700" : "border-gray-200 hover:border-gray-400"}`}
+                    className={`p-2 rounded-lg border text-center cursor-pointer transition-all ${editVehicleId === v.id ? "border-rose-600 bg-rose-50 text-rose-700" : "border-gray-200"}`}
                   >
                     <div className="flex justify-center mb-1">{v.icon}</div>
                     <div className="text-[10px] font-bold">{v.label}</div>
@@ -724,7 +691,6 @@ function HotelBookingContent() {
                 ))}
               </div>
             </div>
-
             <button
               onClick={handleUpdateTrip}
               className="w-full bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold shadow-lg"
