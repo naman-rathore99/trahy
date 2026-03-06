@@ -44,11 +44,9 @@ const validatePhone = (phone: string) => {
 };
 
 const validateEmail = (email: string) => {
-  // Standard email regex + block disposable-looking domains
   if (!email) return true; // email is optional
-  const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(email)) return false;
-  // Block obviously fake domains
   const blocked = [
     "test.com",
     "fake.com",
@@ -217,9 +215,7 @@ function HotelBookingContent() {
     discount,
   ]);
 
-  // ─── Input handler with touch tracking ───────────────────────────────────
   const handleInput = (field: keyof typeof formData, value: string) => {
-    // Phone: only allow digits, max 10
     if (field === "phone") {
       value = value.replace(/\D/g, "").slice(0, 10);
     }
@@ -303,7 +299,6 @@ function HotelBookingContent() {
   };
 
   const handleConfirm = async () => {
-    // ✅ Mark all fields as touched to show all errors
     setTouched({ name: true, phone: true, email: true });
 
     if (!isFormValid) return;
@@ -366,6 +361,20 @@ function HotelBookingContent() {
       if (!paymentRes.ok)
         throw new Error(paymentData.error || "Payment Gateway Error.");
 
+      // Function to trigger failure email backend route
+      const triggerFailureEmail = async () => {
+        await fetch("/api/payment/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookingId: createRes.bookingId,
+            status: "failed",
+            userEmail: formData.email,
+            hotelName: listingName,
+          }),
+        });
+      };
+
       const options = {
         key: paymentData.keyId,
         amount: paymentData.amount,
@@ -380,7 +389,8 @@ function HotelBookingContent() {
         },
         theme: { color: "#e11d48" },
         handler: async (response: any) => {
-          const verifyRes = await fetch("/api/payment/callback", {
+          // Send FULL payload to backend so Invoice Email works
+          const verifyRes = await fetch("/api/payment/verify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -388,6 +398,12 @@ function HotelBookingContent() {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
               bookingId: createRes.bookingId,
+              status: "success",
+              userEmail: formData.email,
+              hotelName: listingName,
+              amount: totalPrice,
+              date: `${format(parseISO(startParam), "dd MMM")} to ${format(parseISO(endParam), "dd MMM")}`,
+              guests: totalGuests,
             }),
           });
           const verifyData = await verifyRes.json();
@@ -396,14 +412,22 @@ function HotelBookingContent() {
           else router.push(`/book/failure/${createRes.bookingId}`);
         },
         modal: {
-          ondismiss: () => {
+          ondismiss: async () => {
             setLoading(false);
+            await triggerFailureEmail(); // User closed modal
             router.push(`/book/failure/${createRes.bookingId}`);
           },
         },
       };
 
       const rzp = new window.Razorpay(options);
+
+      // Explicitly catch declined cards
+      rzp.on("payment.failed", async function (response: any) {
+        await triggerFailureEmail();
+        router.push(`/book/failure/${createRes.bookingId}`);
+      });
+
       rzp.open();
     } catch (error: any) {
       console.error("Booking Error:", error);
@@ -467,13 +491,12 @@ function HotelBookingContent() {
               </div>
             </div>
 
-            {/* Traveler Details — with validation */}
+            {/* Traveler Details */}
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
               <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">
                 Traveler Details
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Name */}
                 <div>
                   <input
                     type="text"
@@ -492,7 +515,6 @@ function HotelBookingContent() {
                   {errors.name && <FieldError msg={errors.name} />}
                 </div>
 
-                {/* Phone */}
                 <div>
                   <div
                     className={`flex items-center bg-gray-50 dark:bg-slate-800 border rounded-xl overflow-hidden transition-colors ${
@@ -533,7 +555,6 @@ function HotelBookingContent() {
                   )}
                 </div>
 
-                {/* Email */}
                 <div className="md:col-span-2">
                   <input
                     type="email"
@@ -560,10 +581,18 @@ function HotelBookingContent() {
                 Optional Add-ons
               </h2>
               <label
-                className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-all ${includeBanquet ? "border-rose-600 bg-rose-50 dark:bg-rose-900/10" : "border-gray-200 dark:border-gray-700"}`}
+                className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-all ${
+                  includeBanquet
+                    ? "border-rose-600 bg-rose-50 dark:bg-rose-900/10"
+                    : "border-gray-200 dark:border-gray-700"
+                }`}
               >
                 <div
-                  className={`mt-1 w-5 h-5 border-2 rounded flex items-center justify-center ${includeBanquet ? "bg-rose-600 border-rose-600" : "border-gray-400"}`}
+                  className={`mt-1 w-5 h-5 border-2 rounded flex items-center justify-center ${
+                    includeBanquet
+                      ? "bg-rose-600 border-rose-600"
+                      : "border-gray-400"
+                  }`}
                 >
                   {includeBanquet && (
                     <CheckCircle size={14} className="text-white" />
@@ -611,7 +640,11 @@ function HotelBookingContent() {
                   <div
                     key={id}
                     onClick={() => setPaymentMethod(id as any)}
-                    className={`flex-1 p-4 border rounded-xl flex items-center justify-between cursor-pointer transition-all ${paymentMethod === id ? "border-rose-600 bg-rose-50 dark:bg-rose-900/10" : "border-gray-200 dark:border-slate-700"}`}
+                    className={`flex-1 p-4 border rounded-xl flex items-center justify-between cursor-pointer transition-all ${
+                      paymentMethod === id
+                        ? "border-rose-600 bg-rose-50 dark:bg-rose-900/10"
+                        : "border-gray-200 dark:border-slate-700"
+                    }`}
                   >
                     <span className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                       {icon} {label}
@@ -715,7 +748,7 @@ function HotelBookingContent() {
                 </p>
               )}
 
-              {/* ✅ Show which fields are incomplete */}
+              {/* Show which fields are incomplete */}
               {!isFormValid && touched.name && touched.phone && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 text-center mb-3 font-medium flex items-center justify-center gap-1">
                   <AlertCircle size={12} /> Please fix the errors above to
@@ -825,7 +858,11 @@ function HotelBookingContent() {
                     onClick={() =>
                       setEditVehicleId(editVehicleId === v.id ? null : v.id)
                     }
-                    className={`p-2 rounded-lg border text-center cursor-pointer transition-all ${editVehicleId === v.id ? "border-rose-600 bg-rose-50 text-rose-700" : "border-gray-200 dark:border-gray-700 dark:text-gray-300"}`}
+                    className={`p-2 rounded-lg border text-center cursor-pointer transition-all ${
+                      editVehicleId === v.id
+                        ? "border-rose-600 bg-rose-50 text-rose-700"
+                        : "border-gray-200 dark:border-gray-700 dark:text-gray-300"
+                    }`}
                   >
                     <div className="flex justify-center mb-1">{v.icon}</div>
                     <div className="text-[10px] font-bold">{v.label}</div>

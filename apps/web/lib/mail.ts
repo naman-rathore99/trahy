@@ -251,3 +251,29 @@ export async function sendPasswordResetEmail(to: string, resetLink: string) {
     return { success: false, error };
   }
 }
+export async function sendPaymentFailedEmail(to: string, hotelName: string) {
+  if (!to) return;
+
+  try {
+    await resend.emails.send({
+      from: `Shubh Yatra Support <${FROM_EMAIL}>`,
+      to: [to],
+      subject: `Payment Failed: ${hotelName} Booking`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eaeaea; padding: 20px; border-radius: 10px;">
+          <h2 style="color: #e11d48; border-bottom: 2px solid #e11d48; padding-bottom: 10px;">Payment Failed</h2>
+          <p>Namaste,</p>
+          <p>We noticed that your recent payment attempt for <strong>${hotelName}</strong> was unsuccessful.</p>
+          <p>Don't worry, no charges were made to your account. You can easily try completing your booking again by visiting our app or website.</p>
+          <div style="margin-top: 30px; text-align: center;">
+            <a href="https://shubhyatra.world" style="background-color: #111827; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Return to Shubh Yatra</a>
+          </div>
+        </div>
+      `,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Failed Email Error:", error);
+    return { success: false, error };
+  }
+}
