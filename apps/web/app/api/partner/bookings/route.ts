@@ -1,42 +1,41 @@
 import { NextResponse } from "next/server";
-``
 import { getAuth } from "firebase-admin/auth";
-import { adminDb } from "@/lib/firebaseAdmin";;
+import { adminDb } from "@/lib/firebaseAdmin";
 
 export async function GET(request: Request) {
-    // initAdmin auto-initialized
-    const db = adminDb;
-
     try {
-        const token = request.headers.get("Authorization")?.split("Bearer ")[1];
-        if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        const decodedToken = await getAuth().verifyIdToken(token);
-
-        // 1. First, find the Hotel ID owned by this partner
-        const hotelQuery = await db.collection("hotels").where("ownerId", "==", decodedToken.uid).limit(1).get();
-
-        if (hotelQuery.empty) {
-            return NextResponse.json({ bookings: [] }); // No hotel = No bookings
+        // 1. Verify the Partner's Auth Token
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader?.startsWith("Bearer ")) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
-        const hotelId = hotelQuery.docs[0].id;
+        const token = authHeader.split("Bearer ")[1];
+        const decodedToken = await getAuth().verifyIdToken(token);
+        const partnerId = decodedToken.uid;
 
-        // 2. Fetch bookings for this hotelId
-        const snapshot = await db.collection("bookings")
-            .where("hotelId", "==", hotelId)
-            .orderBy("checkInDate", "desc") // Show newest first
+        // 2. Fetch the latest bookings for THIS partner from Firestore
+        // Note: We only fetch where paymentStatus is "paid" or status is "confirmed"
+        const snapshot = await adminDb.collection("bookings")
+            .where("partnerId", "==", partnerId)
+            .where("status", "in", ["confirmed", "paid"])
+            .orderBy("createdAt", "desc")
+            .limit(10) // Get the 10 most recent
             .get();
 
-        const bookings = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            // Format dates safely
-            checkInDate: doc.data().checkInDate?.toDate ? doc.data().checkInDate.toDate().toISOString() : null,
-            checkOutDate: doc.data().checkOutDate?.toDate ? doc.data().checkOutDate.toDate().toISOString() : null,
-        }));
+        const bookings = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                // Safely convert Firestore timestamps
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
+            };
+        });
 
-        return NextResponse.json({ bookings });
+        return NextResponse.json({ success: true, bookings });
 
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error("❌ Error fetching partner bookings:", error);
+        return NextResponse.json({ error: "Failed to fetch bookings" }, { status: 500 });
     }
 }
