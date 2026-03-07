@@ -3,7 +3,7 @@ import Razorpay from "razorpay";
 import { getAuth } from "firebase-admin/auth";
 import { adminDb } from "@/lib/firebaseAdmin";
 
-// Initialize Razorpay SDK (replaces PhonePe SDK)
+// 1. Initialize Razorpay SDK (Replaces PhonePe)
 const razorpay = new Razorpay({
   key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || "",
   key_secret: process.env.RAZORPAY_KEY_SECRET || "",
@@ -27,16 +27,16 @@ export async function POST(request: Request) {
     // 2. Get Data
     const body = await request.json();
     const {
+      partnerId, // 🚨 ADDED: We must receive this from the mobile app!
       listingId, listingName, listingImage, checkIn, checkOut,
       guests, totalAmount, serviceType,
-      vehicleIncluded, vehicleType, vehiclePricePerDay, vehicleTotalAmount,
-      partnerId // 🚨 We need to pass this from the app so the partner can see it!
+      vehicleIncluded, vehicleType, vehiclePricePerDay, vehicleTotalAmount
     } = body;
 
     // 3. Save Pending Booking to Firestore
     const bookingRef = await db.collection("bookings").add({
       userId,
-      partnerId: partnerId || "UNKNOWN", // Links the booking to the hotel owner
+      partnerId: partnerId || "UNKNOWN", // 🚨 Links booking to the partner's dashboard
       listingId,
       listingName,
       listingImage: listingImage || "",
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       vehicleType: vehicleType || null,
       vehiclePrice: vehiclePricePerDay || 0,
       vehicleTotalAmount: vehicleTotalAmount || 0,
-      status: "pending_payment",
+      status: "pending_payment", // Changed to match Razorpay flow
       paymentStatus: "pending",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -57,8 +57,8 @@ export async function POST(request: Request) {
 
     const merchantTransactionId = bookingRef.id;
 
-    // 4. Create Payment Request (Razorpay)
-    const amountInPaise = Math.round(totalAmount * 100); // Razorpay uses paise
+    // 4. Create Razorpay Payment Request
+    const amountInPaise = Math.round(totalAmount * 100);
 
     const options = {
       amount: amountInPaise,
@@ -68,10 +68,10 @@ export async function POST(request: Request) {
 
     const order = await razorpay.orders.create(options);
 
-    // 5. Send data back to mobile app to open the popup
+    // 5. Send data back to frontend so it can open the Razorpay popup
     return NextResponse.json({
       success: true,
-      bookingId: merchantTransactionId, // So app knows which booking to update on success
+      bookingId: merchantTransactionId,
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
