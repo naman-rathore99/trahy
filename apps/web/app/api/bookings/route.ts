@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import {
-  StandardCheckoutClient,
-  Env,
-  StandardCheckoutPayRequest,
-} from "pg-sdk-node";
-``
+import Razorpay from "razorpay";
 import { getAuth } from "firebase-admin/auth";
-import { adminDb } from "@/lib/firebaseAdmin";;
+import { adminDb } from "@/lib/firebaseAdmin";
+
+// Initialize Razorpay SDK (replaces PhonePe SDK)
+const razorpay = new Razorpay({
+  key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || "",
+  key_secret: process.env.RAZORPAY_KEY_SECRET || "",
+});
 
 export async function POST(request: Request) {
   // initAdmin auto-initialized
@@ -28,12 +29,14 @@ export async function POST(request: Request) {
     const {
       listingId, listingName, listingImage, checkIn, checkOut,
       guests, totalAmount, serviceType,
-      vehicleIncluded, vehicleType, vehiclePricePerDay, vehicleTotalAmount
+      vehicleIncluded, vehicleType, vehiclePricePerDay, vehicleTotalAmount,
+      partnerId // 🚨 We need to pass this from the app so the partner can see it!
     } = body;
 
-    // 3. Save Pending Booking
+    // 3. Save Pending Booking to Firestore
     const bookingRef = await db.collection("bookings").add({
       userId,
+      partnerId: partnerId || "UNKNOWN", // Links the booking to the hotel owner
       listingId,
       listingName,
       listingImage: listingImage || "",
@@ -46,40 +49,34 @@ export async function POST(request: Request) {
       vehicleType: vehicleType || null,
       vehiclePrice: vehiclePricePerDay || 0,
       vehicleTotalAmount: vehicleTotalAmount || 0,
-      status: "pending",
+      status: "pending_payment",
       paymentStatus: "pending",
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
 
     const merchantTransactionId = bookingRef.id;
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
-    // 4. Initialize SDK
-    const clientId = process.env.PHONEPE_MERCHANT_ID || "PGTESTPAYUAT";
-    const clientSecret = process.env.PHONEPE_SALT_KEY || "099eb0cd-02cf-4e2a-8aca-3e6c6aff0399";
-    const clientVersion = 1;
-    const env = Env.SANDBOX;
+    // 4. Create Payment Request (Razorpay)
+    const amountInPaise = Math.round(totalAmount * 100); // Razorpay uses paise
 
-    const client = StandardCheckoutClient.getInstance(clientId, clientSecret, clientVersion, env);
+    const options = {
+      amount: amountInPaise,
+      currency: "INR",
+      receipt: merchantTransactionId, // Links Razorpay to your Firestore Booking ID
+    };
 
-    // 5. Create Payment Request
-    const amountInPaise = Math.round(totalAmount * 100);
+    const order = await razorpay.orders.create(options);
 
-    // ✅ CORRECTION: Point to the file we created: /api/payment/status
-    // We do NOT need '?id=' because PhonePe sends the ID in the body automatically.
-    const callbackRoute = `${baseUrl}/api/payment/status`;
-
-    const payRequest = StandardCheckoutPayRequest.builder()
-      .merchantOrderId(merchantTransactionId)
-      .amount(amountInPaise)
-      .redirectUrl(callbackRoute) // This ensures we hit our status handler
-      .build();
-
-    // 6. Execute
-    const response = await client.pay(payRequest);
-    const checkoutPageUrl = response.redirectUrl;
-
-    return NextResponse.json({ url: checkoutPageUrl });
+    // 5. Send data back to mobile app to open the popup
+    return NextResponse.json({
+      success: true,
+      bookingId: merchantTransactionId, // So app knows which booking to update on success
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID,
+    });
 
   } catch (error: any) {
     console.error("❌ SDK Payment Error:", error);
