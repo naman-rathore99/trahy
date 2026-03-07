@@ -297,10 +297,8 @@ function HotelBookingContent() {
         op === "inc" ? prev + 1 : Math.max(0, prev - 1),
       );
   };
-
   const handleConfirm = async () => {
     setTouched({ name: true, phone: true, email: true });
-
     if (!isFormValid) return;
     if (!startParam || !endParam)
       return alert("Invalid Dates. Please select dates.");
@@ -361,20 +359,6 @@ function HotelBookingContent() {
       if (!paymentRes.ok)
         throw new Error(paymentData.error || "Payment Gateway Error.");
 
-      // Function to trigger failure email backend route
-      const triggerFailureEmail = async () => {
-        await fetch("/api/payment/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bookingId: createRes.bookingId,
-            status: "failed",
-            userEmail: formData.email,
-            hotelName: listingName,
-          }),
-        });
-      };
-
       const options = {
         key: paymentData.keyId,
         amount: paymentData.amount,
@@ -389,8 +373,8 @@ function HotelBookingContent() {
         },
         theme: { color: "#e11d48" },
         handler: async (response: any) => {
-          // Send FULL payload to backend so Invoice Email works
-          const verifyRes = await fetch("/api/payment/verify", {
+          // ✅ Verify signature via callback route
+          const verifyRes = await fetch("/api/payment/callback", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -398,12 +382,6 @@ function HotelBookingContent() {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
               bookingId: createRes.bookingId,
-              status: "success",
-              userEmail: formData.email,
-              hotelName: listingName,
-              amount: totalPrice,
-              date: `${format(parseISO(startParam), "dd MMM")} to ${format(parseISO(endParam), "dd MMM")}`,
-              guests: totalGuests,
             }),
           });
           const verifyData = await verifyRes.json();
@@ -412,9 +390,9 @@ function HotelBookingContent() {
           else router.push(`/book/failure/${createRes.bookingId}`);
         },
         modal: {
-          ondismiss: async () => {
+          ondismiss: () => {
             setLoading(false);
-            await triggerFailureEmail(); // User closed modal
+            // ✅ Just redirect to failure — no need to call any API, Firestore stays "pending_payment"
             router.push(`/book/failure/${createRes.bookingId}`);
           },
         },
@@ -422,9 +400,7 @@ function HotelBookingContent() {
 
       const rzp = new window.Razorpay(options);
 
-      // Explicitly catch declined cards
-      rzp.on("payment.failed", async function (response: any) {
-        await triggerFailureEmail();
+      rzp.on("payment.failed", () => {
         router.push(`/book/failure/${createRes.bookingId}`);
       });
 
@@ -435,7 +411,6 @@ function HotelBookingContent() {
       setLoading(false);
     }
   };
-
   if (!listingId)
     return (
       <div className="pt-32 text-center text-red-500">Invalid Booking Link</div>
