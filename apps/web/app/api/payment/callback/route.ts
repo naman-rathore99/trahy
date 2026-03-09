@@ -24,15 +24,20 @@ export async function POST(request: Request) {
     // 2. Find booking
     let bookingRef = adminDb.collection("bookings").doc(bookingId);
     let bookingSnap = await bookingRef.get();
+    let isVehicle = false;
 
     if (!bookingSnap.exists) {
       bookingRef = adminDb.collection("vehicle_bookings").doc(bookingId);
       bookingSnap = await bookingRef.get();
+      isVehicle = true;
     }
 
     if (!bookingSnap.exists) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
+
+    // Extract the data so we can use it for the notification
+    const bookingData = bookingSnap.data();
 
     // 3. Update booking status
     await bookingRef.update({
@@ -42,6 +47,27 @@ export async function POST(request: Request) {
       razorpayOrderId: razorpay_order_id,
       updatedAt: new Date().toISOString(),
     });
+
+    // 🚨 4. TRIGGER REAL-TIME NOTIFICATION FOR THE PARTNER 🚨
+    if (bookingData?.partnerId && bookingData.partnerId !== "UNKNOWN") {
+      const customerName = bookingData.customer?.name || "A guest";
+      const amount = bookingData.totalAmount || "0";
+      const itemName = bookingData.listingName || (isVehicle ? "a vehicle" : "a property");
+
+      await adminDb.collection("notifications").add({
+        partnerId: bookingData.partnerId,
+        title: "New Booking Confirmed! 🎉",
+        message: `${customerName} just booked ${itemName} for ₹${amount}.`,
+        isRead: false,
+        type: "new_booking",
+        bookingId: bookingId,
+        createdAt: new Date().toISOString()
+      });
+
+      console.log(`✅ Notification successfully created for partner: ${bookingData.partnerId}`);
+    } else {
+      console.log(`⚠️ Booking ${bookingId} has no valid partnerId. Notification skipped.`);
+    }
 
     return NextResponse.json({ success: true });
 

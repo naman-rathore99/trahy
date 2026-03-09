@@ -52,7 +52,7 @@ interface Room {
   maxAdults?: number;
   maxChildren?: number;
   description?: string;
-  images?: string[]; // Arrays of room-specific photos
+  images?: string[];
 }
 
 interface Review {
@@ -71,12 +71,12 @@ interface Hotel {
   price?: number;
   description?: string;
   amenities?: string[];
-  // Handle inconsistent DB naming (images vs imageUrls)
   images?: string[];
   imageUrls?: string[];
   mainImage?: string;
   rating?: number;
   hasVehicle?: boolean;
+  ownerId?: string; // 🚨 ADDED: We must expect the ownerId from the database
 }
 
 // --- CONFIGURATION ---
@@ -109,7 +109,6 @@ const VEHICLE_OPTIONS = [
     price: 3000,
     desc: "Innova",
   },
-  // ✅ NEW OPTION ADDED
   {
     id: "self-drive",
     label: "Self Drive",
@@ -349,6 +348,7 @@ export default function HotelDetailsPage({
     }
   };
 
+  // 🚨 FIXED HANDLE RESERVE FUNCTION 🚨
   const handleReserve = () => {
     if (!checkIn || !checkOut || nights === 0) {
       setIsCalendarOpen(true);
@@ -379,6 +379,7 @@ export default function HotelDetailsPage({
       roomId: selectedRoom?.id || "standard",
       roomName: selectedRoom?.type || "Standard Room",
       price: finalPrice.toString(),
+      partnerId: hotel.ownerId || "UNKNOWN", // 🚨 INJECTED OWNER ID HERE!
     });
 
     if (vehicleType) {
@@ -405,7 +406,6 @@ export default function HotelDetailsPage({
       </div>
     );
 
-  // --- 🔥 FIXED IMAGE AGGREGATION LOGIC ---
   // 1. Gather Hotel Images (Handle inconsistently named DB fields)
   const hotelImages = hotel.images?.length
     ? hotel.images
@@ -420,7 +420,7 @@ export default function HotelDetailsPage({
 
   // 3. Combine & Deduplicate
   const allRawImages = [...hotelImages, ...roomImages];
-  const galleryImages = Array.from(new Set(allRawImages)).filter(Boolean); // Remove duplicates & nulls
+  const galleryImages = Array.from(new Set(allRawImages)).filter(Boolean);
 
   // 4. Fallback
   if (galleryImages.length === 0) galleryImages.push("/placeholder-hotel.jpg");
@@ -448,7 +448,7 @@ export default function HotelDetailsPage({
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 md:pt-32">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
-          {/* LEFT: GALLERY (Now showing combined images) */}
+          {/* LEFT: GALLERY */}
           <div className="h-fit lg:sticky lg:top-24">
             <div className="flex flex-col-reverse md:flex-row gap-4 h-[400px] md:h-[500px]">
               <div className="flex md:flex-col gap-3 overflow-auto no-scrollbar md:w-20 shrink-0 h-20 md:h-full">
@@ -740,7 +740,7 @@ export default function HotelDetailsPage({
                 </div>
               </div>
 
-              {/* VEHICLE GRID (With Self Drive Added) */}
+              {/* VEHICLE GRID */}
               <div className="mt-4">
                 <div className="grid grid-cols-5 gap-2">
                   {VEHICLE_OPTIONS.map((v) => (

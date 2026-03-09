@@ -11,8 +11,6 @@ import {
   CheckCircle,
   BedDouble,
   PartyPopper,
-  CreditCard,
-  Wallet,
   Calendar,
   User,
   Car,
@@ -39,12 +37,11 @@ declare global {
 // ─── Validators ───────────────────────────────────────────────────────────────
 const validatePhone = (phone: string) => {
   const cleaned = phone.replace(/\s/g, "");
-  // Indian mobile: 10 digits, starting with 6-9
   return /^[6-9]\d{9}$/.test(cleaned);
 };
 
 const validateEmail = (email: string) => {
-  if (!email) return true; // email is optional
+  if (!email) return true;
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(email)) return false;
   const blocked = [
@@ -109,6 +106,8 @@ function HotelBookingContent() {
   const router = useRouter();
   const auth = getAuth(app);
 
+  // 🚨 ADDED partnerId so notifications work!
+  const partnerId = searchParams.get("partnerId") || "UNKNOWN";
   const listingId = searchParams.get("id");
   const listingName = searchParams.get("name") || "Hotel Stay";
   const pricePerNight = Number(searchParams.get("price")) || 0;
@@ -122,9 +121,6 @@ function HotelBookingContent() {
   const vehiclePrice = Number(searchParams.get("vehiclePrice")) || 0;
 
   const [loading, setLoading] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<
-    "pay_at_pickup" | "online"
-  >("online");
   const [includeBanquet, setIncludeBanquet] = useState(false);
   const [formData, setFormData] = useState({ name: "", email: "", phone: "" });
   const [touched, setTouched] = useState({
@@ -138,6 +134,7 @@ function HotelBookingContent() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editDateRange, setEditDateRange] = useState<DateRange | undefined>();
   const [editAdults, setEditAdults] = useState(adultsParam);
@@ -146,7 +143,6 @@ function HotelBookingContent() {
   const [nights, setNights] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
 
-  // ─── Derived field errors ──────────────────────────────────────────────────
   const errors = {
     name:
       touched.name && !validateName(formData.name)
@@ -154,7 +150,7 @@ function HotelBookingContent() {
         : null,
     phone:
       touched.phone && !validatePhone(formData.phone)
-        ? "Enter a valid 10-digit Indian mobile number (starts with 6-9)"
+        ? "Enter a valid 10-digit Indian mobile number"
         : null,
     email:
       touched.email && formData.email && !validateEmail(formData.email)
@@ -216,9 +212,7 @@ function HotelBookingContent() {
   ]);
 
   const handleInput = (field: keyof typeof formData, value: string) => {
-    if (field === "phone") {
-      value = value.replace(/\D/g, "").slice(0, 10);
-    }
+    if (field === "phone") value = value.replace(/\D/g, "").slice(0, 10);
     setFormData((prev) => ({ ...prev, [field]: value }));
     setTouched((prev) => ({ ...prev, [field]: true }));
   };
@@ -297,6 +291,7 @@ function HotelBookingContent() {
         op === "inc" ? prev + 1 : Math.max(0, prev - 1),
       );
   };
+
   const handleConfirm = async () => {
     setTouched({ name: true, phone: true, email: true });
     if (!isFormValid) return;
@@ -314,6 +309,7 @@ function HotelBookingContent() {
       const idToken = await user.getIdToken();
 
       const createRes = await apiRequest("/api/bookings/create", "POST", {
+        partnerId, // 🚨 Now passing partnerId safely!
         listingId,
         listingName,
         totalAmount: totalPrice,
@@ -334,18 +330,14 @@ function HotelBookingContent() {
           phone: formData.phone,
           userId: user.uid,
         },
-        paymentMethod,
-        status: paymentMethod === "online" ? "pending_payment" : "confirmed",
+        paymentMethod: "online", // 🚨 Hardcoded to online
+        status: "pending_payment",
       });
 
       if (!createRes?.success || !createRes.bookingId)
         throw new Error("Failed to create booking.");
 
-      if (paymentMethod === "pay_at_pickup") {
-        router.push(`/book/success/${createRes.bookingId}`);
-        return;
-      }
-
+      // 🚨 Initiate Razorpay Payment
       const paymentRes = await fetch("/api/payment/initiate", {
         method: "POST",
         headers: {
@@ -373,7 +365,6 @@ function HotelBookingContent() {
         },
         theme: { color: "#e11d48" },
         handler: async (response: any) => {
-          // ✅ Verify signature via callback route
           const verifyRes = await fetch("/api/payment/callback", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -392,18 +383,15 @@ function HotelBookingContent() {
         modal: {
           ondismiss: () => {
             setLoading(false);
-            // ✅ Just redirect to failure — no need to call any API, Firestore stays "pending_payment"
             router.push(`/book/failure/${createRes.bookingId}`);
           },
         },
       };
 
       const rzp = new window.Razorpay(options);
-
       rzp.on("payment.failed", () => {
         router.push(`/book/failure/${createRes.bookingId}`);
       });
-
       rzp.open();
     } catch (error: any) {
       console.error("Booking Error:", error);
@@ -411,6 +399,7 @@ function HotelBookingContent() {
       setLoading(false);
     }
   };
+
   if (!listingId)
     return (
       <div className="pt-32 text-center text-red-500">Invalid Booking Link</div>
@@ -593,44 +582,6 @@ function HotelBookingContent() {
                 </span>
               </label>
             </div>
-
-            {/* Payment Method */}
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
-              <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
-                Payment Method
-              </h2>
-              <div className="flex flex-col sm:flex-row gap-4">
-                {[
-                  {
-                    id: "online",
-                    label: "Pay Online",
-                    icon: <CreditCard size={18} />,
-                  },
-                  {
-                    id: "pay_at_pickup",
-                    label: "Pay at Hotel",
-                    icon: <Wallet size={18} />,
-                  },
-                ].map(({ id, label, icon }) => (
-                  <div
-                    key={id}
-                    onClick={() => setPaymentMethod(id as any)}
-                    className={`flex-1 p-4 border rounded-xl flex items-center justify-between cursor-pointer transition-all ${
-                      paymentMethod === id
-                        ? "border-rose-600 bg-rose-50 dark:bg-rose-900/10"
-                        : "border-gray-200 dark:border-slate-700"
-                    }`}
-                  >
-                    <span className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                      {icon} {label}
-                    </span>
-                    {paymentMethod === id && (
-                      <CheckCircle size={18} className="text-rose-600" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Summary */}
@@ -723,7 +674,6 @@ function HotelBookingContent() {
                 </p>
               )}
 
-              {/* Show which fields are incomplete */}
               {!isFormValid && touched.name && touched.phone && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 text-center mb-3 font-medium flex items-center justify-center gap-1">
                   <AlertCircle size={12} /> Please fix the errors above to
@@ -742,10 +692,8 @@ function HotelBookingContent() {
               >
                 {loading ? (
                   <Loader2 className="animate-spin" />
-                ) : paymentMethod === "online" ? (
-                  "Pay Now"
                 ) : (
-                  "Confirm Booking"
+                  `Pay ₹${totalPrice.toLocaleString("en-IN")}`
                 )}
               </button>
               <p className="text-[10px] text-gray-400 text-center mt-3">
@@ -833,11 +781,7 @@ function HotelBookingContent() {
                     onClick={() =>
                       setEditVehicleId(editVehicleId === v.id ? null : v.id)
                     }
-                    className={`p-2 rounded-lg border text-center cursor-pointer transition-all ${
-                      editVehicleId === v.id
-                        ? "border-rose-600 bg-rose-50 text-rose-700"
-                        : "border-gray-200 dark:border-gray-700 dark:text-gray-300"
-                    }`}
+                    className={`p-2 rounded-lg border text-center cursor-pointer transition-all ${editVehicleId === v.id ? "border-rose-600 bg-rose-50 text-rose-700" : "border-gray-200 dark:border-gray-700 dark:text-gray-300"}`}
                   >
                     <div className="flex justify-center mb-1">{v.icon}</div>
                     <div className="text-[10px] font-bold">{v.label}</div>

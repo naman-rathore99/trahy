@@ -1,95 +1,95 @@
 import { NextResponse } from "next/server";
-``
 import { getAuth } from "firebase-admin/auth";
-import { adminDb } from "@/lib/firebaseAdmin";;
+import { adminDb } from "@/lib/firebaseAdmin";
+import { differenceInDays, parseISO, isWithinInterval, subDays, format } from "date-fns";
 
 export async function GET(request: Request) {
-    // initAdmin auto-initialized
-    const db = adminDb;
-
     try {
-        // 1. Verify Partner Identity
-        const token = request.headers.get("Authorization")?.split("Bearer ")[1];
-        if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        const decodedToken = await getAuth().verifyIdToken(token);
-        const userId = decodedToken.uid;
-
-        // 2. Get Partner's Hotel ID
-        const hotelQuery = await db.collection("hotels").where("ownerId", "==", userId).limit(1).get();
-        if (hotelQuery.empty) {
-            return NextResponse.json({ error: "No hotel found" }, { status: 404 });
+        // 1. Authenticate the Partner
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader?.startsWith("Bearer ")) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
-        const hotelId = hotelQuery.docs[0].id;
 
-        // 3. Fetch "Confirmed" Bookings for this hotel
-        const bookingsSnapshot = await db.collection("bookings")
-            .where("hotelId", "==", hotelId)
-            .where("status", "in", ["confirmed", "completed"]) // Only paid/active bookings
+        const token = authHeader.split("Bearer ")[1];
+        const decodedToken = await getAuth().verifyIdToken(token);
+        const partnerId = decodedToken.uid;
+
+        // 2. Fetch all successful bookings for this partner
+        const snapshot = await adminDb.collection("bookings")
+            .where("partnerId", "==", partnerId)
+            .where("status", "in", ["confirmed", "paid", "success"])
             .get();
 
-        // --- AGGREGATE DATA ---
         let totalRevenue = 0;
         let totalGuests = 0;
-        let activeBookings = 0;
+        let activeOccupancy = 0;
 
-        // Initialize Chart Data (Last 7 Days)
+        // Setup empty chart data for the last 7 days
+        const last7Days = Array.from({ length: 7 }).map((_, i) => {
+            const d = subDays(new Date(), 6 - i);
+            return {
+                dateStr: format(d, "yyyy-MM-dd"),
+                name: format(d, "EEE"), // Mon, Tue, Wed
+                value: 0
+            };
+        });
+
         const today = new Date();
-        const chartDataMap = new Map();
+        today.setHours(0, 0, 0, 0);
 
-        // Create empty entries for the last 7 days so the chart isn't broken
-        for (let i = 6; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(today.getDate() - i);
-            const dayName = d.toLocaleDateString("en-US", { weekday: 'short' }); // "Mon", "Tue"
-            chartDataMap.set(dayName, 0);
-        }
-
-        bookingsSnapshot.forEach(doc => {
+        // 3. Loop through bookings and calculate the math
+        snapshot.docs.forEach(doc => {
             const data = doc.data();
+
+            // Add Revenue
             const amount = Number(data.totalAmount) || 0;
-            const guests = Number(data.guests) || 0;
-
-            // Total Revenue (All Time)
             totalRevenue += amount;
-            totalGuests += guests;
 
-            // Active Now? (Check if today is between checkIn and checkOut)
-            // assuming data.startDate and data.endDate exist as timestamps or strings
-            const start = new Date(data.startDate);
-            const end = new Date(data.endDate);
-            if (today >= start && today <= end) {
-                activeBookings += 1;
+            // Add Guests
+            totalGuests += Number(data.guests) || 0;
+
+            // Calculate Active Occupancy (Are they staying TODAY?)
+            if (data.checkIn && data.checkOut) {
+                const checkInDate = parseISO(data.checkIn);
+                const checkOutDate = parseISO(data.checkOut);
+
+                if (isWithinInterval(today, { start: checkInDate, end: checkOutDate })) {
+                    // Count 1 room occupied for this booking
+                    activeOccupancy += 1;
+                }
             }
 
-            // Chart Data (Weekly Earnings)
-            // Check if booking was created/paid in the last 7 days
-            const bookingDate = data.createdAt ? new Date(data.createdAt.toDate()) : new Date();
-            const diffTime = Math.abs(today.getTime() - bookingDate.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            // Calculate Chart Data (Revenue over the last 7 days)
+            if (data.createdAt) {
+                // Handle Firestore timestamps vs ISO strings safely
+                const createdDate = typeof data.createdAt === 'string'
+                    ? parseISO(data.createdAt)
+                    : data.createdAt.toDate();
 
-            if (diffDays <= 7) {
-                const dayName = bookingDate.toLocaleDateString("en-US", { weekday: 'short' });
-                if (chartDataMap.has(dayName)) {
-                    chartDataMap.set(dayName, chartDataMap.get(dayName) + amount);
+                const createdStr = format(createdDate, "yyyy-MM-dd");
+
+                // Find if this booking was made in the last 7 days
+                const dayIndex = last7Days.findIndex(d => d.dateStr === createdStr);
+                if (dayIndex !== -1) {
+                    last7Days[dayIndex].value += amount;
                 }
             }
         });
 
-        // Convert Map to Array for Recharts
-        const revenueChart = Array.from(chartDataMap, ([name, value]) => ({ name, value }));
-
+        // 4. Return the formatted data to the frontend
         return NextResponse.json({
+            success: true,
             stats: {
                 revenue: totalRevenue,
                 guests: totalGuests,
-                occupancy: activeBookings,
-                vehiclesActive: 3, // Placeholder until you link vehicle DB
-                chartData: revenueChart
+                occupancy: activeOccupancy,
+                chartData: last7Days.map(d => ({ name: d.name, value: d.value }))
             }
         });
 
     } catch (error: any) {
-        console.error("Stats Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error("❌ Failed to fetch partner stats:", error);
+        return NextResponse.json({ error: "Failed to load stats", details: error.message }, { status: 500 });
     }
 }

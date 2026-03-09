@@ -8,7 +8,6 @@ export async function POST(request: Request) {
   const auth = getAuth();
 
   try {
-    // Now expecting 'otp' in the body
     const { name, email, phone, password, role, otp } = await request.json();
 
     if (!email || !password || !name || !role || !otp) {
@@ -25,37 +24,43 @@ export async function POST(request: Request) {
     const otpDoc = await otpRef.get();
 
     if (!otpDoc.exists) {
-      return NextResponse.json(
-        { error: "Invalid or expired OTP" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });
     }
 
     const otpData = otpDoc.data();
     const now = new Date();
     const expiresAt = new Date(otpData?.expiresAt);
 
-    // Check if OTP matches
     if (otpData?.code !== otp) {
-      return NextResponse.json(
-        { error: "Incorrect OTP code" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Incorrect OTP code" }, { status: 400 });
     }
 
-    // Check if OTP is expired
     if (now > expiresAt) {
-      return NextResponse.json(
-        { error: "OTP has expired. Please request a new one." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "OTP has expired. Please request a new one." }, { status: 400 });
     }
 
-    // OTP is valid! Delete it so it can't be reused
     await otpRef.delete();
 
     // =====================================================
-    // 🚀 STEP 2: CREATE USER (Existing Logic)
+    // 🧹 STEP 1.5: FORMAT PHONE NUMBER FOR FIREBASE (E.164)
+    // =====================================================
+    let formattedPhone = undefined;
+
+    if (phone && typeof phone === "string" && phone.trim() !== "") {
+      // Strip everything except digits and the plus sign
+      const cleanPhone = phone.replace(/[^\d+]/g, "");
+
+      if (cleanPhone.startsWith("+")) {
+        formattedPhone = cleanPhone; // Perfect, already E.164
+      } else if (cleanPhone.length === 10) {
+        formattedPhone = `+91${cleanPhone}`; // Standard 10-digit Indian number
+      } else {
+        formattedPhone = `+${cleanPhone}`; // Fallback (e.g., they typed 919876543210)
+      }
+    }
+
+    // =====================================================
+    // 🚀 STEP 2: CREATE USER 
     // =====================================================
 
     // Create User in Firebase Auth
@@ -63,7 +68,8 @@ export async function POST(request: Request) {
       email,
       password,
       displayName: name,
-      phoneNumber: phone || undefined,
+      // Safely inject the phone number ONLY if we successfully formatted it
+      ...(formattedPhone && { phoneNumber: formattedPhone }),
     });
 
     // Set Role
@@ -77,10 +83,10 @@ export async function POST(request: Request) {
         uid: userRecord.uid,
         name,
         email,
-        phone: phone || "",
+        phone: formattedPhone || phone || "", // Save formatted version to DB if we have it
         role,
         createdAt: new Date(),
-        isVerified: role === "user", // Users auto-verified via OTP
+        isVerified: role === "user",
         status: "active",
       });
 

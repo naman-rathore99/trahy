@@ -4,6 +4,8 @@ import {
   getFirestore,
   collection,
   addDoc,
+  doc,        // 🚨 ADDED
+  getDoc,     // 🚨 ADDED
   serverTimestamp,
 } from "firebase/firestore";
 
@@ -12,18 +14,35 @@ export async function POST(request: Request) {
     const body = await request.json();
     const db = getFirestore(app);
 
-    // 1. Determine Collection (Hotels vs Vehicles)
-    // If it's a vehicle-only rental, it might go to 'vehicle_bookings', otherwise 'bookings'
-    // For simplicity based on your flow, we'll put Hotel Stays (even with vehicle addons) in 'bookings'
     const collectionName =
       body.vehicleId && !body.listingId ? "vehicle_bookings" : "bookings";
+
+    // ====================================================================
+    // 🚨 THE BULLETPROOF FIX: SECURE BACKEND LOOKUP FOR PARTNER ID
+    // ====================================================================
+    let resolvedPartnerId = body.partnerId;
+
+    // If the frontend didn't send it, or sent "UNKNOWN", let's find it ourselves!
+    if (!resolvedPartnerId || resolvedPartnerId === "UNKNOWN") {
+      if (body.listingId) {
+        const hotelRef = doc(db, "hotels", body.listingId);
+        const hotelSnap = await getDoc(hotelRef);
+
+        if (hotelSnap.exists()) {
+          // Grab the ownerId directly from the database!
+          resolvedPartnerId = hotelSnap.data().ownerId || "UNKNOWN";
+          console.log(`🔍 Backend automatically matched partnerId: ${resolvedPartnerId}`);
+        }
+      }
+    }
 
     // 2. Prepare Booking Data
     const bookingData = {
       ...body,
+      partnerId: resolvedPartnerId || "UNKNOWN", // 🚨 Now it will definitely save the correct UID
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      status: body.status || "pending_payment", // Default status
+      status: body.status || "pending_payment",
     };
 
     // 3. Save to Firestore
