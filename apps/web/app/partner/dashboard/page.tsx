@@ -270,9 +270,9 @@ export default function PartnerDashboard() {
 
         {/* --- RIGHT: LIVE ACTIVITY FEED --- */}
         <div className="space-y-8">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden">
+          <div className="bg-white dark:text-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden">
             {/* Live Radar Pulse Effect */}
-            <div className="absolute top-6 right-6 flex h-3 w-3">
+            <div className="absolute top-10 right-6 flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
             </div>
@@ -281,7 +281,7 @@ export default function PartnerDashboard() {
               <h3 className="font-bold text-lg">Live Activity</h3>
               <Link
                 href="/partner/notifications"
-                className="text-xs font-bold text-rose-600 hover:underline"
+                className="text-xs font-bold mt-10 text-rose-600 hover:underline"
               >
                 View All
               </Link>
