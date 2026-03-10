@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { apiRequest } from "@/lib/api";
-import { db, auth } from "@/lib/firebase"; // 🚨 ADDED
+import { db, auth } from "@/lib/firebase";
 import {
   collection,
   query,
@@ -10,7 +10,7 @@ import {
   orderBy,
   limit,
   onSnapshot,
-} from "firebase/firestore"; // 🚨 ADDED
+} from "firebase/firestore";
 import {
   TrendingUp,
   Users,
@@ -24,16 +24,20 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from "recharts";
-import toast, { Toaster } from "react-hot-toast"; // 🚨 ADDED
+import toast, { Toaster } from "react-hot-toast";
 
 export default function PartnerDashboard() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
-  const [recentAlerts, setRecentAlerts] = useState<any[]>([]); // 🚨 ADDED
+  const [recentAlerts, setRecentAlerts] = useState<any[]>([]);
 
-  // Used to prevent firing 5 toasts the moment the page loads
+  // Used to prevent firing toasts the moment the page loads
   const isInitialLoad = useRef(true);
 
+  // 🚨 NEW: Tracks exactly which notifications we've already "dinged" for
+  const notifiedIds = useRef(new Set());
+
+  // 1. FETCH DASHBOARD STATS
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -48,7 +52,7 @@ export default function PartnerDashboard() {
     fetchData();
   }, []);
 
-  // 🚨 NEW: REAL-TIME NOTIFICATION LISTENER
+  // 2. REAL-TIME NOTIFICATION LISTENER
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
@@ -64,80 +68,94 @@ export default function PartnerDashboard() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      // Update the UI list
       const notifs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
       setRecentAlerts(notifs);
 
-      if (!isInitialLoad.current) {
+      // Handle Toasts & Sound (with duplicate protection)
+      if (isInitialLoad.current) {
+        // On first load, silently add existing IDs to memory so they don't trigger sounds
+        snapshot.docs.forEach((doc) => notifiedIds.current.add(doc.id));
+        isInitialLoad.current = false;
+      } else {
         snapshot.docChanges().forEach((change) => {
           if (change.type === "added") {
             const newAlert = change.doc.data();
             const alertId = change.doc.id; // Get the unique Firebase document ID
 
-            audio?.play().catch((e) => console.log("Audio blocked:", e));
+            // 🚨 FIX: Check if we've already alerted the user for this specific ID
+            if (!notifiedIds.current.has(alertId)) {
+              notifiedIds.current.add(alertId); // Mark as notified in memory
 
-            // 🚨 Explicitly pass the ID and set duration to 120,000ms (2 mins)
-            toast.custom(
-              (t) => (
-                <div
-                  className={`${t.visible ? "animate-enter" : "animate-leave"} max-w-sm w-full bg-white dark:bg-gray-900 shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-black/5 border-l-4 border-rose-500 overflow-hidden cursor-pointer`}
-                >
-                  {/* 🚨 Clicking the body takes them to notifications & dismisses toast */}
+              // Play sound safely
+              audio?.play().catch((e) => console.log("Audio blocked:", e));
+
+              // Show Toast
+              toast.custom(
+                (t) => (
                   <div
-                    className="flex-1 w-0 p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    onClick={() => {
-                      toast.dismiss(alertId);
-                      window.location.href = "/partner/notifications";
-                    }}
+                    className={`${
+                      t.visible ? "animate-enter" : "animate-leave"
+                    } max-w-sm w-full bg-white dark:bg-gray-900 shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-black/5 border-l-4 border-rose-500 overflow-hidden cursor-pointer`}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 pt-0.5">
-                        <div className="h-10 w-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
-                          <BellRing size={20} />
+                    {/* Clicking the body takes them to notifications & dismisses toast */}
+                    <div
+                      className="flex-1 w-0 p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      onClick={() => {
+                        toast.dismiss(alertId);
+                        window.location.href = "/partner/notifications";
+                      }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 pt-0.5">
+                          <div className="h-10 w-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
+                            <BellRing size={20} />
+                          </div>
+                        </div>
+                        <div className="ml-1 flex-1">
+                          <p className="text-sm font-bold text-gray-900 dark:text-white">
+                            {newAlert.title}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                            {newAlert.message}
+                          </p>
                         </div>
                       </div>
-                      <div className="ml-1 flex-1">
-                        <p className="text-sm font-bold text-gray-900 dark:text-white">
-                          {newAlert.title}
-                        </p>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                          {newAlert.message}
-                        </p>
-                      </div>
+                    </div>
+
+                    {/* Fixed Close Button */}
+                    <div className="flex border-l border-gray-100 dark:border-gray-800">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation(); // Stops the click from triggering the body link
+                          toast.dismiss(alertId);
+                        }}
+                        className="w-full border border-transparent rounded-none rounded-r-2xl p-4 flex items-center justify-center text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none transition-colors"
+                      >
+                        Close
+                      </button>
                     </div>
                   </div>
-
-                  {/* 🚨 Fixed Close Button */}
-                  <div className="flex border-l border-gray-100 dark:border-gray-800">
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation(); // Stops the click from triggering the body link
-                        toast.dismiss(alertId); // Uses explicit ID
-                      }}
-                      className="w-full border border-transparent rounded-none rounded-r-2xl p-4 flex items-center justify-center text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none transition-colors"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
-              ),
-              {
-                id: alertId, // Guaranteed to match and allow dismissal
-                duration: 120000, // 120,000 ms = 2 minutes
-                position: "top-right",
-              },
-            );
+                ),
+                {
+                  id: alertId, // Guaranteed to match and allow dismissal
+                  duration: 120000, // 120,000 ms = 2 minutes
+                  position: "top-right",
+                },
+              );
+            }
           }
         });
       }
-      isInitialLoad.current = false;
     });
 
     return () => unsubscribe();
   }, []);
+
   if (loading)
     return (
       <div className="h-screen flex items-center justify-center">
