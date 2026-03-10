@@ -11,7 +11,7 @@ const razorpay = new Razorpay({
 export async function POST(request: Request) {
   try {
     // 1. Verify Auth
-    const authHeader = request.headers.get("Authorization");
+    const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
