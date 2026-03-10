@@ -1,61 +1,68 @@
 import { NextResponse } from "next/server";
-import { app } from "@/lib/firebase";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  doc,        // 🚨 ADDED
-  getDoc,     // 🚨 ADDED
-  serverTimestamp,
-} from "firebase/firestore";
+import { adminDb, adminAuth } from "@/lib/firebaseAdmin";
+import { FieldValue } from "firebase-admin/firestore";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const db = getFirestore(app);
+
+    // ✅ SAFE: Try to verify token if present, fall back to body userId
+    // Web works either way. Mobile gets properly verified.
+    let verifiedUserId: string | null = null;
+
+    const authHeader =
+      request.headers.get("authorization") ||
+      request.headers.get("Authorization");
+
+    if (authHeader?.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.split("Bearer ")[1];
+        const decoded = await adminAuth.verifyIdToken(token);
+        verifiedUserId = decoded.uid;
+      } catch (e) {
+        console.warn("⚠️ Token verification failed, falling back to body userId");
+      }
+    }
+
+    // Use verified UID if available, otherwise trust body (web fallback)
+    const resolvedUserId = verifiedUserId || body.customer?.userId || null;
 
     const collectionName =
       body.vehicleId && !body.listingId ? "vehicle_bookings" : "bookings";
 
-    // ====================================================================
-    // 🚨 THE BULLETPROOF FIX: SECURE BACKEND LOOKUP FOR PARTNER ID
-    // ====================================================================
+    // Resolve partnerId if missing
     let resolvedPartnerId = body.partnerId;
-
-    // If the frontend didn't send it, or sent "UNKNOWN", let's find it ourselves!
     if (!resolvedPartnerId || resolvedPartnerId === "UNKNOWN") {
       if (body.listingId) {
-        const hotelRef = doc(db, "hotels", body.listingId);
-        const hotelSnap = await getDoc(hotelRef);
-
-        if (hotelSnap.exists()) {
-          // Grab the ownerId directly from the database!
-          resolvedPartnerId = hotelSnap.data().ownerId || "UNKNOWN";
-          console.log(`🔍 Backend automatically matched partnerId: ${resolvedPartnerId}`);
+        const hotelSnap = await adminDb
+          .collection("hotels")
+          .doc(body.listingId)
+          .get();
+        if (hotelSnap.exists) {
+          resolvedPartnerId = hotelSnap.data()?.ownerId || "UNKNOWN";
+          console.log(`🔍 Resolved partnerId: ${resolvedPartnerId}`);
         }
       }
     }
 
-    // 2. Prepare Booking Data
     const bookingData = {
       ...body,
-      partnerId: resolvedPartnerId || "UNKNOWN", // 🚨 Now it will definitely save the correct UID
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      // ✅ CRITICAL: userId at top level so initiate can find it
+      userId: resolvedUserId,
+      partnerId: resolvedPartnerId || "UNKNOWN",
+      customer: {
+        ...body.customer,
+        userId: resolvedUserId, // keep in sync
+      },
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
       status: body.status || "pending_payment",
     };
 
-    // 3. Save to Firestore
-    const docRef = await addDoc(collection(db, collectionName), bookingData);
+    const docRef = await adminDb.collection(collectionName).add(bookingData);
+    console.log(`✅ Booking Created [${collectionName}]:`, docRef.id);
 
-    console.log(`✅ Booking Created in [${collectionName}]:`, docRef.id);
-
-    // 4. Return the ID
-    return NextResponse.json({
-      success: true,
-      bookingId: docRef.id,
-      message: "Booking created successfully",
-    });
+    return NextResponse.json({ success: true, bookingId: docRef.id });
   } catch (error: any) {
     console.error("❌ Booking Creation Error:", error);
     return NextResponse.json(

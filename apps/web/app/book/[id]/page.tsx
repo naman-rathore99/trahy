@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
 import { app } from "@/lib/firebase";
 import Navbar from "@/components/Navbar";
-import { apiRequest } from "@/lib/api";
 import {
   Loader2,
   CheckCircle,
@@ -106,7 +105,6 @@ function HotelBookingContent() {
   const router = useRouter();
   const auth = getAuth(app);
 
-  // 🚨 ADDED partnerId so notifications work!
   const partnerId = searchParams.get("partnerId") || "UNKNOWN";
   const listingId = searchParams.get("id");
   const listingName = searchParams.get("name") || "Hotel Stay";
@@ -292,6 +290,9 @@ function HotelBookingContent() {
       );
   };
 
+  // ✅ FIXED: bookings/create now sends Authorization token
+  // This ensures userId is verified and saved correctly so
+  // payment/initiate ownership check passes for both web and mobile
   const handleConfirm = async () => {
     setTouched({ name: true, phone: true, email: true });
     if (!isFormValid) return;
@@ -306,38 +307,48 @@ function HotelBookingContent() {
         setLoading(false);
         return;
       }
+
+      // Get token once and reuse for all requests
       const idToken = await user.getIdToken();
 
-      const createRes = await apiRequest("/api/bookings/create", "POST", {
-        partnerId, // 🚨 Now passing partnerId safely!
-        listingId,
-        listingName,
-        totalAmount: totalPrice,
-        discountApplied: discount,
-        couponCode: discount > 0 ? couponCode : null,
-        checkIn: startParam,
-        checkOut: endParam,
-        guests: totalGuests,
-        includeBanquet,
-        serviceType: includeBanquet ? "banquet_booking" : "hotel_stay",
-        vehicleIncluded: !!vehicleId,
-        vehicleId,
-        vehicleName,
-        vehiclePrice,
-        customer: {
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          userId: user.uid,
+      // ✅ CHANGED: was apiRequest() with no token — now sends Authorization header
+      const createRes = await fetch("/api/bookings/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
-        paymentMethod: "online", // 🚨 Hardcoded to online
-        status: "pending_payment",
-      });
+        body: JSON.stringify({
+          partnerId,
+          listingId,
+          listingName,
+          totalAmount: totalPrice,
+          discountApplied: discount,
+          couponCode: discount > 0 ? couponCode : null,
+          checkIn: startParam,
+          checkOut: endParam,
+          guests: totalGuests,
+          includeBanquet,
+          serviceType: includeBanquet ? "banquet_booking" : "hotel_stay",
+          vehicleIncluded: !!vehicleId,
+          vehicleId,
+          vehicleName,
+          vehiclePrice,
+          customer: {
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            userId: user.uid,
+          },
+          paymentMethod: "online",
+          status: "pending_payment",
+        }),
+      }).then((r) => r.json());
 
       if (!createRes?.success || !createRes.bookingId)
         throw new Error("Failed to create booking.");
 
-      // 🚨 Initiate Razorpay Payment
+      // Initiate Razorpay Payment (already had token — unchanged)
       const paymentRes = await fetch("/api/payment/initiate", {
         method: "POST",
         headers: {
