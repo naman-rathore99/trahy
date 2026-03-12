@@ -30,6 +30,15 @@ import {
   BedDouble,
   Trash2,
   CarFront,
+  // ✅ NEW IMPORTS FOR EXPANDED AMENITIES
+  Coffee,
+  Bath,
+  Refrigerator,
+  MountainSnow,
+  Shirt,
+  Dumbbell,
+  MonitorSmartphone,
+  Check,
 } from "lucide-react";
 import {
   format,
@@ -43,7 +52,7 @@ import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import Link from "next/link";
 
-// --- 1. UPDATED INTERFACES (Flexible for DB variations) ---
+// --- 1. UPDATED INTERFACES ---
 interface Room {
   id: string;
   type: string;
@@ -76,7 +85,7 @@ interface Hotel {
   mainImage?: string;
   rating?: number;
   hasVehicle?: boolean;
-  ownerId?: string; // 🚨 ADDED: We must expect the ownerId from the database
+  ownerId?: string;
 }
 
 // --- CONFIGURATION ---
@@ -118,14 +127,29 @@ const VEHICLE_OPTIONS = [
   },
 ];
 
+// ✅ MASSIVELY EXPANDED AMENITY MAP to match Admin Panel
 const AMENITY_MAP: Record<string, { label: string; icon: React.ReactNode }> = {
   wifi: { label: "Free Wi-Fi", icon: <Wifi size={16} /> },
+  "free wifi": { label: "Free Wi-Fi", icon: <Wifi size={16} /> },
   parking: { label: "Free Parking", icon: <Car size={16} /> },
   ac: { label: "AC", icon: <Snowflake size={16} /> },
-  geyser: { label: "Hot Water", icon: <Droplets size={16} /> },
+  geyser: { label: "Hot Water", icon: <Bath size={16} /> },
+  "hot water": { label: "Hot Water", icon: <Bath size={16} /> },
   tv: { label: "TV", icon: <Tv size={16} /> },
   pool: { label: "Pool", icon: <Waves size={16} /> },
+  "pool access": { label: "Pool Access", icon: <Waves size={16} /> },
   dining: { label: "Dining", icon: <Utensils size={16} /> },
+  breakfast: { label: "Breakfast", icon: <Coffee size={16} /> },
+  fridge: { label: "Mini Fridge", icon: <Refrigerator size={16} /> },
+  "mini fridge": { label: "Mini Fridge", icon: <Refrigerator size={16} /> },
+  room_service: { label: "Room Service", icon: <Utensils size={16} /> },
+  "room service": { label: "Room Service", icon: <Utensils size={16} /> },
+  balcony: { label: "Balcony", icon: <MountainSnow size={16} /> },
+  housekeeping: { label: "Housekeeping", icon: <Shirt size={16} /> },
+  gym: { label: "Gym Access", icon: <Dumbbell size={16} /> },
+  "gym access": { label: "Gym Access", icon: <Dumbbell size={16} /> },
+  smart_tv: { label: "Smart TV", icon: <MonitorSmartphone size={16} /> },
+  "smart tv": { label: "Smart TV", icon: <MonitorSmartphone size={16} /> },
 };
 
 // --- HELPERS ---
@@ -348,7 +372,6 @@ export default function HotelDetailsPage({
     }
   };
 
-  // 🚨 FIXED HANDLE RESERVE FUNCTION 🚨
   const handleReserve = () => {
     if (!checkIn || !checkOut || nights === 0) {
       setIsCalendarOpen(true);
@@ -379,7 +402,7 @@ export default function HotelDetailsPage({
       roomId: selectedRoom?.id || "standard",
       roomName: selectedRoom?.type || "Standard Room",
       price: finalPrice.toString(),
-      partnerId: hotel.ownerId || "UNKNOWN", // 🚨 INJECTED OWNER ID HERE!
+      partnerId: hotel.ownerId || "UNKNOWN",
     });
 
     if (vehicleType) {
@@ -406,7 +429,6 @@ export default function HotelDetailsPage({
       </div>
     );
 
-  // 1. Gather Hotel Images (Handle inconsistently named DB fields)
   const hotelImages = hotel.images?.length
     ? hotel.images
     : hotel.imageUrls?.length
@@ -415,17 +437,12 @@ export default function HotelDetailsPage({
   if (hotelImages.length === 0 && hotel.mainImage)
     hotelImages.push(hotel.mainImage);
 
-  // 2. Gather Room Images (Flatten all room images)
   const roomImages = rooms.flatMap((r) => r.images || []);
-
-  // 3. Combine & Deduplicate
   const allRawImages = [...hotelImages, ...roomImages];
   const galleryImages = Array.from(new Set(allRawImages)).filter(Boolean);
 
-  // 4. Fallback
   if (galleryImages.length === 0) galleryImages.push("/placeholder-hotel.png");
 
-  // --- DYNAMIC TABS LOGIC ---
   const availableCategories = Array.from(new Set(rooms.map(getRoomCategory)));
   const sortOrder = ["Standard", "Deluxe", "Luxury", "Suite"];
   availableCategories.sort(
@@ -535,21 +552,36 @@ export default function HotelDetailsPage({
               <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-4">
                 {hotel.description || "Experience luxury at its finest."}
               </p>
+
               <h3 className="font-bold text-lg text-gray-900 dark:text-white">
                 Amenities
               </h3>
               <div className="flex flex-wrap gap-3">
-                {hotel.amenities?.slice(0, 6).map((id: string) => {
-                  const key = id.toLowerCase();
-                  const amenity = AMENITY_MAP[key];
-                  return amenity ? (
+                {/* ✅ FIXED AMENITIES MAP: Removed slice(0,6) to show all, and added fallback for custom text */}
+                {hotel.amenities?.map((rawString: string) => {
+                  const key = rawString.toLowerCase().trim();
+                  let amenity = AMENITY_MAP[key];
+
+                  // Fallback: If custom string contains a known keyword (e.g. "River View and Wifi" -> Wifi)
+                  if (!amenity) {
+                    const foundKey = Object.keys(AMENITY_MAP).find((k) =>
+                      key.includes(k),
+                    );
+                    if (foundKey) amenity = AMENITY_MAP[foundKey];
+                  }
+
+                  // Final Fallback for completely custom typed amenities
+                  const displayLabel = amenity?.label || rawString;
+                  const DisplayIcon = amenity?.icon || <Check size={16} />;
+
+                  return (
                     <span
-                      key={id}
+                      key={rawString}
                       className="text-xs font-medium px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl flex items-center gap-2 text-gray-700 dark:text-gray-300"
                     >
-                      {amenity.icon} {amenity.label}
+                      {DisplayIcon} {displayLabel}
                     </span>
-                  ) : null;
+                  );
                 })}
               </div>
             </div>

@@ -58,6 +58,20 @@ const ROOM_TYPES = [
   "Villa",
 ];
 
+// Reusable empty state for the form
+const INITIAL_FORM_STATE = {
+  id: "", // Used to track if we are editing an existing room
+  type: "Deluxe",
+  basePrice: "",
+  discountPrice: "",
+  maxAdults: 2,
+  maxChildren: 1,
+  totalStock: 5,
+  amenities: [] as string[],
+  images: [] as string[],
+  description: "",
+};
+
 export default function RoomManager() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -69,17 +83,7 @@ export default function RoomManager() {
   const [customAmenity, setCustomAmenity] = useState("");
 
   // --- FORM STATE ---
-  const [formData, setFormData] = useState({
-    type: "Deluxe",
-    basePrice: "",
-    discountPrice: "",
-    maxAdults: 2,
-    maxChildren: 1,
-    totalStock: 5,
-    amenities: [] as string[],
-    images: [] as string[],
-    description: "",
-  });
+  const [formData, setFormData] = useState(INITIAL_FORM_STATE);
 
   // --- LOAD ROOMS ---
   useEffect(() => {
@@ -125,6 +129,29 @@ export default function RoomManager() {
     setCustomAmenity(""); // Clear input
   };
 
+  // ✅ ADDED: Function to handle opening the form for a NEW room
+  const handleAddNewRoom = () => {
+    setFormData(INITIAL_FORM_STATE); // Clear any old edit data
+    setIsFormOpen(true);
+  };
+
+  // ✅ ADDED: Function to handle opening the form for an EXISTING room
+  const handleEdit = (room: any) => {
+    setFormData({
+      id: room.id,
+      type: room.type || "Deluxe",
+      basePrice: room.basePrice || "",
+      discountPrice: room.discountPrice || "",
+      maxAdults: room.maxAdults || 2,
+      maxChildren: room.maxChildren || 1,
+      totalStock: room.totalStock || 5,
+      amenities: room.amenities || [],
+      images: room.images || [],
+      description: room.description || "",
+    });
+    setIsFormOpen(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.images.length === 0)
@@ -132,23 +159,17 @@ export default function RoomManager() {
 
     setSubmitting(true);
     try {
-      await apiRequest("/api/partner/rooms", "POST", formData);
-      alert("Room Added Successfully!");
+      // ✅ FIX: Use PUT if updating (has an ID), or POST if adding new
+      const method = formData.id ? "PUT" : "POST";
+
+      await apiRequest("/api/partner/rooms", method, formData);
+      alert(
+        formData.id ? "Room Updated Successfully!" : "Room Added Successfully!",
+      );
+
       setIsFormOpen(false);
       fetchRooms(); // Refresh list
-
-      // Reset Form
-      setFormData({
-        type: "Deluxe",
-        basePrice: "",
-        discountPrice: "",
-        maxAdults: 2,
-        maxChildren: 1,
-        totalStock: 5,
-        amenities: [],
-        images: [],
-        description: "",
-      });
+      setFormData(INITIAL_FORM_STATE); // Reset Form
     } catch (error: any) {
       alert("Error: " + error.message);
     } finally {
@@ -180,7 +201,7 @@ export default function RoomManager() {
           </p>
         </div>
         <button
-          onClick={() => setIsFormOpen(true)}
+          onClick={handleAddNewRoom} // ✅ CHANGED: Clears form before opening
           className="bg-black dark:bg-white text-white dark:text-black px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-80 transition-all shadow-sm active:scale-95"
         >
           <Plus size={20} /> Add Room
@@ -271,7 +292,10 @@ export default function RoomManager() {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-800">
-                  <button className="flex-1 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                  <button
+                    onClick={() => handleEdit(room)} // ✅ ADDED: Edit onClick handler
+                    className="flex-1 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  >
                     <Edit size={16} /> Edit
                   </button>
                   <button
@@ -287,9 +311,9 @@ export default function RoomManager() {
         </div>
       )}
 
-      {/* --- ADD ROOM FORM OVERLAY --- */}
+      {/* --- ADD/EDIT ROOM FORM OVERLAY --- */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex justify-end">
+        <div className="fixed inset-0 z-[100] flex justify-end">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
@@ -300,7 +324,8 @@ export default function RoomManager() {
           <div className="relative w-full max-w-lg bg-white dark:bg-black h-full shadow-2xl p-6 overflow-y-auto animate-in slide-in-from-right duration-300 border-l border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between mb-8 sticky top-0 bg-white dark:bg-black z-10 py-2">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Add New Room
+                {formData.id ? "Edit Room" : "Add New Room"}{" "}
+                {/* ✅ Dynamic Title */}
               </h2>
               <button
                 onClick={() => setIsFormOpen(false)}
@@ -458,7 +483,7 @@ export default function RoomManager() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {AMENITIES_LIST.map((am) => {
                     const Icon = am.icon;
-                    const isSelected = formData.amenities.includes(am.label); // Match by Label now
+                    const isSelected = formData.amenities.includes(am.label);
                     return (
                       <button
                         key={am.id}
@@ -553,7 +578,11 @@ export default function RoomManager() {
                   ) : (
                     <CheckCircle2 size={20} />
                   )}
-                  {submitting ? "Saving..." : "Save Room Details"}
+                  {submitting
+                    ? "Saving..."
+                    : formData.id
+                      ? "Update Room"
+                      : "Save Room Details"}
                 </button>
               </div>
             </form>
