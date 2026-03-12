@@ -36,10 +36,13 @@ export default function CustomerBookings() {
 
   // 1. Fetch Live Data from Firestore
   useEffect(() => {
+    let unsubscribeSnapshot: () => void;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user) {
         setBookings([]);
         setLoading(false);
+        if (unsubscribeSnapshot) unsubscribeSnapshot();
         return;
       }
 
@@ -50,22 +53,30 @@ export default function CustomerBookings() {
         orderBy("createdAt", "desc"),
       );
 
-      const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-        const fetchedBookings = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Booking[];
+      // 🚨 ADDED ERROR HANDLER HERE
+      unsubscribeSnapshot = onSnapshot(
+        q,
+        (snapshot) => {
+          const fetchedBookings = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as Booking[];
 
-        setBookings(fetchedBookings);
-        setLoading(false);
-      });
-
-      return () => unsubscribeSnapshot();
+          setBookings(fetchedBookings);
+          setLoading(false);
+        },
+        (error) => {
+          console.error("❌ FIRESTORE ERROR:", error.message);
+          setLoading(false); // Stops the infinite spinner!
+        },
+      );
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
   }, []);
-
   // 2. Helper functions to make the data look pretty in your UI
   const formatStatus = (status: string) => {
     if (status === "pending_payment") return "Pending";

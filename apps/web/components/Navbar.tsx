@@ -112,12 +112,25 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             onClick={() => setIsMobileMenuOpen(false)}
           >
             {/* shubyatra<span className="text-indigo-500">.</span>world */}
-            <Image
-              src="/unnamed-removebg-preview.png"
-              alt="Logo"
-              width={200}
-              height={200}
-            />
+            <div className="relative w-[180px] h-[40px]">
+              {/* Light mode logo */}
+              <Image
+                src="/unnamed-removebg-preview.png"
+                alt="Logo"
+                fill
+                className="object-contain dark:hidden"
+                priority
+              />
+
+              {/* Dark mode logo */}
+              <Image
+                src="/main-dark.png"
+                alt="Logo"
+                fill
+                className="object-contain hidden dark:block"
+                priority
+              />
+            </div>
           </Link>
 
           {/* Desktop Menu */}
