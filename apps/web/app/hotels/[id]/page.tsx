@@ -423,7 +423,7 @@ export default function HotelDetailsPage({
   const galleryImages = Array.from(new Set(allRawImages)).filter(Boolean);
 
   // 4. Fallback
-  if (galleryImages.length === 0) galleryImages.push("/placeholder-hotel.jpg");
+  if (galleryImages.length === 0) galleryImages.push("/placeholder-hotel.png");
 
   // --- DYNAMIC TABS LOGIC ---
   const availableCategories = Array.from(new Set(rooms.map(getRoomCategory)));

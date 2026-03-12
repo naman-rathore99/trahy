@@ -104,207 +104,47 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
       <nav
         className={`fixed top-0 left-0 right-0 z-[60] transition-all duration-300 ${navBackground}`}
       >
-        <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex items-center justify-between">
-          {/* Logo */}
-          <Link
-            href="/"
-            className={`text-2xl font-bold uppercase tracking-wide ${textColor}`}
-            onClick={() => setIsMobileMenuOpen(false)}
-          >
-            {/* shubyatra<span className="text-indigo-500">.</span>world */}
-            <div className="relative w-[180px] h-[40px]">
-              {/* Light mode logo */}
+        {/* Logo */}
+        <Link
+          href="/"
+          className={`text-2xl font-bold uppercase tracking-wide`}
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          <div className="relative w-[180px] h-[40px]">
+            {/* THEME + VARIANT LOGIC:
+                - If transparent: Show White Logo ONLY.
+                - If solid: Show Black Logo in Light Mode, White Logo in Dark Mode.
+              */}
+            {!isSolidState ? (
+              /* Transparent State: ALWAYS show White Logo */
               <Image
-                src="/unnamed-removebg-preview.png"
+                src="/main-dark.png" // The white text logo
                 alt="Logo"
                 fill
-                className="object-contain dark:hidden"
+                className="object-contain"
                 priority
               />
-
-              {/* Dark mode logo */}
-              <Image
-                src="/main-dark.png"
-                alt="Logo"
-                fill
-                className="object-contain hidden dark:block"
-                priority
-              />
-            </div>
-          </Link>
-
-          {/* Desktop Menu */}
-          <ul
-            className={`hidden md:flex items-center gap-8 text-sm font-medium ${textColor}`}
-          >
-            <li>
-              <Link href="/" className="hover:opacity-70">
-                Home
-              </Link>
-            </li>
-            <li>
-              <Link href="/vehicles" className="hover:opacity-70">
-                Vehicles
-              </Link>
-            </li>
-            {!firebaseUser && (
-              <li>
-                <Link href="/join" className="hover:opacity-70">
-                  Become a Partner
-                </Link>
-              </li>
-            )}
-          </ul>
-
-          {/* Desktop Actions */}
-          <div className="hidden md:flex items-center gap-4">
-            <button
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-full transition-colors ${textColor} ${buttonBorder} hover:bg-black/5 dark:hover:bg-white/10`}
-            >
-              <Globe size={16} /> EN
-            </button>
-
-            {!loading && (
+            ) : (
+              /* Solid State: Use Tailwind's dark: classes to toggle */
               <>
-                {!firebaseUser ? (
-                  <Link
-                    href="/login"
-                    className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-full transition-transform hover:scale-105 ${isSolidState ? "bg-black text-white" : "bg-white text-black"}`}
-                  >
-                    <UserIcon size={18} /> Login
-                  </Link>
-                ) : (
-                  <div className="relative" ref={profileRef}>
-                    <button
-                      onClick={() => setIsProfileOpen(!isProfileOpen)}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-full ${textColor} ${buttonBorder}`}
-                    >
-                      {firebaseUser.photoURL ? (
-                        <img
-                          src={firebaseUser.photoURL}
-                          alt="Avatar"
-                          className="w-6 h-6 rounded-full"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center">
-                          <UserIcon
-                            size={14}
-                            className="text-gray-600 dark:text-gray-300"
-                          />
-                        </div>
-                      )}
-                      <span className="hidden lg:block max-w-[100px] truncate">
-                        {firebaseUser.displayName || "User"}
-                      </span>
-                    </button>
-
-                    {isProfileOpen && (
-                      // ✅ Always white in light, always slate-900 in dark — never transparent
-                      <div className="absolute right-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden">
-                        {/* Header */}
-                        <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800">
-                          <p className="font-bold text-gray-900 dark:text-white">
-                            {firebaseUser.displayName || "My Account"}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {firebaseUser.email}
-                          </p>
-                        </div>
-
-                        {/* Menu Items */}
-                        <div className="py-1">
-                          <Link
-                            href="/profile"
-                            onClick={() => setIsProfileOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-                          >
-                            <UserIcon
-                              size={16}
-                              className="text-gray-500 dark:text-gray-400"
-                            />{" "}
-                            My Profile
-                          </Link>
-
-                          {userRole === "partner" && (
-                            <Link
-                              href="/partner/dashboard"
-                              onClick={() => setIsProfileOpen(false)}
-                              className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-                            >
-                              <Hotel
-                                size={16}
-                                className="text-gray-500 dark:text-gray-400"
-                              />{" "}
-                              Partner Dashboard
-                            </Link>
-                          )}
-
-                          {userRole === "admin" && (
-                            <Link
-                              href="/admin"
-                              onClick={() => setIsProfileOpen(false)}
-                              className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-                            >
-                              <ShieldCheck
-                                size={16}
-                                className="text-gray-500 dark:text-gray-400"
-                              />{" "}
-                              Admin Panel
-                            </Link>
-                          )}
-
-                          <Link
-                            href="/trips"
-                            onClick={() => setIsProfileOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-                          >
-                            <Briefcase
-                              size={16}
-                              className="text-gray-500 dark:text-gray-400"
-                            />{" "}
-                            My Trips
-                          </Link>
-
-                          <Link
-                            href="/transactions"
-                            onClick={() => setIsProfileOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-                          >
-                            <Receipt
-                              size={16}
-                              className="text-gray-500 dark:text-gray-400"
-                            />{" "}
-                            Transactions
-                          </Link>
-                        </div>
-
-                        {/* Logout */}
-                        <div className="border-t border-gray-100 dark:border-slate-700">
-                          <button
-                            onClick={handleLogout}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                          >
-                            <LogOut size={16} /> Log Out
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <Image
+                  src="/main-white.png" // The dark text logo
+                  alt="Logo"
+                  fill
+                  className="object-contain dark:hidden"
+                  priority
+                />
+                <Image
+                  src="/main-dark.png" // The white text logo
+                  alt="Logo"
+                  fill
+                  className="object-contain hidden dark:block"
+                  priority
+                />
               </>
             )}
           </div>
-
-          {/* Mobile Toggle */}
-          <div className="md:hidden">
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className={`p-2 rounded-full ${textColor}`}
-            >
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          </div>
-        </div>
+        </Link>
       </nav>
 
       {/* ✅ Mobile Menu — always solid background, always readable */}
