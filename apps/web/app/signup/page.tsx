@@ -22,9 +22,6 @@ import {
   signOut,
   onAuthStateChanged,
   fetchSignInMethodsForEmail,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  ConfirmationResult,
 } from "firebase/auth";
 import { app } from "@/lib/firebase";
 
@@ -50,13 +47,13 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // New: Auth Method State (Only Email for now as per your request to keep logic, but Phone field added below)
+  // Auth Method State
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
-    phone: "", // Added phone field
+    phone: "",
   });
 
   const [otp, setOtp] = useState("");
@@ -107,7 +104,7 @@ export default function SignupPage() {
         return;
       }
 
-      // Send Email OTP (Using your custom API)
+      // Send Email OTP
       const res = await fetch("/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,7 +144,7 @@ export default function SignupPage() {
           password: formData.password,
           role: "user",
           otp: otp,
-          phone: formData.phone, // Passing phone number to backend
+          phone: formData.phone,
         }),
       });
 
@@ -165,258 +162,301 @@ export default function SignupPage() {
 
   if (isSessionClearing) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-black">
         <Loader2 className="animate-spin text-rose-600 mb-4" size={40} />
-        <p className="text-gray-500 font-medium">Preparing secure signup...</p>
+        <p className="text-gray-500 font-medium tracking-wide">
+          Preparing secure environment...
+        </p>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 dark:bg-black font-sans text-gray-900 dark:text-gray-100">
+    <main className="min-h-screen flex flex-col bg-white dark:bg-black font-sans text-gray-900 dark:text-gray-100">
       <Navbar variant="default" />
 
-      <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden pt-24">
-        <div className="bg-white dark:bg-gray-900 w-full max-w-md p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-10 animate-in fade-in zoom-in-95 duration-500">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Create Account
-            </h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">
-              Start your spiritual journey
-            </p>
-          </div>
+      <div className="flex-1 flex pt-16 lg:pt-0">
+        {/* --- LEFT SIDE: INSPIRATIONAL IMAGE (Hidden on Mobile) --- */}
+        <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gray-900">
+          {/* Using a serene Unsplash image placeholder */}
+          <img
+            src="https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1920&q=80"
+            alt="Spiritual Journey"
+            className="absolute inset-0 w-full h-full object-cover opacity-80"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
 
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm p-3 rounded-lg mb-6 text-center border border-red-100 dark:border-red-900/50">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleInitialSubmit} className="space-y-4">
-            {/* NAME */}
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-500 mb-1 ml-1">
-                Full Name
-              </label>
-              <div className="relative group">
-                <User
-                  className="absolute left-3 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
-                  size={18}
-                />
-                <input
-                  type="text"
-                  required
-                  placeholder="John Doe"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            {/* EMAIL */}
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-500 mb-1 ml-1">
-                Email
-              </label>
-              <div className="relative group">
-                <Mail
-                  className="absolute left-3 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
-                  size={18}
-                />
-                <input
-                  type="email"
-                  required
-                  placeholder="you@example.com"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            {/* PHONE (Added) */}
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-500 mb-1 ml-1">
-                Phone Number
-              </label>
-              <div className="relative group">
-                <Phone
-                  className="absolute left-3 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
-                  size={18}
-                />
-                <input
-                  type="tel"
-                  required
-                  placeholder="+91 98765 43210"
-                  maxLength={10}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
-                  value={formData.phone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            {/* PASSWORD */}
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-500 mb-1 ml-1">
-                Password
-              </label>
-              <div className="relative group">
-                <Lock
-                  className="absolute left-3 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
-                  size={18}
-                />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  placeholder="••••••"
-                  className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-            {/* CONFIRM PASSWORD */}
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-500 mb-1 ml-1">
-                Confirm Password
-              </label>
-              <div className="relative group">
-                <Lock
-                  className="absolute left-3 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
-                  size={18}
-                />
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  required
-                  placeholder="••••••"
-                  className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
-                  value={formData.confirmPassword}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      confirmPassword: e.target.value,
-                    })
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none"
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff size={18} />
-                  ) : (
-                    <Eye size={18} />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-black dark:bg-white text-white dark:text-black font-bold py-4 rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 mt-6 shadow-lg disabled:opacity-50"
-            >
-              {loading ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <>
-                  Create Account <ArrowRight size={18} />
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="text-center mt-8">
-            <p className="text-sm text-gray-500">
-              Already have an account?{" "}
-              <Link
-                href="/login"
-                className="font-bold text-black dark:text-white hover:underline"
-              >
-                Log in
-              </Link>
+          <div className="relative z-10 flex flex-col justify-end p-16 w-full text-white">
+            <h2 className="text-5xl font-extrabold tracking-tight mb-4 leading-tight">
+              Begin your <br />
+              <span className="text-rose-400">spiritual journey.</span>
+            </h2>
+            <p className="text-lg text-gray-300 max-w-md leading-relaxed">
+              Join our community to explore sacred spaces, manage your stays,
+              and find peace on your travels.
             </p>
           </div>
         </div>
 
-        {/* OTP PANEL */}
-        {showOtpPanel && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90]"
-              onClick={() => setShowOtpPanel(false)}
-            />
-            <div className="fixed top-0 right-0 h-full w-full max-w-sm bg-white dark:bg-gray-900 shadow-2xl z-[100] animate-in slide-in-from-right duration-300">
-              <div className="p-8 h-full flex flex-col">
-                <div className="flex justify-between items-center mb-10">
-                  <h2 className="text-xl font-bold dark:text-white">
-                    Verify Email
-                  </h2>
-                  <button
-                    onClick={() => setShowOtpPanel(false)}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full dark:text-white"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-                <div className="flex-1 flex flex-col items-center justify-center text-center">
-                  <div className="bg-rose-50 dark:bg-rose-900/20 p-4 rounded-full mb-6">
-                    <ShieldCheck size={48} className="text-rose-600" />
-                  </div>
-                  <h3 className="text-2xl font-bold mb-2 dark:text-white">
-                    Check Inbox
-                  </h3>
-                  <p className="text-gray-500 dark:text-gray-400 mb-8">
-                    Code sent to <br />{" "}
-                    <span className="font-bold text-black dark:text-white">
-                      {formData.email}
-                    </span>
-                  </p>
+        {/* --- RIGHT SIDE: CLEAN FORM --- */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 lg:p-20 relative">
+          <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="mb-10">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                Create an account
+              </h1>
+              <p className="text-gray-500 dark:text-gray-400">
+                Enter your details below to get started.
+              </p>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm p-4 rounded-xl mb-8 flex items-start border border-red-100 dark:border-red-900/50">
+                <ShieldCheck className="shrink-0 mr-3 mt-0.5" size={18} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleInitialSubmit} className="space-y-5">
+              {/* NAME */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 ml-1">
+                  Full Name
+                </label>
+                <div className="relative group">
+                  <User
+                    className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
+                    size={20}
+                  />
                   <input
                     type="text"
-                    placeholder="000000"
-                    maxLength={6}
-                    className="w-full text-center text-3xl font-mono py-4 border-b-2 border-gray-200 dark:border-gray-700 bg-transparent focus:border-rose-600 outline-none mb-8 tracking-[0.5em] dark:text-white"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
+                    required
+                    placeholder="John Doe"
+                    className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-2xl focus:ring-4 focus:ring-rose-500/10 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData({ ...formData, name: e.target.value })
+                    }
                   />
-                  <button
-                    onClick={handleVerifyAndRegister}
-                    disabled={verifying}
-                    className="w-full bg-rose-600 text-white font-bold py-4 rounded-xl hover:bg-rose-700 flex items-center justify-center gap-2 shadow-lg shadow-rose-500/20"
-                  >
-                    {verifying ? (
-                      <Loader2 className="animate-spin" />
-                    ) : (
-                      "Verify & Register"
-                    )}
-                  </button>
                 </div>
               </div>
+
+              {/* EMAIL */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 ml-1">
+                  Email Address
+                </label>
+                <div className="relative group">
+                  <Mail
+                    className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
+                    size={20}
+                  />
+                  <input
+                    type="email"
+                    required
+                    placeholder="you@example.com"
+                    className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-2xl focus:ring-4 focus:ring-rose-500/10 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
+                    value={formData.email}
+                    onChange={(e) =>
+                      setFormData({ ...formData, email: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* PHONE */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 ml-1">
+                  Phone Number
+                </label>
+                <div className="relative group">
+                  <Phone
+                    className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
+                    size={20}
+                  />
+                  <input
+                    type="tel"
+                    required
+                    placeholder="+91 98765 43210"
+                    maxLength={15}
+                    className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-2xl focus:ring-4 focus:ring-rose-500/10 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
+                    value={formData.phone}
+                    onChange={(e) =>
+                      setFormData({ ...formData, phone: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* PASSWORDS ROW */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {/* PASSWORD */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 ml-1">
+                    Password
+                  </label>
+                  <div className="relative group">
+                    <Lock
+                      className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
+                      size={20}
+                    />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      placeholder="••••••"
+                      className="w-full pl-12 pr-12 py-3.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-2xl focus:ring-4 focus:ring-rose-500/10 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
+                      value={formData.password}
+                      onChange={(e) =>
+                        setFormData({ ...formData, password: e.target.value })
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none transition-colors"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* CONFIRM PASSWORD */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 ml-1">
+                    Confirm
+                  </label>
+                  <div className="relative group">
+                    <Lock
+                      className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-rose-600 transition-colors"
+                      size={20}
+                    />
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      required
+                      placeholder="••••••"
+                      className="w-full pl-12 pr-12 py-3.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-2xl focus:ring-4 focus:ring-rose-500/10 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
+                      value={formData.confirmPassword}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          confirmPassword: e.target.value,
+                        })
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
+                      className="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none transition-colors"
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff size={18} />
+                      ) : (
+                        <Eye size={18} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-black dark:bg-white text-white dark:text-black font-bold py-4 rounded-2xl hover:bg-gray-800 dark:hover:bg-gray-200 transition-all flex items-center justify-center gap-2 mt-8 shadow-xl shadow-black/5 dark:shadow-white/5 disabled:opacity-50 disabled:cursor-not-allowed group"
+              >
+                {loading ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <>
+                    Continue{" "}
+                    <ArrowRight
+                      size={18}
+                      className="group-hover:translate-x-1 transition-transform"
+                    />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="text-center mt-10">
+              <p className="text-sm text-gray-500">
+                Already have an account?{" "}
+                <Link
+                  href="/login"
+                  className="font-bold text-rose-600 hover:text-rose-700 transition-colors"
+                >
+                  Log in instead
+                </Link>
+              </p>
+
+              <div>
+                <Link
+                  href="/join"
+                  className="inline-flex items-center gap-2 mt-8 text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition"
+                >
+                  Join as Partner
+                  <ArrowRight size={16} />
+                </Link>
+              </div>
             </div>
-          </>
-        )}
+          </div>
+        </div>
       </div>
+
+      {/* --- SLEEK CENTERED OTP MODAL --- */}
+      {showOtpPanel && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-md transition-opacity"
+            onClick={() => setShowOtpPanel(false)}
+          />
+          <div className="relative bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 fade-in duration-300 border border-gray-100 dark:border-gray-800">
+            <button
+              onClick={() => setShowOtpPanel(false)}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex flex-col items-center text-center mt-4">
+              <div className="bg-rose-50 dark:bg-rose-900/20 p-4 rounded-full mb-6 ring-8 ring-rose-50 dark:ring-rose-900/10">
+                <ShieldCheck size={40} className="text-rose-600" />
+              </div>
+              <h3 className="text-2xl font-bold mb-2 dark:text-white">
+                Check your inbox
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+                We've sent a 6-digit verification code to <br />
+                <span className="font-bold text-gray-900 dark:text-white">
+                  {formData.email}
+                </span>
+              </p>
+
+              <input
+                type="text"
+                placeholder="000000"
+                maxLength={6}
+                className="w-full text-center text-4xl font-mono py-4 border-b-2 border-gray-200 dark:border-gray-700 bg-transparent focus:border-rose-600 outline-none mb-8 tracking-[0.5em] dark:text-white transition-colors placeholder:text-gray-300 dark:placeholder:text-gray-700"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} // Auto-strips non-numbers
+              />
+
+              <button
+                onClick={handleVerifyAndRegister}
+                disabled={verifying || otp.length !== 6}
+                className="w-full bg-rose-600 text-white font-bold py-4 rounded-2xl hover:bg-rose-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-rose-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {verifying ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  "Verify Account"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
