@@ -30,7 +30,6 @@ import {
   BedDouble,
   Trash2,
   CarFront,
-  // ✅ NEW IMPORTS FOR EXPANDED AMENITIES
   Coffee,
   Bath,
   Refrigerator,
@@ -82,7 +81,8 @@ interface Hotel {
   amenities?: string[];
   images?: string[];
   imageUrls?: string[];
-  mainImage?: string;
+  imageUrl?: string; // ✅ ADDED based on your DB screenshot
+  mainImage?: string; // ✅ ADDED based on your DB screenshot
   rating?: number;
   hasVehicle?: boolean;
   ownerId?: string;
@@ -90,44 +90,18 @@ interface Hotel {
 
 // --- CONFIGURATION ---
 const VEHICLE_OPTIONS = [
-  {
-    id: "bike",
-    label: "2-Wheeler",
-    icon: <Bike size={20} />,
-    price: 400,
-    desc: "Scooty",
-  },
-  {
-    id: "auto",
-    label: "Auto",
-    icon: <Zap size={20} />,
-    price: 800,
-    desc: "Rickshaw",
-  },
-  {
-    id: "car",
-    label: "Cab",
-    icon: <Car size={20} />,
-    price: 2000,
-    desc: "AC Car",
-  },
-  {
-    id: "suv",
-    label: "SUV",
-    icon: <Users size={20} />,
-    price: 3000,
-    desc: "Innova",
-  },
+  { id: "bike", label: "2-Wheeler", icon: <Bike size={20} />, price: 400 },
+  { id: "auto", label: "Auto", icon: <Zap size={20} />, price: 800 },
+  { id: "car", label: "Cab", icon: <Car size={20} />, price: 2000 },
+  { id: "suv", label: "SUV", icon: <Users size={20} />, price: 3000 },
   {
     id: "self-drive",
     label: "Self Drive",
     icon: <CarFront size={20} />,
     price: 2500,
-    desc: "Private Car",
   },
 ];
 
-// ✅ MASSIVELY EXPANDED AMENITY MAP to match Admin Panel
 const AMENITY_MAP: Record<string, { label: string; icon: React.ReactNode }> = {
   wifi: { label: "Free Wi-Fi", icon: <Wifi size={16} /> },
   "free wifi": { label: "Free Wi-Fi", icon: <Wifi size={16} /> },
@@ -152,18 +126,14 @@ const AMENITY_MAP: Record<string, { label: string; icon: React.ReactNode }> = {
   "smart tv": { label: "Smart TV", icon: <MonitorSmartphone size={16} /> },
 };
 
-// --- HELPERS ---
 const getRoomPrice = (room: Room): number => {
   const discount = Number(room.discountPrice);
   const base = Number(room.basePrice);
   return discount && !isNaN(discount) && discount > 0 ? discount : base || 0;
 };
 
-const getRoomCategory = (room: Room) => {
-  return room.type || "Standard";
-};
+const getRoomCategory = (room: Room) => room.type || "Standard";
 
-// --- COMPONENT ---
 export default function HotelDetailsPage({
   params,
 }: {
@@ -174,7 +144,6 @@ export default function HotelDetailsPage({
   const searchParams = useSearchParams();
   const auth = getAuth(app);
 
-  // --- STATE ---
   const [hotel, setHotel] = useState<Hotel | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -183,18 +152,15 @@ export default function HotelDetailsPage({
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Review Input State
   const [reviewText, setReviewText] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  // UI State
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("All");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isShareCopied, setIsShareCopied] = useState(false);
 
-  // Booking State
   const [checkIn, setCheckIn] = useState(searchParams.get("start") || "");
   const [checkOut, setCheckOut] = useState(searchParams.get("end") || "");
   const [adults, setAdults] = useState(Number(searchParams.get("adults") || 2));
@@ -203,22 +169,17 @@ export default function HotelDetailsPage({
   );
   const [vehicleType, setVehicleType] = useState<string | null>(null);
 
-  // Popover Toggles
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isGuestOpen, setIsGuestOpen] = useState(false);
   const [bookingMode, setBookingMode] = useState<"range" | "single">("range");
-
-  // Math
   const [nights, setNights] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
 
-  // Refs
   const calendarRef = useRef<HTMLDivElement>(null);
   const guestRef = useRef<HTMLDivElement>(null);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // --- 1. FETCH HOTEL & CHECK ADMIN ---
   useEffect(() => {
     if (!id) return;
     const fetchData = async () => {
@@ -228,10 +189,8 @@ export default function HotelDetailsPage({
           throw new Error("API returned empty hotel data.");
 
         setHotel({ ...hotelData.hotel, hasVehicle: true });
-
         const fetchedRooms = hotelData.rooms || [];
         setRooms(fetchedRooms);
-
         if (fetchedRooms.length > 0) setSelectedRoom(fetchedRooms[0]);
 
         fetchReviews();
@@ -250,7 +209,6 @@ export default function HotelDetailsPage({
     fetchData();
   }, [id, auth.currentUser]);
 
-  // --- 2. FETCH REVIEWS HELPER ---
   const fetchReviews = async () => {
     try {
       const data = await apiRequest(`/api/reviews?hotelId=${id}`, "GET");
@@ -260,7 +218,6 @@ export default function HotelDetailsPage({
     }
   };
 
-  // --- 3. SUBMIT REVIEW ---
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth.currentUser) return router.push("/login");
@@ -281,7 +238,6 @@ export default function HotelDetailsPage({
         },
         ...prev,
       ]);
-
       setReviewText("");
       if (hotel) setHotel({ ...hotel, rating: res.newRating });
     } catch (error: any) {
@@ -291,7 +247,6 @@ export default function HotelDetailsPage({
     }
   };
 
-  // --- 4. ADMIN DELETE REVIEW ---
   const handleDeleteReview = async (reviewId: string) => {
     if (!confirm("Admin: Are you sure you want to delete this review?")) return;
     try {
@@ -305,7 +260,6 @@ export default function HotelDetailsPage({
     }
   };
 
-  // --- CALCULATE PRICE ---
   useEffect(() => {
     if (checkIn && checkOut && hotel) {
       const start = parseISO(checkIn);
@@ -313,11 +267,9 @@ export default function HotelDetailsPage({
       if (isValid(start) && isValid(end) && isBefore(start, end)) {
         const diff = differenceInDays(end, start);
         setNights(diff);
-
-        let basePrice = 0;
-        if (selectedRoom) basePrice = getRoomPrice(selectedRoom);
-        if (!basePrice) basePrice = Number(hotel.price || 0);
-
+        let basePrice = selectedRoom
+          ? getRoomPrice(selectedRoom)
+          : Number(hotel.price || 0);
         const roomTotal = diff * basePrice;
         let vehicleTotal = 0;
         if (vehicleType) {
@@ -332,7 +284,6 @@ export default function HotelDetailsPage({
     }
   }, [checkIn, checkOut, hotel, selectedRoom, vehicleType]);
 
-  // Click Outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (guestRef.current && !guestRef.current.contains(event.target as Node))
@@ -372,6 +323,14 @@ export default function HotelDetailsPage({
     }
   };
 
+  // ✅ EXTRACT THE BEST IMAGE based on your DB structure
+  const bestImage =
+    hotel?.mainImage ||
+    hotel?.imageUrl ||
+    (hotel?.imageUrls && hotel.imageUrls[0]) ||
+    (hotel?.images && hotel.images[0]) ||
+    "/placeholder.jpg";
+
   const handleReserve = () => {
     if (!checkIn || !checkOut || nights === 0) {
       setIsCalendarOpen(true);
@@ -381,20 +340,17 @@ export default function HotelDetailsPage({
       });
       return;
     }
-    const user = auth.currentUser;
-    if (!user) {
-      router.push(`/login?redirect=/hotels/${id}`);
-      return;
-    }
+    if (!auth.currentUser) return router.push(`/login?redirect=/hotels/${id}`);
     if (!hotel) return;
 
-    let finalPrice = 0;
-    if (selectedRoom) finalPrice = getRoomPrice(selectedRoom);
-    else finalPrice = Number(hotel.price || 0);
+    const finalPrice = selectedRoom
+      ? getRoomPrice(selectedRoom)
+      : Number(hotel.price || 0);
 
     const queryParams = new URLSearchParams({
       id: hotel.id,
       name: hotel.name,
+      image: bestImage, // 🚨 PASSING THE EXTRACTED IMAGE TO THE CHECKOUT PAGE URL
       start: checkIn,
       end: checkOut,
       adults: adults.toString(),
@@ -429,24 +385,25 @@ export default function HotelDetailsPage({
       </div>
     );
 
-  const hotelImages = hotel.images?.length
-    ? hotel.images
-    : hotel.imageUrls?.length
-      ? hotel.imageUrls
-      : [];
-  if (hotelImages.length === 0 && hotel.mainImage)
-    hotelImages.push(hotel.mainImage);
+  // Build the Gallery Images array
+  const allRawImages = [
+    hotel.mainImage,
+    hotel.imageUrl,
+    ...(hotel.imageUrls || []),
+    ...(hotel.images || []),
+    ...rooms.flatMap((r) => r.images || []),
+  ];
+  const galleryImages = Array.from(new Set(allRawImages)).filter(
+    Boolean,
+  ) as string[];
+  if (galleryImages.length === 0) galleryImages.push("/placeholder.jpg");
 
-  const roomImages = rooms.flatMap((r) => r.images || []);
-  const allRawImages = [...hotelImages, ...roomImages];
-  const galleryImages = Array.from(new Set(allRawImages)).filter(Boolean);
-
-  if (galleryImages.length === 0) galleryImages.push("/placeholder-hotel.png");
-
-  const availableCategories = Array.from(new Set(rooms.map(getRoomCategory)));
-  const sortOrder = ["Standard", "Deluxe", "Luxury", "Suite"];
-  availableCategories.sort(
-    (a, b) => sortOrder.indexOf(a) - sortOrder.indexOf(b),
+  const availableCategories = Array.from(
+    new Set(rooms.map(getRoomCategory)),
+  ).sort(
+    (a, b) =>
+      ["Standard", "Deluxe", "Luxury", "Suite"].indexOf(a) -
+      ["Standard", "Deluxe", "Luxury", "Suite"].indexOf(b),
   );
   const availableTabs =
     availableCategories.length > 0 ? ["All", ...availableCategories] : [];
@@ -469,7 +426,7 @@ export default function HotelDetailsPage({
           <div className="h-fit lg:sticky lg:top-24">
             <div className="flex flex-col-reverse md:flex-row gap-4 h-[400px] md:h-[500px]">
               <div className="flex md:flex-col gap-3 overflow-auto no-scrollbar md:w-20 shrink-0 h-20 md:h-full">
-                {galleryImages.map((img: string, idx: number) => (
+                {galleryImages.map((img, idx) => (
                   <div
                     key={idx}
                     onMouseEnter={() => setActiveImageIndex(idx)}
@@ -485,7 +442,7 @@ export default function HotelDetailsPage({
               </div>
               <div className="flex-1 rounded-3xl overflow-hidden relative group bg-gray-100 dark:bg-gray-900">
                 <img
-                  src={galleryImages[activeImageIndex] || galleryImages[0]}
+                  src={galleryImages[activeImageIndex]}
                   className="w-full h-full object-cover transition-transform hover:scale-105"
                   onClick={() => setLightboxIndex(activeImageIndex)}
                   alt="Main Hotel"
@@ -537,7 +494,7 @@ export default function HotelDetailsPage({
                 </div>
               </div>
               <div className="text-3xl font-extrabold text-rose-600 flex items-baseline gap-2">
-                ₹{displayPrice.toLocaleString("en-IN")}
+                ₹{displayPrice.toLocaleString("en-IN")}{" "}
                 <span className="text-sm text-gray-400 font-normal">
                   / night
                 </span>
@@ -557,23 +514,17 @@ export default function HotelDetailsPage({
                 Amenities
               </h3>
               <div className="flex flex-wrap gap-3">
-                {/* ✅ FIXED AMENITIES MAP: Removed slice(0,6) to show all, and added fallback for custom text */}
                 {hotel.amenities?.map((rawString: string) => {
                   const key = rawString.toLowerCase().trim();
                   let amenity = AMENITY_MAP[key];
-
-                  // Fallback: If custom string contains a known keyword (e.g. "River View and Wifi" -> Wifi)
                   if (!amenity) {
                     const foundKey = Object.keys(AMENITY_MAP).find((k) =>
                       key.includes(k),
                     );
                     if (foundKey) amenity = AMENITY_MAP[foundKey];
                   }
-
-                  // Final Fallback for completely custom typed amenities
                   const displayLabel = amenity?.label || rawString;
                   const DisplayIcon = amenity?.icon || <Check size={16} />;
-
                   return (
                     <span
                       key={rawString}
@@ -715,10 +666,7 @@ export default function HotelDetailsPage({
                         </div>
                         <div className="flex items-center gap-3">
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAdults(Math.max(1, adults - 1));
-                            }}
+                            onClick={() => setAdults(Math.max(1, adults - 1))}
                             className="p-1 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white"
                           >
                             <Minus size={14} />
@@ -727,10 +675,7 @@ export default function HotelDetailsPage({
                             {adults}
                           </span>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAdults(adults + 1);
-                            }}
+                            onClick={() => setAdults(adults + 1)}
                             className="p-1 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white"
                           >
                             <Plus size={14} />
@@ -745,10 +690,9 @@ export default function HotelDetailsPage({
                         </div>
                         <div className="flex items-center gap-3">
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setChildren(Math.max(0, children - 1));
-                            }}
+                            onClick={() =>
+                              setChildren(Math.max(0, children - 1))
+                            }
                             className="p-1 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white"
                           >
                             <Minus size={14} />
@@ -757,10 +701,7 @@ export default function HotelDetailsPage({
                             {children}
                           </span>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setChildren(children + 1);
-                            }}
+                            onClick={() => setChildren(children + 1)}
                             className="p-1 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white"
                           >
                             <Plus size={14} />
@@ -809,12 +750,11 @@ export default function HotelDetailsPage({
             {/* REVIEWS SECTION */}
             <div className="pt-8">
               <h3 className="font-bold text-xl mb-6 flex justify-between items-center text-gray-900 dark:text-white">
-                Guest Reviews
+                Guest Reviews{" "}
                 <span className="text-sm font-normal text-gray-500">
                   {reviews.length} reviews
                 </span>
               </h3>
-
               {auth.currentUser ? (
                 <form
                   onSubmit={handleSubmitReview}
@@ -940,7 +880,7 @@ export default function HotelDetailsPage({
       </div>
 
       {/* LIGHTBOX */}
-      {lightboxIndex !== null && galleryImages && (
+      {lightboxIndex !== null && (
         <div className="fixed inset-0 z-60 bg-black/95 flex items-center justify-center backdrop-blur-md p-4 animate-in fade-in duration-200">
           <button
             onClick={() => setLightboxIndex(null)}

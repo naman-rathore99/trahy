@@ -108,6 +108,10 @@ function HotelBookingContent() {
   const partnerId = searchParams.get("partnerId") || "UNKNOWN";
   const listingId = searchParams.get("id");
   const listingName = searchParams.get("name") || "Hotel Stay";
+
+  // ✅ 1. ADDED: Extract the image from the URL
+  const listingImage = searchParams.get("image") || "";
+
   const pricePerNight = Number(searchParams.get("price")) || 0;
   const startParam = searchParams.get("start");
   const endParam = searchParams.get("end");
@@ -290,9 +294,6 @@ function HotelBookingContent() {
       );
   };
 
-  // ✅ FIXED: bookings/create now sends Authorization token
-  // This ensures userId is verified and saved correctly so
-  // payment/initiate ownership check passes for both web and mobile
   const handleConfirm = async () => {
     setTouched({ name: true, phone: true, email: true });
     if (!isFormValid) return;
@@ -308,10 +309,8 @@ function HotelBookingContent() {
         return;
       }
 
-      // Get token once and reuse for all requests
       const idToken = await user.getIdToken();
 
-      // ✅ CHANGED: was apiRequest() with no token — now sends Authorization header
       const createRes = await fetch("/api/bookings/create", {
         method: "POST",
         headers: {
@@ -322,6 +321,7 @@ function HotelBookingContent() {
           partnerId,
           listingId,
           listingName,
+          listingImage, // ✅ 2. ADDED: Saving the image to the database!
           totalAmount: totalPrice,
           discountApplied: discount,
           couponCode: discount > 0 ? couponCode : null,
@@ -348,7 +348,6 @@ function HotelBookingContent() {
       if (!createRes?.success || !createRes.bookingId)
         throw new Error("Failed to create booking.");
 
-      // Initiate Razorpay Payment (already had token — unchanged)
       const paymentRes = await fetch("/api/payment/initiate", {
         method: "POST",
         headers: {

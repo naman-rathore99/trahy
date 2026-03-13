@@ -11,6 +11,7 @@ import {
   getDocs,
   doc,
   updateDoc,
+  getDoc, // ✅ Added getDoc for the rescue fetch
 } from "firebase/firestore";
 import { app } from "@/lib/firebase";
 import Navbar from "@/components/Navbar";
@@ -47,19 +48,14 @@ import "react-day-picker/dist/style.css";
 interface Booking {
   id: string;
   sourceCollection: "bookings" | "vehicle_bookings";
-
-  // Normalized Fields
   listingName: string;
   listingImage: string;
   checkIn: string;
   checkOut: string;
   totalAmount: number;
   serviceType: "hotel" | "vehicle_only";
-
   status: "confirmed" | "pending" | "cancelled" | "failed";
   paymentStatus?: "pending" | "paid" | "failed";
-
-  // Original Data
   vehicleType?: string;
   vehicleIncluded?: boolean;
   userName?: string;
@@ -71,7 +67,7 @@ interface Booking {
 
 const ITEMS_PER_PAGE = 5;
 
-// ✅ ROBUST IMAGE EXTRACTOR: Checks every possible DB structure for an image
+// Basic Image Extractor
 const extractImage = (d: any): string => {
   if (typeof d.listingImage === "string" && d.listingImage.trim() !== "")
     return d.listingImage;
@@ -81,14 +77,10 @@ const extractImage = (d: any): string => {
     return d.vehicleImage;
   if (typeof d.mainImage === "string" && d.mainImage.trim() !== "")
     return d.mainImage;
-
   if (Array.isArray(d.images) && d.images.length > 0) return d.images[0];
   if (Array.isArray(d.imageUrls) && d.imageUrls.length > 0)
     return d.imageUrls[0];
-  if (Array.isArray(d.listingImages) && d.listingImages.length > 0)
-    return d.listingImages[0];
-
-  return "/placeholder.jpg"; // Ultimate fallback
+  return "";
 };
 
 export default function TripsPage() {
@@ -99,14 +91,12 @@ export default function TripsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
   const [categoryTab, setCategoryTab] = useState<"all" | "hotels" | "vehicles">(
     "all",
   );
   const [timeTab, setTimeTab] = useState<"upcoming" | "past">("upcoming");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Modals
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(
     null,
@@ -115,11 +105,9 @@ export default function TripsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
 
-  // Animations
   const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
 
-  // --- 1. FETCH TRIPS ---
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       if (!currentUser) {
@@ -134,7 +122,6 @@ export default function TripsPage() {
           collection(db, "bookings"),
           where("customer.userId", "==", currentUser.uid),
         );
-
         const vehicleQuery = query(
           collection(db, "vehicle_bookings"),
           where("customer.userId", "==", currentUser.uid),
@@ -145,11 +132,66 @@ export default function TripsPage() {
           getDocs(vehicleQuery),
         ]);
 
-        const hotelData = hotelSnapshot.docs.map((doc) => {
-          const d = doc.data();
-          const isLegacyVehicle =
-            d.type === "vehicle" || (d.serviceType || "").includes("vehicle");
+        // ✅ WE USE PROMISE.ALL HERE SO WE CAN FETCH MISSING IMAGES FROM THE HOTELS DB
+        const hotelData = await Promise.all(
+          hotelSnapshot.docs.map(async (docSnap) => {
+            const d = docSnap.data();
+            const isLegacyVehicle =
+              d.type === "vehicle" || (d.serviceType || "").includes("vehicle");
+            const rawStatus =
+              d.status === "pending_payment"
+                ? "pending"
+                : d.status || "pending";
+            const pStatus =
+              d.paymentStatus === "pending_payment"
+                ? "pending"
+                : d.paymentStatus ||
+                  (rawStatus === "confirmed" ? "paid" : "pending");
 
+            let finalImage = extractImage(d);
+
+            // 🚨 RESCUE MISSION: If the image is missing (Old Bookings), go find it in the hotels database!
+            if (!finalImage && d.listingId) {
+              try {
+                const hotelRef = await getDoc(doc(db, "hotels", d.listingId));
+                if (hotelRef.exists()) {
+                  const hd = hotelRef.data();
+                  finalImage =
+                    hd.mainImage ||
+                    hd.imageUrl ||
+                    (hd.imageUrls && hd.imageUrls[0]) ||
+                    (hd.images && hd.images[0]) ||
+                    "/placeholder.jpg";
+                }
+              } catch (e) {
+                console.log("Could not rescue image for:", d.listingId);
+              }
+            }
+
+            return {
+              id: docSnap.id,
+              sourceCollection: "bookings",
+              ...d,
+              listingName:
+                d.listingName ||
+                d.hotelName ||
+                d.vehicleName ||
+                "Unnamed Booking",
+              listingImage: finalImage || "/placeholder.jpg",
+              checkIn: d.checkIn || d.startDate,
+              checkOut: d.checkOut || d.endDate,
+              totalAmount: Number(d.totalAmount || d.totalPrice || 0),
+              serviceType: isLegacyVehicle ? "vehicle_only" : "hotel",
+              status: rawStatus,
+              paymentStatus: pStatus,
+              userName: d.customer?.name || d.userName,
+              userEmail: d.customer?.email || d.userEmail,
+            };
+          }),
+        );
+
+        const vehicleData = vehicleSnapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
           const rawStatus =
             d.status === "pending_payment" ? "pending" : d.status || "pending";
           const pStatus =
@@ -159,42 +201,11 @@ export default function TripsPage() {
                 (rawStatus === "confirmed" ? "paid" : "pending");
 
           return {
-            id: doc.id,
-            sourceCollection: "bookings",
-            ...d,
-            listingName:
-              d.listingName ||
-              d.hotelName ||
-              d.vehicleName ||
-              "Unnamed Booking",
-            listingImage: extractImage(d), // ✅ APPLIED EXTRACTOR HERE
-            checkIn: d.checkIn || d.startDate,
-            checkOut: d.checkOut || d.endDate,
-            totalAmount: Number(d.totalAmount || d.totalPrice || 0),
-            serviceType: isLegacyVehicle ? "vehicle_only" : "hotel",
-            status: rawStatus,
-            paymentStatus: pStatus,
-            userName: d.customer?.name || d.userName,
-            userEmail: d.customer?.email || d.userEmail,
-          };
-        });
-
-        const vehicleData = vehicleSnapshot.docs.map((doc) => {
-          const d = doc.data();
-          const rawStatus =
-            d.status === "pending_payment" ? "pending" : d.status || "pending";
-          const pStatus =
-            d.paymentStatus === "pending_payment"
-              ? "pending"
-              : d.paymentStatus ||
-                (rawStatus === "confirmed" ? "paid" : "pending");
-
-          return {
-            id: doc.id,
+            id: docSnap.id,
             sourceCollection: "vehicle_bookings",
             ...d,
             listingName: d.vehicleName || "Unnamed Vehicle",
-            listingImage: extractImage(d), // ✅ APPLIED EXTRACTOR HERE
+            listingImage: extractImage(d) || "/placeholder.jpg",
             checkIn: d.startDate,
             checkOut: d.endDate,
             totalAmount: Number(d.totalPrice || d.totalAmount || 0),
@@ -208,7 +219,6 @@ export default function TripsPage() {
 
         const allTrips = [...hotelData, ...vehicleData] as Booking[];
 
-        // Sort by Created At (Newest first)
         allTrips.sort((a, b) => {
           const getSeconds = (t: any) => {
             if (!t) return 0;
@@ -231,7 +241,6 @@ export default function TripsPage() {
     return () => unsubscribe();
   }, [router]);
 
-  // ✅ HELPER: Safely convert dates
   const getValidDate = (dateVal: any): Date | null => {
     if (!dateVal) return null;
     if (typeof dateVal === "object" && dateVal.seconds)
@@ -245,7 +254,6 @@ export default function TripsPage() {
     return null;
   };
 
-  // --- 2. ACTIONS ---
   const checkPaymentStatus = async (e: React.MouseEvent, bookingId: string) => {
     e.stopPropagation();
     setRefreshingIds((prev) => new Set(prev).add(bookingId));
@@ -337,6 +345,7 @@ export default function TripsPage() {
         doc(db, rescheduleBooking.sourceCollection, rescheduleBooking.id),
         updateData,
       );
+
       setBookings((prev) =>
         prev.map((b) =>
           b.id === rescheduleBooking.id
@@ -354,7 +363,6 @@ export default function TripsPage() {
     }
   };
 
-  // --- FILTER & PAGINATION ---
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -548,18 +556,7 @@ export default function TripsPage() {
 
                     <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
                       <div
-                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 
-                          ${
-                            isCancelled
-                              ? "bg-gray-600 text-white"
-                              : isFailedAPI
-                                ? "bg-red-600 text-white"
-                                : isPaymentPending
-                                  ? "bg-amber-500 text-white"
-                                  : isCompleted
-                                    ? "bg-slate-600 text-white"
-                                    : "bg-emerald-500 text-white"
-                          }`}
+                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 ${isCancelled ? "bg-gray-600 text-white" : isFailedAPI ? "bg-red-600 text-white" : isPaymentPending ? "bg-amber-500 text-white" : isCompleted ? "bg-slate-600 text-white" : "bg-emerald-500 text-white"}`}
                       >
                         {isCancelled
                           ? "Cancelled"
@@ -570,7 +567,6 @@ export default function TripsPage() {
                               : isCompleted
                                 ? "Completed"
                                 : "Confirmed"}
-
                         {isPaymentPending && (
                           <button
                             onClick={(e) => checkPaymentStatus(e, booking.id)}
@@ -585,14 +581,12 @@ export default function TripsPage() {
                           </button>
                         )}
                       </div>
-
                       {isPaymentPending && updatedDate && (
                         <div className="bg-black/50 backdrop-blur-md text-white px-2 py-0.5 rounded text-[9px]">
                           Updated {formatDistanceToNow(updatedDate)} ago
                         </div>
                       )}
                     </div>
-
                     <div
                       className={`absolute bottom-2 right-2 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-white flex items-center gap-1 ${isVehicle ? "bg-indigo-600" : "bg-rose-600"}`}
                     >
@@ -616,7 +610,7 @@ export default function TripsPage() {
                             </span>
                           )}
                           {isFailedAPI && (
-                            <span className="text-red-500 text-sm font-medium flex items-center gap-1">
+                            <span className="text-red-500 text-sm font-medium flex  items-center gap-1">
                               <XCircle size={14} /> Failed Transaction
                             </span>
                           )}
@@ -656,7 +650,7 @@ export default function TripsPage() {
                       !isCancelled &&
                       !isFailedAPI && (
                         <div className="flex items-center gap-2 text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 w-fit px-3 py-1.5 rounded-lg mb-4 border border-amber-100 dark:border-amber-900/30">
-                          <Car size={14} />
+                          <Car size={14} />{" "}
                           <span>Includes {booking.vehicleType || "Cab"}</span>
                         </div>
                       )}
@@ -820,7 +814,7 @@ export default function TripsPage() {
             <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white flex items-center gap-2">
               <Edit className="text-rose-600" /> Reschedule
             </h2>
-            <div className="flex justify-center mb-4 bg-gray-50 dark:bg-slate-800 rounded-xl p-4">
+            <div className="flex justify-center mb-4 bg-gray-50 dark:text-white dark:bg-slate-800 rounded-xl p-4">
               <DayPicker
                 mode="range"
                 selected={newDates}
