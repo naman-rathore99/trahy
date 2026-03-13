@@ -71,6 +71,26 @@ interface Booking {
 
 const ITEMS_PER_PAGE = 5;
 
+// ✅ ROBUST IMAGE EXTRACTOR: Checks every possible DB structure for an image
+const extractImage = (d: any): string => {
+  if (typeof d.listingImage === "string" && d.listingImage.trim() !== "")
+    return d.listingImage;
+  if (typeof d.hotelImage === "string" && d.hotelImage.trim() !== "")
+    return d.hotelImage;
+  if (typeof d.vehicleImage === "string" && d.vehicleImage.trim() !== "")
+    return d.vehicleImage;
+  if (typeof d.mainImage === "string" && d.mainImage.trim() !== "")
+    return d.mainImage;
+
+  if (Array.isArray(d.images) && d.images.length > 0) return d.images[0];
+  if (Array.isArray(d.imageUrls) && d.imageUrls.length > 0)
+    return d.imageUrls[0];
+  if (Array.isArray(d.listingImages) && d.listingImages.length > 0)
+    return d.listingImages[0];
+
+  return "/placeholder.jpg"; // Ultimate fallback
+};
+
 export default function TripsPage() {
   const router = useRouter();
   const db = getFirestore(app);
@@ -110,7 +130,6 @@ export default function TripsPage() {
       try {
         setLoading(true);
 
-        // ✅ FIX 1: Query inside the nested 'customer' map
         const hotelQuery = query(
           collection(db, "bookings"),
           where("customer.userId", "==", currentUser.uid),
@@ -131,7 +150,6 @@ export default function TripsPage() {
           const isLegacyVehicle =
             d.type === "vehicle" || (d.serviceType || "").includes("vehicle");
 
-          // ✅ FIX 2: Normalize "pending_payment" to "pending"
           const rawStatus =
             d.status === "pending_payment" ? "pending" : d.status || "pending";
           const pStatus =
@@ -149,11 +167,7 @@ export default function TripsPage() {
               d.hotelName ||
               d.vehicleName ||
               "Unnamed Booking",
-            listingImage:
-              d.listingImage ||
-              d.hotelImage ||
-              d.vehicleImage ||
-              "/placeholder.jpg",
+            listingImage: extractImage(d), // ✅ APPLIED EXTRACTOR HERE
             checkIn: d.checkIn || d.startDate,
             checkOut: d.checkOut || d.endDate,
             totalAmount: Number(d.totalAmount || d.totalPrice || 0),
@@ -180,7 +194,7 @@ export default function TripsPage() {
             sourceCollection: "vehicle_bookings",
             ...d,
             listingName: d.vehicleName || "Unnamed Vehicle",
-            listingImage: d.vehicleImage || "/placeholder.jpg",
+            listingImage: extractImage(d), // ✅ APPLIED EXTRACTOR HERE
             checkIn: d.startDate,
             checkOut: d.endDate,
             totalAmount: Number(d.totalPrice || d.totalAmount || 0),
@@ -527,7 +541,7 @@ export default function TripsPage() {
                   {/* Image & Badges */}
                   <div className="w-full sm:w-48 h-48 sm:h-auto shrink-0 rounded-xl overflow-hidden relative bg-gray-100 dark:bg-gray-800">
                     <img
-                      src={booking.listingImage || "/placeholder.jpg"}
+                      src={booking.listingImage}
                       className={`w-full h-full object-cover transition-transform duration-500 ${!isCancelled && !isFailedAPI && "group-hover:scale-105"} ${(isCompleted || isCancelled || isFailedAPI) && "grayscale"}`}
                       alt={booking.listingName}
                     />

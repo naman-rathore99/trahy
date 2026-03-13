@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { adminDb } from "@/lib/firebaseAdmin";
+import { sendInvoiceEmail } from "@/lib/mail"; // 🚨 IMPORTED THE EMAIL FUNCTION
 
 export async function POST(request: Request) {
     try {
@@ -47,6 +48,21 @@ export async function POST(request: Request) {
             updatedAt: new Date().toISOString()
         });
 
+        // 🚨 3.5 SEND INVOICE EMAIL TO CUSTOMER 🚨
+        // We use .catch() instead of 'await' so the server replies instantly to the frontend
+        if (bookingData?.customer?.email) {
+            sendInvoiceEmail(
+                bookingData.customer.email,
+                {
+                    id: bookingId.slice(0, 8).toUpperCase(), // Keep it short and readable
+                    hotelName: bookingData.listingName || "Shubh Yatra Stay",
+                    amount: bookingData.totalAmount?.toLocaleString('en-IN') || "0",
+                    date: `${bookingData.checkIn} to ${bookingData.checkOut}`,
+                    guests: bookingData.guests || 1,
+                }
+            ).catch(err => console.error("❌ Failed to send customer email:", err));
+        }
+
         // 4. CREATE NOTIFICATIONS FOR THE PARTNER
         if (bookingData?.partnerId && bookingData.partnerId !== "UNKNOWN") {
             const customerName = bookingData.customer?.name || "A guest";
@@ -63,7 +79,7 @@ export async function POST(request: Request) {
                 createdAt: new Date().toISOString()
             });
 
-            // 🚨 B. SEND THE EXPO PUSH NOTIFICATION (Wakes up the phone!) 🚨
+            // B. SEND THE EXPO PUSH NOTIFICATION (Wakes up the phone!)
             try {
                 // Look up the partner's profile to get their Push Token
                 const partnerDoc = await adminDb.collection("users").doc(bookingData.partnerId).get();
