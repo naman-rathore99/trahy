@@ -1,7 +1,7 @@
-// app/api/payment/callback/route.ts
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import crypto from "crypto";
+import { sendInvoiceEmail } from "@/lib/mail";
 
 export async function POST(request: Request) {
   try {
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
-    // Extract the data so we can use it for the notification
+    // Extract the data so we can use it for the notification and email
     const bookingData = bookingSnap.data();
 
     // 3. Update booking status
@@ -48,7 +48,36 @@ export async function POST(request: Request) {
       updatedAt: new Date().toISOString(),
     });
 
-    // 🚨 4. TRIGGER REAL-TIME NOTIFICATION FOR THE PARTNER 🚨
+    // 🚨 4. SEND INVOICE EMAIL TO CUSTOMER (FIXED FOR VERCEL) 🚨
+    const customerEmail = bookingData?.customer?.email || bookingData?.userEmail;
+
+    if (customerEmail) {
+      const displayId = bookingId.slice(0, 8).toUpperCase();
+      const displayName = bookingData?.listingName || bookingData?.hotelName || bookingData?.vehicleName || "Shubh Yatra Stay";
+      const displayAmount = bookingData?.totalAmount?.toLocaleString('en-IN') || "0";
+      const checkInDate = bookingData?.checkIn || bookingData?.startDate || "TBD";
+      const checkOutDate = bookingData?.checkOut || bookingData?.endDate || "TBD";
+      const guestCount = bookingData?.guests || bookingData?.customer?.guests || 1;
+
+      // We MUST use 'await' here so Vercel doesn't kill the function before Resend finishes
+      try {
+        console.log(`✉️ Attempting to send invoice email to: ${customerEmail}`);
+        await sendInvoiceEmail(customerEmail, {
+          id: displayId,
+          hotelName: displayName,
+          amount: displayAmount,
+          date: `${checkInDate} to ${checkOutDate}`,
+          guests: guestCount,
+        });
+        console.log(`✅ Email sent successfully to ${customerEmail}`);
+      } catch (err) {
+        console.error("❌ Failed to send customer email via Resend:", err);
+      }
+    } else {
+      console.log("⚠️ No customer email provided, skipping invoice email.");
+    }
+
+    // 5. TRIGGER REAL-TIME NOTIFICATION FOR THE PARTNER
     if (bookingData?.partnerId && bookingData.partnerId !== "UNKNOWN") {
       const customerName = bookingData.customer?.name || "A guest";
       const amount = bookingData.totalAmount || "0";
