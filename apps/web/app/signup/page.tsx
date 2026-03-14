@@ -278,7 +278,7 @@ export default function SignupPage() {
                     type="tel"
                     required
                     placeholder="+91 98765 43210"
-                    maxLength={15}
+                    maxLength={10}
                     className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-2xl focus:ring-4 focus:ring-rose-500/10 focus:border-rose-500 outline-none transition-all dark:text-white font-medium"
                     value={formData.phone}
                     onChange={(e) =>
