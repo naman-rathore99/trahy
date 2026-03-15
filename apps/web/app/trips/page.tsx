@@ -10,8 +10,7 @@ import {
   where,
   getDocs,
   doc,
-  updateDoc,
-  getDoc, // ✅ Added getDoc for the rescue fetch
+  getDoc,
 } from "firebase/firestore";
 import { app } from "@/lib/firebase";
 import Navbar from "@/components/Navbar";
@@ -132,7 +131,6 @@ export default function TripsPage() {
           getDocs(vehicleQuery),
         ]);
 
-        // ✅ WE USE PROMISE.ALL HERE SO WE CAN FETCH MISSING IMAGES FROM THE HOTELS DB
         const hotelData = await Promise.all(
           hotelSnapshot.docs.map(async (docSnap) => {
             const d = docSnap.data();
@@ -150,7 +148,6 @@ export default function TripsPage() {
 
             let finalImage = extractImage(d);
 
-            // 🚨 RESCUE MISSION: If the image is missing (Old Bookings), go find it in the hotels database!
             if (!finalImage && d.listingId) {
               try {
                 const hotelRef = await getDoc(doc(db, "hotels", d.listingId));
@@ -289,20 +286,32 @@ export default function TripsPage() {
     }
   };
 
+  // 🚨 UPDATED TO USE CANCELLATION API
   const handleCancel = async (e: React.MouseEvent, booking: Booking) => {
     e.stopPropagation();
     if (!window.confirm("Are you sure? This cannot be undone.")) return;
     setCancellingId(booking.id);
 
     try {
-      await updateDoc(doc(db, booking.sourceCollection, booking.id), {
-        status: "cancelled",
+      const res = await fetch("/api/bookings/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          sourceCollection: booking.sourceCollection,
+          hotelName: booking.listingName,
+          customerEmail: booking.userEmail || auth.currentUser?.email,
+        }),
       });
+
+      if (!res.ok) throw new Error("Failed to cancel trip.");
+
       setBookings((prev) =>
         prev.map((b) =>
           b.id === booking.id ? { ...b, status: "cancelled" } : b,
         ),
       );
+      alert("Booking cancelled successfully.");
     } catch (error) {
       console.error(error);
       alert("Error processing cancellation");
@@ -325,12 +334,14 @@ export default function TripsPage() {
     }
   };
 
+  // 🚨 UPDATED TO USE RESCHEDULE API
   const confirmReschedule = async () => {
     if (!rescheduleBooking || !newDates?.from || !newDates?.to) return;
     setUpdating(true);
     try {
       const newStart = format(newDates.from, "yyyy-MM-dd");
       const newEnd = format(newDates.to, "yyyy-MM-dd");
+      const dateString = `${format(newDates.from, "dd MMM")} to ${format(newDates.to, "dd MMM yyyy")}`;
 
       const isVehicleCollection =
         rescheduleBooking.sourceCollection === "vehicle_bookings";
@@ -341,10 +352,20 @@ export default function TripsPage() {
           ? { startDate: newStart, endDate: newEnd, status: "confirmed" }
           : { checkIn: newStart, checkOut: newEnd, status: "confirmed" };
 
-      await updateDoc(
-        doc(db, rescheduleBooking.sourceCollection, rescheduleBooking.id),
-        updateData,
-      );
+      const res = await fetch("/api/bookings/reschedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: rescheduleBooking.id,
+          sourceCollection: rescheduleBooking.sourceCollection,
+          updateData,
+          hotelName: rescheduleBooking.listingName,
+          customerEmail: rescheduleBooking.userEmail || auth.currentUser?.email,
+          newDates: dateString,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to reschedule trip.");
 
       setBookings((prev) =>
         prev.map((b) =>
@@ -354,7 +375,7 @@ export default function TripsPage() {
         ),
       );
       setRescheduleBooking(null);
-      alert("Rescheduled successfully!");
+      alert("Rescheduled successfully! An email confirmation has been sent.");
     } catch (error) {
       console.error(error);
       alert("Failed to reschedule.");

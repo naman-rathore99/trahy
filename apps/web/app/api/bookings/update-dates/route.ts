@@ -1,35 +1,51 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebaseAdmin";;
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";
+import { sendRescheduleEmail } from "@/lib/mail";
 
 export async function POST(request: Request) {
-    try {
-        const { bookingId, newCheckIn, newCheckOut } = await request.json();
+  try {
+    const {
+      bookingId,
+      sourceCollection,
+      updateData,
+      hotelName,
+      customerEmail,
+      newDates,
+    } = await request.json();
 
-        if (!bookingId || !newCheckIn || !newCheckOut) {
-            return NextResponse.json({ error: "Missing dates" }, { status: 400 });
-        }
-
-        // initAdmin auto-initialized
-        const db = adminDb;
-        const bookingRef = db.collection("bookings").doc(bookingId);
-
-        // Update Dates & Add System Message
-        await bookingRef.update({
-            checkIn: newCheckIn,
-            checkOut: newCheckOut,
-            hasOpenTicket: false, // Close the ticket automatically
-            updatedAt: new Date().toISOString(),
-            adminReplies: FieldValue.arrayUnion({
-                message: `✅ Request Approved: Your dates have been successfully changed to ${newCheckIn} - ${newCheckOut}.`,
-                createdAt: new Date().toISOString(),
-                adminName: "System"
-            })
-        });
-
-        return NextResponse.json({ success: true });
-
-    } catch (error) {
-        return NextResponse.json({ error: "Server Error" }, { status: 500 });
+    if (!bookingId || !sourceCollection || !updateData) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
     }
+
+    // 1. Update Database
+    await adminDb
+      .collection(sourceCollection)
+      .doc(bookingId)
+      .update({
+        ...updateData,
+        updatedAt: new Date().toISOString(),
+      });
+
+    // 2. Send Reschedule Email
+    if (customerEmail && newDates) {
+      try {
+        await sendRescheduleEmail(
+          customerEmail,
+          hotelName || "Your Booking",
+          bookingId.slice(0, 8).toUpperCase(),
+          newDates,
+        );
+      } catch (err) {
+        console.error("Failed to send reschedule email via Resend:", err);
+      }
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Reschedule API Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
