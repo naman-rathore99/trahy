@@ -1,4 +1,3 @@
-import { auth, db } from "@/config/firebase";
 import { Ionicons } from "@expo/vector-icons";
 import { onAuthStateChanged } from "firebase/auth";
 import {
@@ -17,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { auth, db } from "../../config/firebase"; // Adjust path if needed
 
 // Define what our database booking looks like
 interface Booking {
@@ -47,13 +47,14 @@ export default function CustomerBookings() {
       }
 
       const bookingsRef = collection(db, "bookings");
+
+      // 🚨 THIS QUERY REQUIRES A FIRESTORE INDEX 🚨
       const q = query(
         bookingsRef,
         where("customer.userId", "==", user.uid),
         orderBy("createdAt", "desc"),
       );
 
-      // 🚨 ADDED ERROR HANDLER HERE
       unsubscribeSnapshot = onSnapshot(
         q,
         (snapshot) => {
@@ -66,8 +67,9 @@ export default function CustomerBookings() {
           setLoading(false);
         },
         (error) => {
-          console.error("❌ FIRESTORE ERROR:", error.message);
-          setLoading(false); // Stops the infinite spinner!
+          // 🚨 THIS STOPS THE INFINITE SPINNER AND PRINTS THE FIX 🚨
+          console.error("❌ FIRESTORE INDEX ERROR:", error.message);
+          setLoading(false);
         },
       );
     });
@@ -77,17 +79,16 @@ export default function CustomerBookings() {
       if (unsubscribeSnapshot) unsubscribeSnapshot();
     };
   }, []);
+
   // 2. Helper functions to make the data look pretty in your UI
   const formatStatus = (status: string) => {
     if (status === "pending_payment") return "Pending";
-    // Capitalizes first letter (e.g., "confirmed" -> "Confirmed")
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "Dates TBD";
     const date = new Date(dateString);
-    // Returns formats like "12 Feb"
     return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   };
 
@@ -107,7 +108,7 @@ export default function CustomerBookings() {
         {/* 3. Show Loading, Empty State, or Your Beautiful List */}
         {loading ? (
           <View className="flex-1 justify-center items-center">
-            <ActivityIndicator size="large" color="#5f259f" />
+            <ActivityIndicator size="large" color="#FF5A1F" />
           </View>
         ) : bookings.length === 0 ? (
           <View className="flex-1 justify-center items-center px-6">

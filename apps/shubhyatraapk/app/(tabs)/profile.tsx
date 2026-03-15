@@ -66,10 +66,18 @@ export default function ProfileScreen() {
 
   const menuItems = [
     { icon: "person-outline", label: "Edit Profile", route: "/profile/edit" },
-    { icon: "briefcase-outline", label: "My Trips", route: "/(tabs)/trips" },
-    { icon: "heart-outline", label: "Favorites", route: "/favorites" },
-    { icon: "settings-outline", label: "Settings", route: "/settings" },
-    { icon: "help-circle-outline", label: "Help & Support", route: "/support" },
+    { icon: "briefcase-outline", label: "My Trips", route: "/(tabs)/bookings" },
+    { icon: "heart-outline", label: "Favorites", route: "/(tabs)/saved" },
+    {
+      icon: "settings-outline",
+      label: "Settings",
+      route: "/profile/edit",
+    },
+    {
+      icon: "help-circle-outline",
+      label: "Help & Support",
+      route: "/(tabs)/support",
+    },
   ];
 
   if (loading)
