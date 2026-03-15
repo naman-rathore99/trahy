@@ -277,3 +277,74 @@ export async function sendPaymentFailedEmail(to: string, hotelName: string) {
     return { success: false, error };
   }
 }
+export async function sendCancellationEmail(
+  to: string,
+  hotelName: string,
+  bookingId: string,
+) {
+  if (!to) return;
+
+  try {
+    await resend.emails.send({
+      from: `Shubh Yatra Support <${FROM_EMAIL}>`,
+      to: [to],
+      subject: `Booking Cancelled: ${hotelName}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eaeaea; padding: 20px; border-radius: 10px;">
+          <h2 style="color: #e11d48; border-bottom: 2px solid #e11d48; padding-bottom: 10px;">Booking Cancelled</h2>
+          <p>Namaste,</p>
+          <p>Your booking at <strong>${hotelName}</strong> (ID: #${bookingId}) has been successfully cancelled as requested.</p>
+          <p>If you are eligible for a refund according to the property's cancellation policy, it will be processed to your original payment method within 5-7 business days.</p>
+          <div style="margin-top: 30px; text-align: center;">
+            <a href="https://shubhyatra.world" style="background-color: #111827; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Book a New Stay</a>
+          </div>
+        </div>
+      `,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Cancellation Email Failed:", error);
+    return { success: false, error };
+  }
+}
+
+/**
+ * 6. Send Reschedule Email
+ */
+export async function sendRescheduleEmail(
+  to: string,
+  hotelName: string,
+  bookingId: string,
+  newDates: string,
+) {
+  if (!to) return;
+
+  try {
+    await resend.emails.send({
+      from: `Shubh Yatra Bookings <${FROM_EMAIL}>`,
+      to: [to],
+      subject: `Booking Rescheduled: ${hotelName}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eaeaea; padding: 20px; border-radius: 10px;">
+          <h2 style="color: #e11d48; border-bottom: 2px solid #e11d48; padding-bottom: 10px;">Booking Rescheduled</h2>
+          <p>Namaste,</p>
+          <p>Your booking at <strong>${hotelName}</strong> (ID: #${bookingId}) has been successfully rescheduled!</p>
+          
+          <div style="background-color: #f4f4f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0; color: #555;"><strong>Your New Dates:</strong></p>
+            <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #18181b;">${newDates}</p>
+          </div>
+
+          <p>We look forward to hosting you on your new dates!</p>
+          <div style="margin-top: 30px; text-align: center;">
+            <a href="https://shubhyatra.world/trips" style="background-color: #e11d48; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">View My Trips</a>
+          </div>
+        </div>
+      `,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Reschedule Email Failed:", error);
+    return { success: false, error };
+  }
+}

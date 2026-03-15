@@ -10,7 +10,7 @@ import {
   where,
   getDocs,
   doc,
-  updateDoc,
+  getDoc,
 } from "firebase/firestore";
 import { app } from "@/lib/firebase";
 import Navbar from "@/components/Navbar";
@@ -47,19 +47,14 @@ import "react-day-picker/dist/style.css";
 interface Booking {
   id: string;
   sourceCollection: "bookings" | "vehicle_bookings";
-
-  // Normalized Fields
   listingName: string;
   listingImage: string;
   checkIn: string;
   checkOut: string;
   totalAmount: number;
   serviceType: "hotel" | "vehicle_only";
-
   status: "confirmed" | "pending" | "cancelled" | "failed";
   paymentStatus?: "pending" | "paid" | "failed";
-
-  // Original Data
   vehicleType?: string;
   vehicleIncluded?: boolean;
   userName?: string;
@@ -71,6 +66,22 @@ interface Booking {
 
 const ITEMS_PER_PAGE = 5;
 
+// Basic Image Extractor
+const extractImage = (d: any): string => {
+  if (typeof d.listingImage === "string" && d.listingImage.trim() !== "")
+    return d.listingImage;
+  if (typeof d.hotelImage === "string" && d.hotelImage.trim() !== "")
+    return d.hotelImage;
+  if (typeof d.vehicleImage === "string" && d.vehicleImage.trim() !== "")
+    return d.vehicleImage;
+  if (typeof d.mainImage === "string" && d.mainImage.trim() !== "")
+    return d.mainImage;
+  if (Array.isArray(d.images) && d.images.length > 0) return d.images[0];
+  if (Array.isArray(d.imageUrls) && d.imageUrls.length > 0)
+    return d.imageUrls[0];
+  return "";
+};
+
 export default function TripsPage() {
   const router = useRouter();
   const db = getFirestore(app);
@@ -79,14 +90,12 @@ export default function TripsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
   const [categoryTab, setCategoryTab] = useState<"all" | "hotels" | "vehicles">(
     "all",
   );
   const [timeTab, setTimeTab] = useState<"upcoming" | "past">("upcoming");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Modals
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(
     null,
@@ -95,11 +104,9 @@ export default function TripsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
 
-  // Animations
   const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
 
-  // --- 1. FETCH TRIPS ---
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       if (!currentUser) {
@@ -110,12 +117,10 @@ export default function TripsPage() {
       try {
         setLoading(true);
 
-        // ✅ FIX 1: Query inside the nested 'customer' map
         const hotelQuery = query(
           collection(db, "bookings"),
           where("customer.userId", "==", currentUser.uid),
         );
-
         const vehicleQuery = query(
           collection(db, "vehicle_bookings"),
           where("customer.userId", "==", currentUser.uid),
@@ -126,12 +131,64 @@ export default function TripsPage() {
           getDocs(vehicleQuery),
         ]);
 
-        const hotelData = hotelSnapshot.docs.map((doc) => {
-          const d = doc.data();
-          const isLegacyVehicle =
-            d.type === "vehicle" || (d.serviceType || "").includes("vehicle");
+        const hotelData = await Promise.all(
+          hotelSnapshot.docs.map(async (docSnap) => {
+            const d = docSnap.data();
+            const isLegacyVehicle =
+              d.type === "vehicle" || (d.serviceType || "").includes("vehicle");
+            const rawStatus =
+              d.status === "pending_payment"
+                ? "pending"
+                : d.status || "pending";
+            const pStatus =
+              d.paymentStatus === "pending_payment"
+                ? "pending"
+                : d.paymentStatus ||
+                  (rawStatus === "confirmed" ? "paid" : "pending");
 
-          // ✅ FIX 2: Normalize "pending_payment" to "pending"
+            let finalImage = extractImage(d);
+
+            if (!finalImage && d.listingId) {
+              try {
+                const hotelRef = await getDoc(doc(db, "hotels", d.listingId));
+                if (hotelRef.exists()) {
+                  const hd = hotelRef.data();
+                  finalImage =
+                    hd.mainImage ||
+                    hd.imageUrl ||
+                    (hd.imageUrls && hd.imageUrls[0]) ||
+                    (hd.images && hd.images[0]) ||
+                    "/placeholder.jpg";
+                }
+              } catch (e) {
+                console.log("Could not rescue image for:", d.listingId);
+              }
+            }
+
+            return {
+              id: docSnap.id,
+              sourceCollection: "bookings",
+              ...d,
+              listingName:
+                d.listingName ||
+                d.hotelName ||
+                d.vehicleName ||
+                "Unnamed Booking",
+              listingImage: finalImage || "/placeholder.jpg",
+              checkIn: d.checkIn || d.startDate,
+              checkOut: d.checkOut || d.endDate,
+              totalAmount: Number(d.totalAmount || d.totalPrice || 0),
+              serviceType: isLegacyVehicle ? "vehicle_only" : "hotel",
+              status: rawStatus,
+              paymentStatus: pStatus,
+              userName: d.customer?.name || d.userName,
+              userEmail: d.customer?.email || d.userEmail,
+            };
+          }),
+        );
+
+        const vehicleData = vehicleSnapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
           const rawStatus =
             d.status === "pending_payment" ? "pending" : d.status || "pending";
           const pStatus =
@@ -141,46 +198,11 @@ export default function TripsPage() {
                 (rawStatus === "confirmed" ? "paid" : "pending");
 
           return {
-            id: doc.id,
-            sourceCollection: "bookings",
-            ...d,
-            listingName:
-              d.listingName ||
-              d.hotelName ||
-              d.vehicleName ||
-              "Unnamed Booking",
-            listingImage:
-              d.listingImage ||
-              d.hotelImage ||
-              d.vehicleImage ||
-              "/placeholder.jpg",
-            checkIn: d.checkIn || d.startDate,
-            checkOut: d.checkOut || d.endDate,
-            totalAmount: Number(d.totalAmount || d.totalPrice || 0),
-            serviceType: isLegacyVehicle ? "vehicle_only" : "hotel",
-            status: rawStatus,
-            paymentStatus: pStatus,
-            userName: d.customer?.name || d.userName,
-            userEmail: d.customer?.email || d.userEmail,
-          };
-        });
-
-        const vehicleData = vehicleSnapshot.docs.map((doc) => {
-          const d = doc.data();
-          const rawStatus =
-            d.status === "pending_payment" ? "pending" : d.status || "pending";
-          const pStatus =
-            d.paymentStatus === "pending_payment"
-              ? "pending"
-              : d.paymentStatus ||
-                (rawStatus === "confirmed" ? "paid" : "pending");
-
-          return {
-            id: doc.id,
+            id: docSnap.id,
             sourceCollection: "vehicle_bookings",
             ...d,
             listingName: d.vehicleName || "Unnamed Vehicle",
-            listingImage: d.vehicleImage || "/placeholder.jpg",
+            listingImage: extractImage(d) || "/placeholder.jpg",
             checkIn: d.startDate,
             checkOut: d.endDate,
             totalAmount: Number(d.totalPrice || d.totalAmount || 0),
@@ -194,7 +216,6 @@ export default function TripsPage() {
 
         const allTrips = [...hotelData, ...vehicleData] as Booking[];
 
-        // Sort by Created At (Newest first)
         allTrips.sort((a, b) => {
           const getSeconds = (t: any) => {
             if (!t) return 0;
@@ -217,7 +238,6 @@ export default function TripsPage() {
     return () => unsubscribe();
   }, [router]);
 
-  // ✅ HELPER: Safely convert dates
   const getValidDate = (dateVal: any): Date | null => {
     if (!dateVal) return null;
     if (typeof dateVal === "object" && dateVal.seconds)
@@ -231,7 +251,6 @@ export default function TripsPage() {
     return null;
   };
 
-  // --- 2. ACTIONS ---
   const checkPaymentStatus = async (e: React.MouseEvent, bookingId: string) => {
     e.stopPropagation();
     setRefreshingIds((prev) => new Set(prev).add(bookingId));
@@ -267,20 +286,32 @@ export default function TripsPage() {
     }
   };
 
+  // 🚨 UPDATED TO USE CANCELLATION API
   const handleCancel = async (e: React.MouseEvent, booking: Booking) => {
     e.stopPropagation();
     if (!window.confirm("Are you sure? This cannot be undone.")) return;
     setCancellingId(booking.id);
 
     try {
-      await updateDoc(doc(db, booking.sourceCollection, booking.id), {
-        status: "cancelled",
+      const res = await fetch("/api/bookings/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          sourceCollection: booking.sourceCollection,
+          hotelName: booking.listingName,
+          customerEmail: booking.userEmail || auth.currentUser?.email,
+        }),
       });
+
+      if (!res.ok) throw new Error("Failed to cancel trip.");
+
       setBookings((prev) =>
         prev.map((b) =>
           b.id === booking.id ? { ...b, status: "cancelled" } : b,
         ),
       );
+      alert("Booking cancelled successfully.");
     } catch (error) {
       console.error(error);
       alert("Error processing cancellation");
@@ -303,12 +334,14 @@ export default function TripsPage() {
     }
   };
 
+  // 🚨 UPDATED TO USE RESCHEDULE API
   const confirmReschedule = async () => {
     if (!rescheduleBooking || !newDates?.from || !newDates?.to) return;
     setUpdating(true);
     try {
       const newStart = format(newDates.from, "yyyy-MM-dd");
       const newEnd = format(newDates.to, "yyyy-MM-dd");
+      const dateString = `${format(newDates.from, "dd MMM")} to ${format(newDates.to, "dd MMM yyyy")}`;
 
       const isVehicleCollection =
         rescheduleBooking.sourceCollection === "vehicle_bookings";
@@ -319,10 +352,21 @@ export default function TripsPage() {
           ? { startDate: newStart, endDate: newEnd, status: "confirmed" }
           : { checkIn: newStart, checkOut: newEnd, status: "confirmed" };
 
-      await updateDoc(
-        doc(db, rescheduleBooking.sourceCollection, rescheduleBooking.id),
-        updateData,
-      );
+      const res = await fetch("/api/bookings/reschedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: rescheduleBooking.id,
+          sourceCollection: rescheduleBooking.sourceCollection,
+          updateData,
+          hotelName: rescheduleBooking.listingName,
+          customerEmail: rescheduleBooking.userEmail || auth.currentUser?.email,
+          newDates: dateString,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to reschedule trip.");
+
       setBookings((prev) =>
         prev.map((b) =>
           b.id === rescheduleBooking.id
@@ -331,7 +375,7 @@ export default function TripsPage() {
         ),
       );
       setRescheduleBooking(null);
-      alert("Rescheduled successfully!");
+      alert("Rescheduled successfully! An email confirmation has been sent.");
     } catch (error) {
       console.error(error);
       alert("Failed to reschedule.");
@@ -340,7 +384,6 @@ export default function TripsPage() {
     }
   };
 
-  // --- FILTER & PAGINATION ---
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -527,25 +570,14 @@ export default function TripsPage() {
                   {/* Image & Badges */}
                   <div className="w-full sm:w-48 h-48 sm:h-auto shrink-0 rounded-xl overflow-hidden relative bg-gray-100 dark:bg-gray-800">
                     <img
-                      src={booking.listingImage || "/placeholder.jpg"}
+                      src={booking.listingImage}
                       className={`w-full h-full object-cover transition-transform duration-500 ${!isCancelled && !isFailedAPI && "group-hover:scale-105"} ${(isCompleted || isCancelled || isFailedAPI) && "grayscale"}`}
                       alt={booking.listingName}
                     />
 
                     <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
                       <div
-                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 
-                          ${
-                            isCancelled
-                              ? "bg-gray-600 text-white"
-                              : isFailedAPI
-                                ? "bg-red-600 text-white"
-                                : isPaymentPending
-                                  ? "bg-amber-500 text-white"
-                                  : isCompleted
-                                    ? "bg-slate-600 text-white"
-                                    : "bg-emerald-500 text-white"
-                          }`}
+                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 ${isCancelled ? "bg-gray-600 text-white" : isFailedAPI ? "bg-red-600 text-white" : isPaymentPending ? "bg-amber-500 text-white" : isCompleted ? "bg-slate-600 text-white" : "bg-emerald-500 text-white"}`}
                       >
                         {isCancelled
                           ? "Cancelled"
@@ -556,7 +588,6 @@ export default function TripsPage() {
                               : isCompleted
                                 ? "Completed"
                                 : "Confirmed"}
-
                         {isPaymentPending && (
                           <button
                             onClick={(e) => checkPaymentStatus(e, booking.id)}
@@ -571,14 +602,12 @@ export default function TripsPage() {
                           </button>
                         )}
                       </div>
-
                       {isPaymentPending && updatedDate && (
                         <div className="bg-black/50 backdrop-blur-md text-white px-2 py-0.5 rounded text-[9px]">
                           Updated {formatDistanceToNow(updatedDate)} ago
                         </div>
                       )}
                     </div>
-
                     <div
                       className={`absolute bottom-2 right-2 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-white flex items-center gap-1 ${isVehicle ? "bg-indigo-600" : "bg-rose-600"}`}
                     >
@@ -642,7 +671,7 @@ export default function TripsPage() {
                       !isCancelled &&
                       !isFailedAPI && (
                         <div className="flex items-center gap-2 text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 w-fit px-3 py-1.5 rounded-lg mb-4 border border-amber-100 dark:border-amber-900/30">
-                          <Car size={14} />
+                          <Car size={14} />{" "}
                           <span>Includes {booking.vehicleType || "Cab"}</span>
                         </div>
                       )}
