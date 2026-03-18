@@ -203,17 +203,3 @@ function ResetPasswordForm() {
     </div>
   );
 }
-
-// Wrapper for Suspense (Required for Next.js build)
-export default function ResetPasswordPage() {
-  return (
-    <main className="min-h-screen bg-white dark:bg-black font-sans flex flex-col">
-      <Navbar />
-      <div className="flex-1 flex items-center justify-center p-4">
-        <Suspense fallback={<Loader2 className="animate-spin" />}>
-          <ResetPasswordForm />
-        </Suspense>
-      </div>
-    </main>
-  );
-}
