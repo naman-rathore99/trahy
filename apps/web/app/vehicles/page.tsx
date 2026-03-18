@@ -58,9 +58,10 @@ export default function VehiclesPage() {
       vehicleId: vehicle.id,
       vehicleName: vehicle.name,
       price: vehicle.price.toString(),
+      image: vehicle.imageUrl || "/placeholder-car.jpg",
       start: dates.start,
       end: dates.end,
-      type: "vehicle_only"
+      type: "vehicle_only",
     }).toString();
 
     router.push(`/book/vehicle?${query}`);

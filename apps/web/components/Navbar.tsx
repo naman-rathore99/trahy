@@ -103,7 +103,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
   return (
     <>
       <nav
-        className={`fixed top-0 left-0 right-0 z-[60] transition-all duration-300 ${navBackground}`}
+        className={`fixed top-0 left-0 right-0 z-60 transition-all duration-300 ${navBackground}`}
       >
         <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex items-center justify-between">
           {/* Logo */}
@@ -112,7 +112,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             className="text-2xl font-bold uppercase tracking-wide"
             onClick={() => setIsMobileMenuOpen(false)}
           >
-            <div className="relative w-[180px] h-[40px]">
+            <div className="relative w-[180px] h-20">
               {!isSolidState ? (
                 /* TRANSPARENT NAV: ALWAYS SHOW WHITE TEXT LOGO */
                 <Image
@@ -126,7 +126,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
                 /* SOLID NAV: SWITCH BASED ON THEME */
                 <>
                   <Image
-                    src="/unnamed-removebg-preview.png" // MUST BE YOUR DARK TEXT LOGO (Light Mode)
+                    src="/main-white.png" // MUST BE YOUR DARK TEXT LOGO (Light Mode)
                     alt="Logo"
                     fill
                     className="object-contain dark:hidden"
@@ -175,6 +175,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-4">
+            {/* 
             <button
               className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-full transition-colors ${textColor} ${buttonBorder} ${
                 isSolidState
@@ -184,7 +185,7 @@ export default function Navbar({ variant = "transparent" }: NavbarProps) {
             >
               <Globe size={16} /> EN
             </button>
-
+ */}
             {!loading && (
               <>
                 {!firebaseUser ? (
