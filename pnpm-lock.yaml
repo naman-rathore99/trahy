@@ -184,9 +184,18 @@ importers:
       '@types/react':
         specifier: ~19.1.0
         version: 19.1.17
+      '@types/react-date-range':
+        specifier: ^1.4.10
+        version: 1.4.10
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.1.17)
       '@types/react-native-razorpay':
         specifier: ^2.2.6
         version: 2.2.6
+      '@types/serve-static':
+        specifier: ^2.2.0
+        version: 2.2.0
       eslint:
         specifier: ^9.25.0
         version: 9.39.1(jiti@1.21.7)
@@ -9597,7 +9606,6 @@ snapshots:
   '@types/react-dom@19.2.3(@types/react@19.1.17)':
     dependencies:
       '@types/react': 19.1.17
-    optional: true
 
   '@types/react-dom@19.2.3(@types/react@19.2.8)':
     dependencies:

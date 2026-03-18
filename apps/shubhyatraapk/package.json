@@ -1,6 +1,6 @@
 {
   "name": "shubhyatraapk",
-  "main": "expo-router/entry",
+ "main": "index.js",
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
@@ -56,7 +56,10 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "@types/react-date-range": "^1.4.10",
+    "@types/react-dom": "^19.2.3",
     "@types/react-native-razorpay": "^2.2.6",
+    "@types/serve-static": "^2.2.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"

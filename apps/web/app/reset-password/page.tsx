@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react"; // Added Suspense for searchParams
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import {
@@ -35,7 +35,7 @@ function ResetPasswordForm() {
     "loading" | "valid" | "expired" | "success"
   >("loading");
   const [error, setError] = useState("");
-  const [email, setEmail] = useState(""); // We can extract email from the code to show user
+  const [email, setEmail] = useState("");
 
   // 1. Verify the Link on Load
   useEffect(() => {
@@ -80,7 +80,6 @@ function ResetPasswordForm() {
   };
 
   // --- RENDER STATES ---
-
   if (status === "loading") {
     return (
       <div className="flex flex-col items-center">
@@ -204,11 +203,11 @@ function ResetPasswordForm() {
   );
 }
 
-// Wrapper for Suspense (Required for Next.js build)
+// 🚨 THIS EXPORT DEFAULT IS CRITICAL FOR NEXT.JS
 export default function ResetPasswordPage() {
   return (
     <main className="min-h-screen bg-white dark:bg-black font-sans flex flex-col">
-      <Navbar />
+      <Navbar variant="default" />
       <div className="flex-1 flex items-center justify-center p-4">
         <Suspense fallback={<Loader2 className="animate-spin" />}>
           <ResetPasswordForm />
