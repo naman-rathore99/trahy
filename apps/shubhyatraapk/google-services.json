@@ -1,13 +1,106 @@
 {
-  "type": "service_account",
-  "project_id": "superapp-8e8ba",
-  "private_key_id": "0c42c22ec0500c3c74f7aa57272d3f9446880aa7",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDiZ+nipg2xQVKn\nuBGUmV02NzSFcYNgwOflJjRTHWy2i7ARoo3vWaHCRpjoCQKFvFlSb3aDPcY/6Afb\nOyWxQX3tRQbGvCrKMuh3HWKzpptYg1i+WN+MyjuUTcfOA0VSdy5lEU0J/S5Cpz9e\nGBk89HdvfJxaSdy78qUYEpbRfpBUdl17PPczVMMDH6ZPb+PrepgGwmNmXx4fkDwH\nk3QgW0o7Uy/+fY9DiDXg0UsLIhXE5M2fK0BewtspuCxDO8ZflZoBo+1OqN/St5SR\n7rBaE+Vd/L/u94lHLk/CJct1/McRpr9H7PRJmsvR2BChZkgTkacdvpq4aCG2S1dJ\n0OIEkv4xAgMBAAECggEAWp1oeLQpSsZwRHxhXO485lQWC0qxYGoU5hvyWUmvlyg1\nYfmDgUaIfW8wB76Dae9GeL3v2vtAe5dsfYwgu98QfYRg/+2T2rWhYPs749dM2ZJI\nVHbRklHmoqa2z3dzqVvWD9Fq2hKhD0BNFmXixAi8PLzM/z4MwJSPCyF1h4d2ULcG\nJ2+QaJugY+dioVEU5yIk52txMI9CQhIISwEGLXweBxENbl5P6XjXe41SE3qJV7Y5\nfiPvdH9BFcjltqNuu7Vok9kvYGGjibSbicCafgVjdrdNW7pBfdTbQuwqYqU/SpJG\nFEKOTB54kk9lwrh8pDMvHmmnqZPYiZsJWKQRkT3GeQKBgQD8nC9H3eOytnhaBAdy\nL+E1w/e21nrBp0beVIeQDOscYXJ00InaddJy4QfvgE3aH/0vG8Z3iemtcxOxUa/I\nf5DZu/FO+M8pkcxU9xwj9vER1K4k8/L4JbU8w0N0G1AILgwJJdKXjH8t+vU045FP\nQyL15F2ZKPI5BWzUWG3kzMfpiwKBgQDlcbUMOdwtfGGWlFYN/EHqfiDE7C0uVP4E\nRRRZ1TnrVg0dLHiS3Gui57EFLfzYZ2cSFd/mFk9uviNh3YctLfWF4HOi3j5lHes3\ngChBt/M0FFaClyi+klUCwekQD4IdiqNaMMaKHYICg5if36gzOtDr9nBFDBkmiNGt\nhLUCM8JWswKBgQD286VRR73jJ3mO3qN84Qv1KOiRaSpHCUZB8jc4/zgV3bosMvah\niE+9mPrODAuP83frxuaGVGAK/hZBYk9L3lH4WkD06E52IB+27IEpM6/Gs7mvTIG6\nT/rXNTlLV6ws4v9HLh+romFuzQlMtDCJYWPbKW7LXXk3f3M+QFjmtb+2MwKBgDEj\nzTa1HabQQMZTNqsAH83s/W+vdW263jxj3xvuQt1YLK7W22v4sUTOgmctlj1yx+xj\nqvRISvLY3hMTsuPGOBNYIuv61Toq0jmsxPJuRzQcNvr5DMzj4jkY9qVt7NwO2TVz\nxNHHyBRpwsJa0FdIfX5L5XekQ66xFtcm2O2D0FdpAoGAcHDqE7lhMU04uES/J3il\n+Z7aK6/6KXtDvek14llmAJQqabxCgeFYZiFGbAw5qKwiz9+EFsLbyXpp9UaUHC3s\norb3eR3BwbYZxp8yhTejSIwK31FXAqMNr15fIoQF7q5q3oSnbvlQZrZChbDiK9EH\nvt3TO0yG9Tfh6EZ7VH1PtyQ=\n-----END PRIVATE KEY-----\n",
-  "client_email": "firebase-adminsdk-fbsvc@superapp-8e8ba.iam.gserviceaccount.com",
-  "client_id": "111179581660245348550",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40superapp-8e8ba.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
+  "project_info": {
+    "project_number": "347936045558",
+    "project_id": "superapp-8e8ba",
+    "storage_bucket": "superapp-8e8ba.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:347936045558:android:44cc7919566ad0e72c6fd7",
+        "android_client_info": {
+          "package_name": "com.example.super_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "347936045558-8nk7re3621lau2ej11lmdqg0o2ndun20.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.super_app",
+            "certificate_hash": "b0cb248849bb090a693286cc1ee2c1308b06a8af"
+          }
+        },
+        {
+          "client_id": "347936045558-f1c676ned43go7psamgsfc0q6n0u0bd8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.super_app",
+            "certificate_hash": "bbe088b5c4f7b0606e38dba6ec71fdce19441cf6"
+          }
+        },
+        {
+          "client_id": "347936045558-lp0df2ic1sohb57sktpcedv51nipsthb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDalnm3Spe25-tF0gW4-0jhZ8tcfQE23mk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "347936045558-lp0df2ic1sohb57sktpcedv51nipsthb.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "347936045558-61bia3o1ng95pghfjsjm8ispfm9fsmng.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.superApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:347936045558:android:21535532bbf7785a2c6fd7",
+        "android_client_info": {
+          "package_name": "com.shubhyatra.world"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "347936045558-dki2hsg081un70gds2gdgqv0trb8hsbu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shubhyatra.world",
+            "certificate_hash": "b0cb248849bb090a693286cc1ee2c1308b06a8af"
+          }
+        },
+        {
+          "client_id": "347936045558-lp0df2ic1sohb57sktpcedv51nipsthb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDalnm3Spe25-tF0gW4-0jhZ8tcfQE23mk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "347936045558-lp0df2ic1sohb57sktpcedv51nipsthb.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "347936045558-61bia3o1ng95pghfjsjm8ispfm9fsmng.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.superApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
 }
