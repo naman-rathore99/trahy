@@ -24,7 +24,8 @@ import {
   Settings,
   Moon,
   Sun,
-  Lock, // Used for disabled items
+  Lock,
+  IndianRupee, // Used for disabled items
 } from "lucide-react";
 
 // --- MENU STRUCTURE ---
@@ -34,6 +35,11 @@ const menuGroups = [
     items: [
       { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
       { name: "Join Requests", href: "/admin/requests", icon: FileText },
+      {
+        name: "Pricing",
+        href: "/admin/pricing",
+        icon: IndianRupee,
+      },
     ],
   },
   {
