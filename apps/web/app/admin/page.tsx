@@ -223,7 +223,7 @@ export default function AdminDashboard() {
               fetchData(true);
             }}
             disabled={refreshing}
-            className="p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            className="p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors h-12"
           >
             <RefreshCcw
               size={20}

@@ -17,9 +17,9 @@ import {
   Heart,
   Bed,
   Car,
-  Clock, // 🚨 Added for modal
-  X, // 🚨 Added for modal
-  CheckCircle2, // 🚨 Added for success state
+  Clock,
+  X,
+  CheckCircle2,
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -39,6 +39,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // --- 🚨 SEARCH STATE 🚨 ---
   const [searchTerm, setSearchTerm] = useState("");
   const [openDate, setOpenDate] = useState(false);
   const [dateRange, setDateRange] = useState([
@@ -50,8 +51,9 @@ export default function HomePage() {
   ]);
   const [openGuest, setOpenGuest] = useState(false);
   const [guests, setGuests] = useState({ adults: 2, children: 0 });
+  const [arrivalTime, setArrivalTime] = useState("14:00"); // 🚨 NEW: Arrival Time
 
-  // --- 🚕 CAB TRANSFER STATE & MODAL ---
+  // --- CAB TRANSFER STATE ---
   const [showCabModal, setShowCabModal] = useState(false);
   const [transferData, setTransferData] = useState({
     enabled: false,
@@ -108,12 +110,11 @@ export default function HomePage() {
       setFilteredHotels(filtered);
       setCurrentPage(1);
       setLoading(false);
-      if (hotelsRef.current) {
+      if (hotelsRef.current)
         hotelsRef.current.scrollIntoView({
           behavior: "smooth",
           block: "start",
         });
-      }
     }, 400);
   };
 
@@ -147,7 +148,6 @@ export default function HomePage() {
     }).format(price || 0);
   };
 
-  // --- 💾 SAVE MODAL DATA ---
   const handleSaveTransfer = () => {
     if (!transferData.pickup.trim()) {
       alert("Please enter a pickup location.");
@@ -165,9 +165,9 @@ export default function HomePage() {
     <main className="min-h-screen bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 font-sans transition-colors pb-20 overflow-x-hidden">
       <Navbar variant="transparent" />
 
-      {/* --- 🚕 CAB MODAL (THE SMALL POPUP) --- */}
+      {/* CAB MODAL */}
       {showCabModal && (
-        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-gray-800 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
@@ -180,7 +180,6 @@ export default function HomePage() {
                 <X size={18} className="text-gray-600 dark:text-gray-400" />
               </button>
             </div>
-
             <p className="text-gray-500 text-sm mb-6">
               We'll arrange a cab to pick you up when you arrive on{" "}
               <span className="font-bold text-gray-900 dark:text-white">
@@ -188,7 +187,6 @@ export default function HomePage() {
               </span>{" "}
               and drop you at your booked hotel.
             </p>
-
             <div className="space-y-4 mb-8">
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
@@ -210,7 +208,6 @@ export default function HomePage() {
                   />
                 </div>
               </div>
-
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
                   Arrival Time
@@ -228,7 +225,6 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-
             <button
               onClick={handleSaveTransfer}
               className="w-full bg-rose-600 hover:bg-rose-700 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
@@ -239,8 +235,8 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* --- HERO SECTION --- */}
-      <div className="relative min-h-[75vh] md:h-[75vh] flex items-center justify-center pt-24 pb-12">
+      {/* HERO SECTION */}
+      <div className="relative min-h-[85vh] md:h-[80vh] flex items-center justify-center pt-24 pb-12">
         <div className="absolute inset-0 z-0">
           <Image
             src="/home-main.jpg"
@@ -277,17 +273,17 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* --- SMART SEARCH WIDGET --- */}
+          {/* SMART SEARCH WIDGET */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl rounded-tl-none shadow-2xl w-full max-w-5xl flex flex-col relative animate-in slide-in-from-bottom-10 duration-700 delay-200 border border-gray-100 dark:border-gray-800 z-20">
-            <div className="p-3 flex flex-col md:flex-row gap-3">
-              {/* 1. Location Input */}
-              <div className="flex-1 px-5 py-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors z-20">
+            <div className="p-3 flex flex-col md:flex-row gap-3 flex-wrap">
+              {/* Location */}
+              <div className="flex-1 px-5 py-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors z-20 min-w-[200px]">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
                   Where
                 </label>
                 <input
                   type="text"
-                  placeholder="Search hotels or destinations"
+                  placeholder="Search destinations"
                   className="w-full bg-transparent outline-none text-gray-900 dark:text-white font-bold placeholder:font-medium placeholder:text-gray-400 text-base"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -298,9 +294,9 @@ export default function HomePage() {
               <div className="w-px bg-gray-200 dark:bg-gray-800 my-3 hidden md:block"></div>
               <div className="h-px w-full bg-gray-200 dark:bg-gray-800 md:hidden"></div>
 
-              {/* 2. Date Picker */}
+              {/* Dates */}
               <div
-                className="flex-1 px-5 py-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer relative z-30"
+                className="flex-[1.5] px-5 py-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer relative z-30"
                 onClick={() => {
                   setOpenDate(!openDate);
                   setOpenGuest(false);
@@ -310,14 +306,14 @@ export default function HomePage() {
                   Dates
                 </label>
                 <div className="font-bold text-base flex items-center gap-2 truncate text-gray-900 dark:text-white">
-                  <Calendar size={18} className="text-rose-500" />
+                  <Calendar size={18} className="text-rose-500 shrink-0" />
                   {`${format(dateRange[0].startDate, "MMM dd")} — ${format(dateRange[0].endDate, "MMM dd")}`}
                 </div>
                 {openDate && (
                   <div
                     ref={calendarRef}
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute top-full mt-2 left-0 md:left-1/2 md:-translate-x-1/2 z-60 shadow-2xl rounded-2xl overflow-hidden bg-white border border-gray-200 w-[calc(100vw-2rem)] md:w-auto flex justify-center"
+                    className="absolute top-full mt-2 left-0 md:left-1/2 md:-translate-x-1/2 z-[60] shadow-2xl rounded-2xl overflow-hidden bg-white border border-gray-200 w-[calc(100vw-2rem)] md:w-auto flex justify-center"
                   >
                     <style
                       dangerouslySetInnerHTML={{
@@ -341,9 +337,28 @@ export default function HomePage() {
               <div className="w-px bg-gray-200 dark:bg-gray-800 my-3 hidden md:block"></div>
               <div className="h-px w-full bg-gray-200 dark:bg-gray-800 md:hidden"></div>
 
-              {/* 3. Guests */}
+              {/* 🚨 NEW: Arrival Time 🚨 */}
+              <div className="flex-1 px-5 py-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors z-20 min-w-[120px]">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  Check-in Time
+                </label>
+                <div className="flex items-center gap-2">
+                  <Clock size={18} className="text-rose-500 shrink-0" />
+                  <input
+                    type="time"
+                    value={arrivalTime}
+                    onChange={(e) => setArrivalTime(e.target.value)}
+                    className="w-full bg-transparent outline-none text-gray-900 dark:text-white font-bold text-base cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div className="w-px bg-gray-200 dark:bg-gray-800 my-3 hidden md:block"></div>
+              <div className="h-px w-full bg-gray-200 dark:bg-gray-800 md:hidden"></div>
+
+              {/* Guests */}
               <div
-                className="flex-1 px-5 py-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer relative z-30"
+                className="flex-1 px-5 py-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer relative z-30 min-w-[150px]"
                 onClick={() => {
                   setOpenGuest(!openGuest);
                   setOpenDate(false);
@@ -353,13 +368,13 @@ export default function HomePage() {
                   Guests
                 </label>
                 <div className="font-bold text-base flex items-center gap-2 text-gray-900 dark:text-white">
-                  <Users size={18} className="text-rose-500" />
+                  <Users size={18} className="text-rose-500 shrink-0" />
                   {guests.adults + guests.children} Guests
                 </div>
                 {openGuest && (
                   <div
                     ref={guestRef}
-                    className="absolute top-full mt-2 left-0 md:left-auto md:right-0 w-[calc(100vw-3rem)] md:w-80 bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 z-60 cursor-default"
+                    className="absolute top-full right-0 mt-2 w-[calc(100vw-3rem)] md:w-80 bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 z-[60] cursor-default"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex justify-between items-center mb-6">
@@ -377,7 +392,7 @@ export default function HomePage() {
                         >
                           <Minus size={14} />
                         </button>
-                        <span className="font-bold w-4 text-center">
+                        <span className="font-bold w-4 text-center text-gray-900 dark:text-white">
                           {guests.adults}
                         </span>
                         <button
@@ -403,7 +418,7 @@ export default function HomePage() {
                         >
                           <Minus size={14} />
                         </button>
-                        <span className="font-bold w-4 text-center">
+                        <span className="font-bold w-4 text-center text-gray-900 dark:text-white">
                           {guests.children}
                         </span>
                         <button
@@ -419,7 +434,7 @@ export default function HomePage() {
               </div>
 
               {/* Search Button */}
-              <div className="p-1 mt-2 md:mt-0 z-20">
+              <div className="p-2 w-full md:w-auto z-20">
                 <button
                   onClick={handleSearch}
                   className="w-full h-full bg-rose-600 hover:bg-rose-700 text-white rounded-2xl px-8 py-4 md:py-0 font-bold shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center gap-2 text-lg"
@@ -430,7 +445,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* --- 🚕 NEW ADD-ON BAR (BOTTOM OF SEARCH) --- */}
+            {/* ADD-ON BAR */}
             <div className="bg-rose-50/50 dark:bg-rose-900/10 px-5 py-3 border-t border-gray-100 dark:border-gray-800 rounded-b-3xl flex items-center justify-between">
               {transferData.enabled ? (
                 <div className="flex items-center justify-between w-full">
@@ -470,7 +485,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* --- LISTINGS SECTION --- */}
+      {/* LISTINGS SECTION */}
       <div
         ref={hotelsRef}
         className="max-w-[1400px] mx-auto px-4 md:px-8 py-16 scroll-mt-20"
@@ -523,14 +538,30 @@ export default function HomePage() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 mb-12">
               {currentItems.map((hotel) => {
-                // 🚨 SMART ROUTING: Attach the cab details to the hotel link!
+                // 🚨 SMART ROUTING: Pass ALL Context to the Hotel Page 🚨
                 const queryParams = new URLSearchParams();
+
+                // Add Context
+                queryParams.append(
+                  "start",
+                  format(dateRange[0].startDate, "yyyy-MM-dd"),
+                );
+                queryParams.append(
+                  "end",
+                  format(dateRange[0].endDate, "yyyy-MM-dd"),
+                );
+                queryParams.append("adults", guests.adults.toString());
+                queryParams.append("children", guests.children.toString());
+                queryParams.append("time", arrivalTime);
+
+                // Add Cab Info if enabled
                 if (transferData.enabled) {
                   queryParams.append("needCab", "true");
                   queryParams.append("cabPickup", transferData.pickup);
                   queryParams.append("cabTime", transferData.time);
                 }
-                const hotelUrl = `/hotels/${hotel.id}${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+
+                const hotelUrl = `/hotels/${hotel.id}?${queryParams.toString()}`;
 
                 return (
                   <Link
@@ -556,7 +587,6 @@ export default function HomePage() {
                         <Heart size={14} />
                       </div>
                     </div>
-
                     <div className="p-5 flex flex-col flex-1">
                       <div className="flex justify-between items-start mb-2">
                         <h3 className="font-bold text-lg leading-tight truncate pr-2 group-hover:text-rose-600 transition-colors">
@@ -564,10 +594,7 @@ export default function HomePage() {
                         </h3>
                       </div>
                       <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 truncate mb-4">
-                        <MapPin
-                          size={14}
-                          className="text-rose-500 shrink-0"
-                        />{" "}
+                        <MapPin size={14} className="text-rose-500 shrink-0" />{" "}
                         <span className="truncate">
                           {hotel.location || hotel.city || "Mathura"}
                         </span>

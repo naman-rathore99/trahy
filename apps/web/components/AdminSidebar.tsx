@@ -190,6 +190,7 @@ export default function AdminSidebar() {
                           "All Partners",
                           "Settings",
                           "Invoices",
+                          "Pricing",
                         ].includes(item.name)
                       ) {
                         if (!isAdmin) isDisabled = true;
