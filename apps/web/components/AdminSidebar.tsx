@@ -25,7 +25,10 @@ import {
   Moon,
   Sun,
   Lock,
-  IndianRupee, // Used for disabled items
+  IndianRupee,
+  MoreVertical,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 // --- MENU STRUCTURE ---
@@ -35,11 +38,7 @@ const menuGroups = [
     items: [
       { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
       { name: "Join Requests", href: "/admin/requests", icon: FileText },
-      {
-        name: "Pricing",
-        href: "/admin/pricing",
-        icon: IndianRupee,
-      },
+      { name: "Pricing", href: "/admin/pricing", icon: IndianRupee },
     ],
   },
   {
@@ -72,12 +71,15 @@ export default function AdminSidebar() {
   const router = useRouter();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  // 🚨 NEW: Desktop Collapsed State
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   // --- PERMISSIONS STATE ---
   const [permissions, setPermissions] = useState({
     role: "admin",
     hasProperty: false,
     hasVehicle: false,
-    loading: true, // Starts true to prevent flashing locks
+    loading: true,
   });
 
   // --- SHADCN THEME LOGIC ---
@@ -89,13 +91,10 @@ export default function AdminSidebar() {
     setMounted(true);
     const auth = getAuth(app);
 
-    // FIX: Listen for Auth State Change instead of running once
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         try {
-          // fetch permissions from backend
           const data = await apiRequest("/api/user/me", "GET");
-
           setPermissions({
             role: data.user?.role || "user",
             hasProperty: data.user?.hasProperty || false,
@@ -107,7 +106,6 @@ export default function AdminSidebar() {
           setPermissions((prev) => ({ ...prev, loading: false }));
         }
       } else {
-        // User logged out
         setPermissions({
           role: "user",
           hasProperty: false,
@@ -117,7 +115,7 @@ export default function AdminSidebar() {
       }
     });
 
-    return () => unsubscribe(); // Cleanup listener on unmount
+    return () => unsubscribe();
   }, []);
 
   const handleLogout = async () => {
@@ -131,162 +129,224 @@ export default function AdminSidebar() {
 
   return (
     <>
-      {/* MOBILE TRIGGER */}
+      {/* 🚨 MOBILE TRIGGER (Hidden on Desktop) */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="md:hidden fixed top-4 right-4 z-50 p-2 bg-gray-900 text-white dark:bg-white dark:text-black rounded-lg shadow-lg"
+        className="md:hidden fixed top-4 right-4 z-50 p-2 bg-white dark:bg-[#111827] text-gray-900 dark:text-white border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm"
       >
         {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
 
-      {/* SIDEBAR CONTAINER */}
-      <aside
-        className={`
-          fixed top-0 left-0 z-40 h-screen transition-transform duration-300
-          w-72 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800
-          text-gray-900 dark:text-white
-          ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
-        `}
-      >
-        <div className="h-full flex flex-col py-6 px-4 overflow-y-auto custom-scrollbar">
-          {/* BRAND */}
-          <div className="flex items-center gap-3 mb-8 px-2">
-            <div className="bg-black text-white dark:bg-white dark:text-black p-2 rounded-xl">
-              <ShieldCheck size={26} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-wide leading-none">
-                ADMIN
-              </h1>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1">
-                Trav & Stay OS
-              </p>
-            </div>
-          </div>
-
-          {/* MENU LINKS */}
-          <div className="flex-1 space-y-8">
-            {menuGroups.map((group, groupIdx) => (
-              <div key={groupIdx}>
-                <h3 className="px-4 text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
-                  {group.label}
-                </h3>
-                <ul className="space-y-1">
-                  {group.items.map((item) => {
-                    const isActive = pathname === item.href;
-
-                    // --- 2. DISABLE LOGIC START ---
-                    let isDisabled = false;
-
-                    // Only check logic if we are done loading
-                    if (!permissions.loading) {
-                      const { role, hasProperty, hasVehicle } = permissions;
-                      const isAdmin = role === "admin";
-
-                      // A. ADMIN ONLY PAGES
-                      if (
-                        [
-                          "Join Requests",
-                          "All Partners",
-                          "Settings",
-                          "Invoices",
-                          "Pricing",
-                        ].includes(item.name)
-                      ) {
-                        if (!isAdmin) isDisabled = true;
-                      }
-
-                      // B. PROPERTY SPECIFIC
-                      if (item.name === "Hotels") {
-                        if (!isAdmin && !hasProperty) isDisabled = true;
-                      }
-
-                      // C. VEHICLE SPECIFIC
-                      if (item.name === "Vehicles") {
-                        if (!isAdmin && !hasVehicle) isDisabled = true;
-                      }
-
-                      // D. SHARED BUSINESS OPERATIONS
-                      if (
-                        ["Bookings", "Reviews", "Travelers"].includes(item.name)
-                      ) {
-                        if (!isAdmin && !hasProperty && !hasVehicle)
-                          isDisabled = true;
-                      }
-                    }
-                    // --- DISABLE LOGIC END ---
-
-                    return (
-                      <li key={item.href}>
-                        {isDisabled ? (
-                          // --- DISABLED STATE (Locked) ---
-                          <div className="flex items-center justify-between px-4 py-2.5 rounded-lg text-gray-300 dark:text-gray-700 cursor-not-allowed select-none group relative">
-                            <div className="flex items-center gap-3">
-                              <item.icon size={18} />
-                              <span>{item.name}</span>
-                            </div>
-                            <Lock size={14} />
-                          </div>
-                        ) : (
-                          // --- ENABLED STATE (Active Link) ---
-                          <Link
-                            href={item.href}
-                            onClick={() => setIsMobileOpen(false)}
-                            className={`
-                              flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-sm
-                              ${
-                                isActive
-                                  ? "bg-black text-white dark:bg-white dark:text-black shadow-md"
-                                  : "text-gray-500 hover:text-black hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-900"
-                              }
-                            `}
-                          >
-                            <item.icon size={18} />
-                            <span>{item.name}</span>
-                          </Link>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          {/* FOOTER ACTIONS */}
-          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-800 space-y-3">
-            {mounted && (
-              <button
-                onClick={toggleTheme}
-                className="flex items-center gap-3 px-4 py-2.5 w-full text-left rounded-lg transition-colors
-                           text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-900"
-              >
-                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-                <span className="text-sm font-medium">
-                  {theme === "dark" ? "Light Mode" : "Dark Mode"}
-                </span>
-              </button>
-            )}
-
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-3 px-4 py-2.5 w-full text-left rounded-lg transition-colors
-                         text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10"
-            >
-              <LogOut size={18} />
-              <span className="text-sm font-medium">Sign Out</span>
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* MOBILE OVERLAY */}
+      {/* 🚨 MOBILE OVERLAY */}
       {isMobileOpen && (
         <div
           onClick={() => setIsMobileOpen(false)}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+          className="fixed inset-0 bg-gray-900/60 dark:bg-black/60 backdrop-blur-sm z-30 md:hidden animate-in fade-in duration-200"
         />
       )}
+
+      {/* SIDEBAR CONTAINER */}
+      <aside
+        className={`
+          fixed top-0 left-0 z-40 h-screen transition-all duration-300 ease-in-out
+          bg-white dark:bg-[#111827] border-r border-gray-100 dark:border-gray-800
+          flex flex-col
+          ${isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} 
+          ${isCollapsed ? "w-[80px]" : "w-[280px]"}
+        `}
+      >
+        {/* Header / Brand */}
+        <div
+          className={`h-20 flex items-center justify-between border-b border-gray-100 dark:border-gray-800 shrink-0 transition-all ${isCollapsed ? "px-0 justify-center" : "px-5"}`}
+        >
+          {isCollapsed ? (
+            <div className="bg-gradient-to-br from-[#FF5A1F] to-orange-400 text-white p-2 rounded-xl shadow-sm shadow-orange-500/20 hidden md:flex items-center justify-center">
+              <span className="font-black text-lg leading-none">A</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 overflow-hidden whitespace-nowrap">
+              <div className="bg-gradient-to-br from-[#FF5A1F] to-orange-400 text-white p-2.5 rounded-xl shadow-sm shadow-orange-500/20 shrink-0">
+                <ShieldCheck size={20} strokeWidth={2.5} />
+              </div>
+              <div>
+                <h1 className="text-lg font-black tracking-tight text-gray-900 dark:text-white leading-none">
+                  Shubh Yatra
+                </h1>
+                <p className="text-[9px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mt-1">
+                  Admin OS
+                </p>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="hidden md:flex items-center justify-center p-2 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
+          >
+            {isCollapsed ? (
+              <ChevronRight size={18} />
+            ) : (
+              <ChevronLeft size={18} />
+            )}
+          </button>
+        </div>
+
+        {/* MENU LINKS */}
+        <div className="flex-1 py-6 px-3 space-y-6 overflow-y-auto custom-scrollbar overflow-x-hidden">
+          {menuGroups.map((group, groupIdx) => (
+            <div key={groupIdx}>
+              {!isCollapsed && (
+                <h3 className="px-3 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 whitespace-nowrap">
+                  {group.label}
+                </h3>
+              )}
+              <ul className="space-y-1">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href;
+                  let isDisabled = false;
+
+                  if (!permissions.loading) {
+                    const { role, hasProperty, hasVehicle } = permissions;
+                    const isAdmin = role === "admin";
+
+                    if (
+                      [
+                        "Join Requests",
+                        "All Partners",
+                        "Settings",
+                        "Invoices",
+                        "Pricing",
+                      ].includes(item.name)
+                    ) {
+                      if (!isAdmin) isDisabled = true;
+                    }
+                    if (item.name === "Hotels" && !isAdmin && !hasProperty)
+                      isDisabled = true;
+                    if (item.name === "Vehicles" && !isAdmin && !hasVehicle)
+                      isDisabled = true;
+                    if (
+                      ["Bookings", "Reviews", "Travelers"].includes(
+                        item.name,
+                      ) &&
+                      !isAdmin &&
+                      !hasProperty &&
+                      !hasVehicle
+                    )
+                      isDisabled = true;
+                  }
+
+                  return (
+                    <li key={item.href}>
+                      {isDisabled ? (
+                        // DISABLED STATE
+                        <div
+                          title={isCollapsed ? `${item.name} (Locked)` : ""}
+                          className={`flex items-center px-3 py-2.5 rounded-xl text-gray-400 dark:text-gray-600 cursor-not-allowed select-none transition-all ${isCollapsed ? "justify-center" : "justify-between"}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <item.icon
+                              size={18}
+                              strokeWidth={2}
+                              className="shrink-0"
+                            />
+                            {!isCollapsed && (
+                              <span className="text-sm font-semibold whitespace-nowrap">
+                                {item.name}
+                              </span>
+                            )}
+                          </div>
+                          {!isCollapsed && (
+                            <Lock size={14} className="shrink-0" />
+                          )}
+                        </div>
+                      ) : (
+                        // ENABLED STATE
+                        <Link
+                          href={item.href}
+                          onClick={() => setIsMobileOpen(false)}
+                          title={isCollapsed ? item.name : ""}
+                          className={`
+                            flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-semibold text-sm
+                            ${
+                              isActive
+                                ? "bg-orange-50 text-[#FF5A1F] dark:bg-[#FF5A1F]/10 dark:text-[#FF5A1F]"
+                                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800/50"
+                            }
+                            ${isCollapsed ? "justify-center" : ""}
+                          `}
+                        >
+                          <item.icon
+                            size={18}
+                            strokeWidth={isActive ? 2.5 : 2}
+                            className={`shrink-0 ${isActive ? "text-[#FF5A1F]" : ""}`}
+                          />
+                          {!isCollapsed && (
+                            <span className="whitespace-nowrap flex-1 overflow-hidden">
+                              {item.name}
+                            </span>
+                          )}
+                        </Link>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        {/* BOTTOM ACTIONS & PROFILE */}
+        <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-4 shrink-0">
+          {/* Quick Actions (Theme & Logout) */}
+          <div
+            className={`flex items-center gap-2 ${isCollapsed ? "flex-col" : "px-1"}`}
+          >
+            {mounted && (
+              <button
+                onClick={toggleTheme}
+                title={isCollapsed ? "Toggle Theme" : ""}
+                className={`flex items-center justify-center py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-400 transition-colors ${isCollapsed ? "w-full" : "flex-1"}`}
+              >
+                {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
+            )}
+            <button
+              onClick={handleLogout}
+              title={isCollapsed ? "Sign Out" : ""}
+              className={`flex items-center justify-center py-2.5 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg transition-colors ${isCollapsed ? "w-full" : "flex-1"}`}
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+
+          {/* User Profile Mini-Card */}
+          <div
+            title={isCollapsed ? `${permissions.role} User` : ""}
+            className={`flex items-center rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer ${isCollapsed ? "justify-center p-2" : "justify-between p-3"}`}
+          >
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-800 to-gray-600 dark:from-white dark:to-gray-300 flex items-center justify-center text-white dark:text-black font-black text-sm shadow-sm shrink-0">
+                {permissions.role === "admin" ? "A" : "P"}
+              </div>
+
+              {!isCollapsed && (
+                <div className="whitespace-nowrap overflow-hidden">
+                  <div className="text-sm font-bold text-gray-900 dark:text-white leading-tight capitalize truncate">
+                    {permissions.role} User
+                  </div>
+                  <div className="text-[10px] font-medium text-gray-500 truncate">
+                    Manage account
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {!isCollapsed && (
+              <MoreVertical size={16} className="text-gray-400 shrink-0" />
+            )}
+          </div>
+        </div>
+      </aside>
     </>
   );
 }

@@ -8,15 +8,18 @@ import {
   Building2,
   AlertCircle,
   ChevronRight,
-  Activity,
   Loader2,
-  PlusCircle,
-  ShieldCheck,
   RefreshCcw,
   Bell,
   X,
   CheckCircle2,
   Info,
+  Calendar,
+  Wallet,
+  TrendingUp,
+  PieChart,
+  Search,
+  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -36,6 +39,15 @@ interface ToastMsg {
   type: "success" | "error" | "info";
 }
 
+// Mock Chart Data for the visual representation
+const CHART_DATA = [
+  { day: "10 Oct", value: 25 },
+  { day: "15 Oct", value: 50 },
+  { day: "20 Oct", value: 45 },
+  { day: "25 Oct", value: 75 },
+  { day: "30 Oct", value: 100 },
+];
+
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,15 +60,14 @@ export default function AdminDashboard() {
     pendingRequests: 0,
     pendingProperties: 0,
     revenue: 124500,
+    totalBookings: 142, // Mock value for visual
   });
 
-  // Notification & Toast State
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
 
   // --- HELPERS ---
-
   const addToast = (
     message: string,
     type: "success" | "error" | "info" = "info",
@@ -78,7 +89,6 @@ export default function AdminDashboard() {
         apiRequest("/api/admin/hotels", "GET"),
       ]);
 
-      // 1. Process Stats
       const allUsers = usersData.users || [];
       const travelers = allUsers.filter(
         (u: any) => u.role !== "partner" && u.role !== "admin",
@@ -105,12 +115,11 @@ export default function AdminDashboard() {
         pendingRequests,
         pendingProperties,
         revenue: 124500,
+        totalBookings: 142,
       });
 
-      // 2. Generate Notifications dynamically
       const newNotifs: Notification[] = [];
-
-      if (pendingRequests > 0) {
+      if (pendingRequests > 0)
         newNotifs.push({
           id: "req-1",
           title: "New Partner Requests",
@@ -119,9 +128,7 @@ export default function AdminDashboard() {
           type: "alert",
           time: "Action Required",
         });
-      }
-
-      if (pendingProperties > 0) {
+      if (pendingProperties > 0)
         newNotifs.push({
           id: "prop-1",
           title: "Property Reviews",
@@ -130,9 +137,7 @@ export default function AdminDashboard() {
           type: "alert",
           time: "Action Required",
         });
-      }
-
-      if (activeListings > 0 && !isRefresh) {
+      if (activeListings > 0 && !isRefresh)
         newNotifs.push({
           id: "sys-1",
           title: "System Status",
@@ -141,10 +146,8 @@ export default function AdminDashboard() {
           type: "success",
           time: "Just now",
         });
-      }
 
       setNotifications(newNotifs);
-
       if (isRefresh) addToast("Dashboard updated successfully", "success");
     } catch (err) {
       console.error("Dashboard Load Failed", err);
@@ -161,8 +164,8 @@ export default function AdminDashboard() {
 
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-black">
-        <Loader2 className="animate-spin text-rose-600" size={40} />
+      <div className="min-h-screen flex items-center justify-center bg-[#F4F7F9] dark:bg-[#09090B]">
+        <Loader2 className="animate-spin text-[#FF5A1F]" size={40} />
       </div>
     );
 
@@ -170,10 +173,10 @@ export default function AdminDashboard() {
 
   return (
     <div
-      className="max-w-7xl mx-auto p-6 bg-gray-50 dark:bg-black min-h-screen relative"
+      className="min-h-screen bg-[#F4F7F9] dark:bg-[#09090B] pb-12"
       onClick={() => setShowNotifMenu(false)}
     >
-      {/* --- TOASTER CONTAINER --- */}
+      {/* --- TOASTER --- */}
       <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div
@@ -204,242 +207,357 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* 1. HEADER */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Command Center
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Platform overview and required actions.
-          </p>
-        </div>
+      {/* --- TOP HEADER (SAAS STYLE) --- */}
+      <div className="bg-white dark:bg-[#111827] border-b border-gray-100 dark:border-gray-800 px-8 py-4 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex-1 w-full">
+            <h1 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
+              Welcome Back, Admin!
+            </h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+              You have {totalAlerts} tasks pending today — keep it up!
+            </p>
+          </div>
 
-        <div className="flex gap-3">
-          {/* Refresh Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              fetchData(true);
-            }}
-            disabled={refreshing}
-            className="p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors h-12"
-          >
-            <RefreshCcw
-              size={20}
-              className={`text-gray-600 dark:text-gray-400 ${refreshing ? "animate-spin" : ""}`}
-            />
-          </button>
+          <div className="flex items-center gap-4 w-full sm:w-auto">
+            {/* Global Search */}
+            <div className="relative flex-1 sm:w-64 hidden md:block">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                size={16}
+              />
+              <input
+                type="text"
+                placeholder="Search for Bookings, Partners..."
+                className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A1F]/20 text-gray-900 dark:text-white"
+              />
+            </div>
 
-          {/* Notification Bell */}
-          <div className="relative">
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setShowNotifMenu(!showNotifMenu);
+                fetchData(true);
               }}
-              className="p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors relative"
+              disabled={refreshing}
+              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
-              <Bell size={20} className="text-gray-600 dark:text-gray-400" />
-              {notifications.length > 0 && (
-                <span className="absolute top-2 right-2.5 w-2.5 h-2.5 bg-rose-600 rounded-full border border-white dark:border-gray-900"></span>
-              )}
+              <RefreshCcw
+                size={18}
+                className={refreshing ? "animate-spin" : ""}
+              />
             </button>
 
-            {/* Dropdown Menu */}
-            {showNotifMenu && (
-              <div
-                className="absolute right-0 mt-3 w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl z-40 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
-                onClick={(e) => e.stopPropagation()}
+            {/* Notification Bell */}
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowNotifMenu(!showNotifMenu);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors relative"
               >
-                <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
-                  <h3 className="font-bold text-gray-900 dark:text-white">
-                    Notifications
-                  </h3>
-                  <span className="text-xs font-bold bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md text-gray-500">
-                    {notifications.length} New
+                <Bell size={20} />
+                {notifications.length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-[#111827]"></span>
+                )}
+              </button>
+
+              {/* Notification Dropdown */}
+              {showNotifMenu && (
+                <div
+                  className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                    <h3 className="font-bold text-gray-900 dark:text-white">
+                      Notifications
+                    </h3>
+                    <span className="text-xs font-bold bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-gray-500">
+                      {notifications.length} New
+                    </span>
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {notifications.length > 0 ? (
+                      notifications.map((note) => (
+                        <Link
+                          href={note.link}
+                          key={note.id}
+                          onClick={() => setShowNotifMenu(false)}
+                          className="block p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b border-gray-50 dark:border-gray-800/50 transition-colors"
+                        >
+                          <div className="flex gap-3">
+                            <div
+                              className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${note.type === "alert" ? "bg-orange-500" : "bg-blue-500"}`}
+                            />
+                            <div>
+                              <p className="text-sm font-bold text-gray-900 dark:text-white">
+                                {note.title}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {note.desc}
+                              </p>
+                              <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-wider">
+                                {note.time}
+                              </p>
+                            </div>
+                          </div>
+                        </Link>
+                      ))
+                    ) : (
+                      <div className="p-8 text-center text-gray-400 text-sm">
+                        No new notifications
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Profile Avatar */}
+            <div className="w-8 h-8 bg-[#FF5A1F] text-white rounded-full flex items-center justify-center font-black text-sm shadow-sm cursor-pointer">
+              A
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* --- MAIN DASHBOARD CONTENT --- */}
+      <div className="max-w-7xl mx-auto px-8 pt-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-black text-gray-900 dark:text-white">
+            Highlights
+          </h2>
+          <button className="text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center gap-1">
+            <RefreshCcw size={12} /> Refresh Data
+          </button>
+        </div>
+
+        {/* 1. HIGHLIGHTS GRID (4 Cards) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <HighlightCard
+            title="Total Partners"
+            value={stats.partners}
+            icon={Briefcase}
+            trend="+12%"
+          />
+          <HighlightCard
+            title="Active Listings"
+            value={stats.activeListings}
+            icon={Building2}
+            trend="+5%"
+          />
+          <HighlightCard
+            title="Total Bookings"
+            value={stats.totalBookings}
+            icon={Calendar}
+            trend="+18%"
+          />
+          <HighlightCard
+            title="Pending Tasks"
+            value={totalAlerts}
+            icon={AlertCircle}
+            trend="Action Needed"
+            isAlert={totalAlerts > 0}
+          />
+        </div>
+
+        {/* 2. MIDDLE SECTION (Chart & Split) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Progress Overview (Left - 2/3 width) */}
+          <div className="lg:col-span-2 bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h3 className="text-base font-black text-gray-900 dark:text-white mb-1">
+                  Revenue Overview
+                </h3>
+                <p className="text-xs text-gray-500 font-medium">
+                  Your platform booking trends.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-600 dark:text-gray-300">
+                  Oct 2025 <ChevronDown size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Pure CSS Area Chart Visual (No libraries needed) */}
+            <div className="h-48 flex items-end justify-between pt-4 relative">
+              {/* Y-Axis Grid lines */}
+              <div className="absolute inset-0 flex flex-col justify-between pb-6 opacity-10">
+                <div className="border-b border-gray-400 w-full h-0"></div>
+                <div className="border-b border-gray-400 w-full h-0"></div>
+                <div className="border-b border-gray-400 w-full h-0"></div>
+                <div className="border-b border-gray-400 w-full h-0"></div>
+              </div>
+
+              {/* Chart Bars */}
+              {CHART_DATA.map((data, idx) => (
+                <div
+                  key={idx}
+                  className="flex flex-col items-center w-[15%] z-10 group relative"
+                >
+                  {/* Tooltip on Hover */}
+                  <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-gray-800 shadow-lg border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-lg flex flex-col items-center pointer-events-none">
+                    <span className="text-[10px] font-bold text-gray-500 whitespace-nowrap">
+                      {data.day}
+                    </span>
+                    <span className="text-xs font-black text-[#FF5A1F]">
+                      +5%
+                    </span>
+                    <div className="absolute -bottom-1 w-2 h-2 bg-white dark:bg-gray-800 rotate-45 border-r border-b border-gray-100 dark:border-gray-700" />
+                  </div>
+
+                  {/* The Bar */}
+                  <div
+                    className={`w-full max-w-[40px] rounded-t-lg transition-all duration-500 ${data.value === 75 ? "bg-gradient-to-t from-orange-200 to-[#FF5A1F] shadow-lg shadow-orange-500/20" : "bg-orange-100 dark:bg-orange-900/30"}`}
+                    style={{ height: `${data.value}%` }}
+                  />
+                  <span className="text-[10px] font-bold text-gray-400 mt-3">
+                    {data.day.split(" ")[0]}
                   </span>
                 </div>
-                <div className="max-h-[300px] overflow-y-auto">
-                  {notifications.length > 0 ? (
-                    notifications.map((note) => (
-                      <Link
-                        href={note.link}
-                        key={note.id}
-                        onClick={() => setShowNotifMenu(false)}
-                        className="block p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-50 dark:border-gray-800/50 last:border-0"
-                      >
-                        <div className="flex gap-3">
-                          <div
-                            className={`mt-1 w-2 h-2 rounded-full shrink-0 ${note.type === "alert" ? "bg-orange-500" : "bg-blue-500"}`}
-                          />
-                          <div>
-                            <p className="text-sm font-bold text-gray-900 dark:text-white">
-                              {note.title}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
-                              {note.desc}
-                            </p>
-                            <p className="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">
-                              {note.time}
-                            </p>
-                          </div>
-                        </div>
-                      </Link>
-                    ))
-                  ) : (
-                    <div className="p-8 text-center text-gray-400 text-sm">
-                      No new notifications
-                    </div>
-                  )}
-                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Activity Split (Right - 1/3 width) */}
+          <div className="bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+                <PieChart size={16} className="text-gray-400" /> Booking Split
+              </h3>
+              <div className="flex gap-1">
+                <button className="p-1.5 border border-gray-200 dark:border-gray-700 rounded text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <Search size={14} />
+                </button>
               </div>
-            )}
-          </div>
-
-          {/* Revenue Badge */}
-          <div className="hidden md:block bg-green-50 dark:bg-green-900/20 px-6 py-3 rounded-xl border border-green-100 dark:border-green-800 text-right">
-            <div className="text-xs text-green-600 dark:text-green-400 font-bold uppercase tracking-wider">
-              Total Revenue
             </div>
-            <div className="text-xl font-bold text-gray-900 dark:text-white">
-              ₹{stats.revenue.toLocaleString()}
+
+            <div className="flex-1 flex flex-col items-center justify-center py-4">
+              {/* CSS Donut Chart */}
+              <div className="w-40 h-40 rounded-full border-[14px] border-[#FF5A1F] border-r-[#3B82F6] border-b-[#EC4899] flex flex-col items-center justify-center relative shadow-inner">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  Total
+                </span>
+                <span className="text-3xl font-black text-gray-900 dark:text-white">
+                  {stats.totalBookings}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-y-3 mt-4">
+              <LegendItem color="bg-[#FF5A1F]" label="Hotels" value="45%" />
+              <LegendItem color="bg-[#3B82F6]" label="Cabs" value="35%" />
+              <LegendItem color="bg-[#EC4899]" label="Rentals" value="15%" />
+              <LegendItem color="bg-indigo-500" label="Other" value="5%" />
             </div>
           </div>
         </div>
-      </div>
 
-      {/* 2. HIGH LEVEL METRICS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        <StatCard
-          label="Total Travelers"
-          value={stats.travelers}
-          icon={Users}
-          color="blue"
-          link="/admin/travelers"
-          sub="Active Customers"
-        />
-        <StatCard
-          label="Total Partners"
-          value={stats.partners}
-          icon={Briefcase}
-          color="purple"
-          link="/admin/partners"
-          sub="Supply Providers"
-        />
-        <StatCard
-          label="Active Listings"
-          value={stats.activeListings}
-          icon={Building2}
-          color="indigo"
-          link="/admin/hotels"
-          sub="Hotels & Vehicle"
-        />
-        <StatCard
-          label="Action Needed"
-          value={totalAlerts}
-          icon={AlertCircle}
-          color={totalAlerts > 0 ? "orange" : "gray"}
-          link={stats.pendingRequests > 0 ? "/admin/requests" : "/admin/hotels"}
-          sub="Approvals Pending"
-          isAlert={totalAlerts > 0}
-        />
-      </div>
-
-      {/* 3. SPLIT VIEW */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Activity
-              className={totalAlerts > 0 ? "text-orange-500" : "text-gray-400"}
-              size={20}
-            />
-            Requires Attention
-          </h3>
-
-          <div className="space-y-4">
-            {/* PENDING REQUESTS */}
-            {stats.pendingRequests > 0 ? (
-              <Link
-                href="/admin/requests"
-                className="flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-2xl border border-orange-200 dark:border-orange-900/50 shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
-              >
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-500"></div>
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 flex items-center justify-center font-bold">
-                    {stats.pendingRequests}
-                  </div>
-                  <div>
-                    <div className="font-bold text-gray-900 dark:text-white group-hover:text-orange-600 transition-colors">
-                      New Partner Requests
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Business partners waiting to join
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm font-bold text-orange-600 bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded-lg">
-                  Review <ChevronRight size={16} />
-                </div>
-              </Link>
-            ) : null}
-
-            {/* PENDING PROPERTIES */}
-            {stats.pendingProperties > 0 ? (
-              <Link
-                href="/admin/hotels"
-                className="flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-2xl border border-yellow-200 dark:border-yellow-900/50 shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
-              >
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-yellow-500"></div>
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 flex items-center justify-center font-bold">
-                    {stats.pendingProperties}
-                  </div>
-                  <div>
-                    <div className="font-bold text-gray-900 dark:text-white group-hover:text-yellow-600 transition-colors">
-                      Pending Listing Approvals
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Hotels or Vehicles waiting for verification
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm font-bold text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20 px-3 py-1 rounded-lg">
-                  Review <ChevronRight size={16} />
-                </div>
-              </Link>
-            ) : null}
-
-            {/* EMPTY STATE */}
-            {totalAlerts === 0 && (
-              <EmptyState message="All caught up! No pending actions." />
-            )}
+        {/* 3. BOTTOM SECTION: Recent Activity Table */}
+        <div className="bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-base font-black text-gray-900 dark:text-white">
+              Requires Attention
+            </h3>
+            <button className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
+              <Search size={14} /> Sort & Filter
+            </button>
           </div>
-        </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm h-fit">
-          <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">
-            Quick Management
-          </h3>
-          <div className="grid grid-cols-1 gap-3">
-            <QuickLink
-              href="/admin/add-hotel"
-              icon={PlusCircle}
-              title="Add Listing"
-              desc="Manually add Hotel or Vehicle"
-            />
-            <QuickLink
-              href="/admin/partners"
-              icon={ShieldCheck}
-              title="Verify Documents"
-              desc="Check partner licenses"
-            />
-            <QuickLink
-              href="/admin/travelers"
-              icon={Users}
-              title="Customer Lookup"
-              desc="Find user by phone/email"
-            />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gray-100 dark:border-gray-800">
+                  <th className="pb-3 px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider w-1/3">
+                    Request / Task
+                  </th>
+                  <th className="pb-3 px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider w-1/4">
+                    Type
+                  </th>
+                  <th className="pb-3 px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider w-1/4">
+                    Status
+                  </th>
+                  <th className="pb-3 px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Pending Partner Row */}
+                {stats.pendingRequests > 0 && (
+                  <tr className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
+                    <td className="py-4 px-4 flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-orange-500" />
+                      <span className="font-bold text-sm text-gray-900 dark:text-white">
+                        New Partner Signups
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-xs font-medium text-gray-500">
+                      Account Verification
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="px-2.5 py-1 rounded bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400 text-[10px] font-bold uppercase tracking-wider">
+                        Pending
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <Link
+                        href="/admin/requests"
+                        className="text-xs font-bold text-[#FF5A1F] hover:underline"
+                      >
+                        Review {stats.pendingRequests}
+                      </Link>
+                    </td>
+                  </tr>
+                )}
+
+                {/* Pending Property Row */}
+                {stats.pendingProperties > 0 && (
+                  <tr className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
+                    <td className="py-4 px-4 flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      <span className="font-bold text-sm text-gray-900 dark:text-white">
+                        Unpublished Hotels
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-xs font-medium text-gray-500">
+                      Listing Approval
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="px-2.5 py-1 rounded bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400 text-[10px] font-bold uppercase tracking-wider">
+                        Pending
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <Link
+                        href="/admin/hotels"
+                        className="text-xs font-bold text-[#FF5A1F] hover:underline"
+                      >
+                        Review {stats.pendingProperties}
+                      </Link>
+                    </td>
+                  </tr>
+                )}
+
+                {/* Empty State if all clear */}
+                {totalAlerts === 0 && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="py-12 text-center text-sm font-medium text-gray-400 border-b border-dashed border-gray-200 dark:border-gray-800"
+                    >
+                      <CheckCircle2
+                        size={24}
+                        className="mx-auto mb-2 text-green-500/50"
+                      />
+                      All caught up! No pending actions required.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -449,79 +567,52 @@ export default function AdminDashboard() {
 
 // --- SUB COMPONENTS ---
 
-function StatCard({
+function HighlightCard({ title, value, icon: Icon, trend, isAlert }: any) {
+  return (
+    <div className="bg-white dark:bg-[#111827] rounded-[24px] p-5 border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden group">
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
+          <Icon size={16} className="text-gray-400" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            {title}
+          </span>
+        </div>
+        <span
+          className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isAlert ? "bg-orange-50 text-orange-600 dark:bg-orange-900/20" : "bg-green-50 text-green-600 dark:bg-green-900/20"}`}
+        >
+          {trend}
+        </span>
+      </div>
+      <div className="flex items-end gap-3">
+        <span className="text-3xl font-black text-gray-900 dark:text-white">
+          {value.toString().padStart(2, "0")}
+        </span>
+      </div>
+
+      {/* Decorative Sparkline (Fake) */}
+      <div className="absolute right-0 bottom-0 opacity-10 group-hover:opacity-20 transition-opacity">
+        <TrendingUp size={64} className="translate-x-4 translate-y-4" />
+      </div>
+    </div>
+  );
+}
+
+function LegendItem({
+  color,
   label,
   value,
-  icon: Icon,
-  color,
-  link,
-  sub,
-  isAlert,
-}: any) {
-  const colorStyles: any = {
-    blue: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
-    purple:
-      "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400",
-    indigo:
-      "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400",
-    orange:
-      "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400",
-    gray: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-  };
-
+}: {
+  color: string;
+  label: string;
+  value: string;
+}) {
   return (
-    <Link
-      href={link}
-      className="block p-5 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all group"
-    >
-      <div className="flex justify-between items-start mb-4">
-        <div
-          className={`p-3 rounded-xl ${colorStyles[color]} group-hover:scale-110 transition-transform`}
-        >
-          <Icon size={24} />
-        </div>
-        {isAlert && value > 0 && (
-          <span className="flex h-3 w-3 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-          </span>
-        )}
-      </div>
-      <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+    <div className="flex items-center gap-2">
+      <div className={`w-2.5 h-2.5 rounded-full ${color}`} />
+      <span className="text-xs font-bold text-gray-500">{label}:</span>
+      <span className="text-xs font-black text-gray-900 dark:text-white">
         {value}
-      </div>
-      <div className="text-sm font-bold text-gray-500">{label}</div>
-      <div className="text-xs text-gray-400 mt-1">{sub}</div>
-    </Link>
-  );
-}
-
-function QuickLink({ href, icon: Icon, title, desc }: any) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
-    >
-      <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-400">
-        <Icon size={20} />
-      </div>
-      <div>
-        <div className="font-bold text-sm text-gray-900 dark:text-white">
-          {title}
-        </div>
-        <div className="text-xs text-gray-500">{desc}</div>
-      </div>
-    </Link>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="p-6 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700 text-center">
-      <div className="text-sm font-bold text-gray-400">{message}</div>
-      <div className="text-xs text-gray-400 mt-1">
-        Good job! Everything is cleared.
-      </div>
+      </span>
     </div>
   );
 }

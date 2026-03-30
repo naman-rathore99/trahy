@@ -23,8 +23,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import api from "@/utils/api";
 
 const { width, height } = Dimensions.get("window");
-
-// We still need this for the Razorpay Logo image URL
 const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://shubhyatra.world";
 
 // ─── Confetti Particle ────────────────────────────────────────────────────────
@@ -311,11 +309,22 @@ export default function CheckoutScreen() {
   const partnerId = (params.partnerId as string) || "UNKNOWN";
   const listingName = (params.listingName as string) || "Hotel Stay";
   const listingId = (params.listingId as string) || "";
-  const rawAmount = Number(params.totalAmount);
-  const totalAmount = rawAmount > 0 ? rawAmount : 0;
+
+  // 🚨 Catching all the new Price Breakdown Context
+  const totalAmount = Number(params.totalAmount) || 0;
+  const roomTotal = Number(params.roomTotal) || totalAmount;
   const checkIn = (params.checkIn as string) || "";
   const checkOut = (params.checkOut as string) || "";
   const guests = Number(params.guests) || 2;
+
+  // Extra Params (Cabs, Delay Protection, Rentals)
+  const needCab = params.needCab === "true";
+  const cabPickup = (params.cabPickup as string) || "";
+  const cabPrice = Number(params.cabPrice) || 0;
+  const delayProtection = params.delayProtection === "true";
+  const delayPrice = Number(params.delayPrice) || 0;
+  const vehicleId = (params.vehicleId as string) || "";
+  const vehiclePrice = Number(params.vehiclePrice) || 0;
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -323,7 +332,7 @@ export default function CheckoutScreen() {
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // 🚨 2. REWRITTEN CHECKOUT LOGIC USING AXIOS
+  // 🚨 REWRITTEN CHECKOUT LOGIC USING AXIOS
   const handleCheckout = async () => {
     if (!name || !phone || !email) {
       Alert.alert("Missing Details", "Please fill in all contact details.");
@@ -346,10 +355,9 @@ export default function CheckoutScreen() {
         return;
       }
 
-      // Explicitly get the fresh token
       const idToken = await currentUser.getIdToken(true);
 
-      // STEP 1: CREATE BOOKING (Using api.post!)
+      // STEP 1: CREATE BOOKING (Includes Extras Payload!)
       const createRes = await api.post(
         "/api/bookings/create",
         {
@@ -364,29 +372,32 @@ export default function CheckoutScreen() {
           customer: { name, email, phone, userId: currentUser.uid },
           paymentMethod: "online",
           status: "pending_payment",
+          // Travel Extras Payload - backend will save this!
+          extras: {
+            needCab,
+            cabPickup,
+            cabPrice,
+            delayProtection,
+            delayPrice,
+            vehicleId,
+            vehiclePrice,
+          },
         },
-        {
-          headers: { Authorization: `Bearer ${idToken}` },
-        },
+        { headers: { Authorization: `Bearer ${idToken}` } },
       );
 
-      const createData = createRes.data; // Axios unwraps JSON automatically
+      const createData = createRes.data;
       if (!createData.success || !createData.bookingId) {
         throw new Error(createData.error || "Failed to create booking.");
       }
 
       const generatedBookingId = createData.bookingId;
 
-      // STEP 2: INITIATE RAZORPAY PAYMENT (Using api.post!)
+      // STEP 2: INITIATE RAZORPAY PAYMENT
       const paymentRes = await api.post(
         "/api/payment/initiate",
-        {
-          bookingId: generatedBookingId,
-          source: "mobile",
-        },
-        {
-          headers: { Authorization: `Bearer ${idToken}` },
-        },
+        { bookingId: generatedBookingId, source: "mobile" },
+        { headers: { Authorization: `Bearer ${idToken}` } },
       );
 
       const paymentData = paymentRes.data;
@@ -394,7 +405,7 @@ export default function CheckoutScreen() {
       // Configure Razorpay modal
       const options = {
         description: `Booking for ${listingName}`,
-        image: `${API_URL}/logo.png`,
+        image: `${API_URL}/logo.png`, // Optional: Add your logo URL here
         currency: paymentData.currency || "INR",
         key: paymentData.keyId,
         amount: paymentData.amount,
@@ -408,7 +419,6 @@ export default function CheckoutScreen() {
       RazorpayCheckout.open(options)
         .then(async (razorpayData: any) => {
           try {
-            // Using api.post for the callback as well
             await api.post("/api/payment/callback", {
               razorpay_order_id: razorpayData.razorpay_order_id,
               razorpay_payment_id: razorpayData.razorpay_payment_id,
@@ -481,28 +491,70 @@ export default function CheckoutScreen() {
 
         <View className="flex-1">
           <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-            {/* Booking Summary */}
+            {/* Booking Summary with Breakdowns */}
             <View className="bg-white dark:bg-[#111827] m-6 p-5 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm">
               <Text className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest mb-3">
                 Booking Summary
               </Text>
-              <Text className="text-gray-900 dark:text-white text-xl font-black mb-1">
+              <Text className="text-gray-900 dark:text-white text-xl font-black mb-3">
                 {listingName}
               </Text>
-              <View className="flex-row justify-between mt-2">
-                <View className="flex-row items-center gap-2 mb-4">
+
+              <View className="flex-row gap-4 mb-4 pb-4 border-b border-gray-100 dark:border-gray-800">
+                <View className="flex-row items-center gap-1.5">
                   <Ionicons name="calendar-outline" size={14} color="#FF5A1F" />
-                  <Text className="text-gray-600 dark:text-gray-300 text-sm font-medium">
+                  <Text className="text-gray-600 dark:text-gray-300 text-xs font-medium">
                     {checkIn} to {checkOut}
                   </Text>
                 </View>
-                <View className="flex-row items-center gap-2 mb-4">
+                <View className="flex-row items-center gap-1.5">
                   <Ionicons name="person-outline" size={14} color="#FF5A1F" />
-                  <Text className="text-gray-600 dark:text-gray-300 text-sm font-medium">
+                  <Text className="text-gray-600 dark:text-gray-300 text-xs font-medium">
                     {guests} Guests
                   </Text>
                 </View>
               </View>
+
+              {/* 🚨 THE PRICE BREAKDOWN 🚨 */}
+              <View className="space-y-3 mb-4">
+                <View className="flex-row justify-between">
+                  <Text className="text-gray-500 text-sm">Room Total</Text>
+                  <Text className="text-gray-900 dark:text-white font-medium">
+                    ₹{roomTotal}
+                  </Text>
+                </View>
+                {needCab && (
+                  <View className="flex-row justify-between">
+                    <Text className="text-[#FF5A1F] text-sm">
+                      Station Transfer
+                    </Text>
+                    <Text className="text-[#FF5A1F] font-medium">
+                      +₹{cabPrice}
+                    </Text>
+                  </View>
+                )}
+                {delayProtection && (
+                  <View className="flex-row justify-between">
+                    <Text className="text-amber-500 text-sm">
+                      Delay Protection
+                    </Text>
+                    <Text className="text-amber-500 font-medium">
+                      +₹{delayPrice}
+                    </Text>
+                  </View>
+                )}
+                {vehicleId && (
+                  <View className="flex-row justify-between">
+                    <Text className="text-emerald-500 text-sm">
+                      Vehicle Rental
+                    </Text>
+                    <Text className="text-emerald-500 font-medium">
+                      +₹{vehiclePrice}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
               <View className="border-t border-gray-100 dark:border-gray-800 pt-4 flex-row justify-between items-center">
                 <Text className="text-gray-600 dark:text-gray-400 font-medium">
                   Total Amount
@@ -524,8 +576,8 @@ export default function CheckoutScreen() {
                   placeholder: "Full Name",
                   value: name,
                   onChangeText: setName,
-                  keyboardType: "default" as any,
-                  autoCapitalize: "words" as any,
+                  keyboardType: "default",
+                  autoCapitalize: "words",
                 },
                 {
                   icon: "call-outline",
@@ -533,16 +585,16 @@ export default function CheckoutScreen() {
                   value: phone,
                   onChangeText: (t: string) =>
                     setPhone(t.replace(/\D/g, "").slice(0, 10)),
-                  keyboardType: "phone-pad" as any,
-                  autoCapitalize: "none" as any,
+                  keyboardType: "phone-pad",
+                  autoCapitalize: "none",
                 },
                 {
                   icon: "mail-outline",
                   placeholder: "Email Address",
                   value: email,
                   onChangeText: setEmail,
-                  keyboardType: "email-address" as any,
-                  autoCapitalize: "none" as any,
+                  keyboardType: "email-address",
+                  autoCapitalize: "none",
                 },
               ].map(
                 ({
@@ -567,8 +619,8 @@ export default function CheckoutScreen() {
                       placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                       value={value}
                       onChangeText={onChangeText}
-                      keyboardType={keyboardType}
-                      autoCapitalize={autoCapitalize}
+                      keyboardType={keyboardType as any}
+                      autoCapitalize={autoCapitalize as any}
                       className="flex-1 ml-3 text-gray-900 dark:text-white"
                     />
                   </View>
@@ -589,7 +641,7 @@ export default function CheckoutScreen() {
             <TouchableOpacity
               disabled={loading}
               onPress={handleCheckout}
-              className={`w-full h-14 rounded-2xl items-center justify-center flex-row gap-2 ${loading ? "bg-[#FF5A1F]/50" : "bg-[#FF5A1F]"}`}
+              className={`w-full h-14 rounded-2xl items-center justify-center flex-row gap-2 ${loading ? "bg-[#FF5A1F]/50" : "bg-[#FF5A1F] active:scale-95"}`}
             >
               {loading ? (
                 <ActivityIndicator color="white" />

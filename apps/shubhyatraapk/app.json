@@ -62,15 +62,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d5c0c806-2b16-498e-b66b-db6c6eccf95c"
+        "projectId": "2ea9548f-c97a-41b8-8b4f-77f55f3d5449"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/2ea9548f-c97a-41b8-8b4f-77f55f3d5449"
-    },
-    "owner": "naman-rathore98"
+    "owner": "namanrathore9"
   }
 }

@@ -1,221 +1,224 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  updateDoc,
+} from "firebase/firestore";
 import { useColorScheme } from "nativewind";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  ScrollView,
+  Alert,
+  FlatList,
+  Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { db } from "../../../config/firebase";
+import { db } from "../../../config/firebase"; // 🚨 Adjust path
 
 export default function AdminHotels() {
   const router = useRouter();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // --- STATES ---
   const [hotels, setHotels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"approved" | "Pending">(
-    "approved",
-  );
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // --- 🔄 FIRESTORE INTEGRATION ---
+  // --- 🔄 LIVE FETCH INVENTORY ---
   useEffect(() => {
-    setLoading(true);
+    const q = query(collection(db, "hotels"));
 
-    // Query hotels based on the selected tab (e.g., status == 'approved' or 'pending')
-    const q = query(
-      collection(db, "hotels"),
-      where("status", "==", activeTab.toLowerCase()),
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedHotels = snapshot.docs.map((doc) => {
-          const data = doc.data();
-
-          // ✅ FIX: Determine correct price by checking pricePerNight first, falling back to price
-          const displayPrice = data.pricePerNight
-            ? data.pricePerNight
-            : data.price;
-
-          return {
-            id: doc.id,
-            name: data.name || "Unknown Hotel",
-            address: data.address || "No Address Provided",
-            owner: data.ownerName || "Unknown Owner",
-            ownerId: data.ownerId?.substring(0, 6) || "N/A",
-            // ✅ FIX: Use the resolved displayPrice
-            price: displayPrice ? `₹${displayPrice}` : "Pricing N/A",
-            status: data.status || "pending",
-          };
-        });
-
-        setHotels(fetchedHotels);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error fetching hotels:", error);
-        setLoading(false);
-      },
-    );
+    // We use onSnapshot so if a partner adds a hotel, it pops up live!
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedHotels = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        // Default to false if the field doesn't exist yet
+        isSoldOut: doc.data().isSoldOut || false,
+        status: doc.data().status || "pending",
+      }));
+      setHotels(fetchedHotels);
+      setLoading(false);
+    });
 
     return () => unsubscribe();
-  }, [activeTab]);
+  }, []);
 
-  // --- SAFE BACK NAVIGATION ---
-  const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace("/admin/dashboard" as any);
+  // --- ⚡ TOGGLE SOLD OUT STATUS ---
+  const toggleSoldOut = async (
+    hotelId: string,
+    currentStatus: boolean,
+    hotelName: string,
+  ) => {
+    const newStatus = !currentStatus;
+
+    Alert.alert(
+      newStatus ? "Mark as Sold Out?" : "Open for Bookings?",
+      newStatus
+        ? `This will instantly hide ${hotelName} from travelers.`
+        : `Travelers will be able to book ${hotelName} again.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: newStatus ? "Lock Hotel" : "Open Hotel",
+          style: newStatus ? "destructive" : "default",
+          onPress: async () => {
+            try {
+              await updateDoc(doc(db, "hotels", hotelId), {
+                isSoldOut: newStatus,
+                updatedAt: new Date().toISOString(),
+              });
+            } catch (error) {
+              Alert.alert("Error", "Could not update hotel status.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // --- ✅ APPROVE PENDING HOTEL ---
+  const approveHotel = async (hotelId: string) => {
+    try {
+      await updateDoc(doc(db, "hotels", hotelId), { status: "approved" });
+    } catch (error) {
+      Alert.alert("Error", "Could not approve hotel.");
     }
   };
 
-  return (
-    <View className="flex-1 bg-gray-50 dark:bg-black">
-      <StatusBar style={isDark ? "light" : "dark"} />
-      <SafeAreaView className="flex-1">
-        {/* HEADER */}
-        <View className="px-6 py-4 border-b border-gray-200 dark:border-gray-900 bg-white dark:bg-black flex-row justify-between items-center">
-          <View className="flex-row items-center gap-3">
-            <TouchableOpacity
-              onPress={handleBack}
-              className="bg-gray-100 dark:bg-gray-900 p-2 rounded-full border border-gray-200 dark:border-gray-800"
-            >
-              <Ionicons
-                name="arrow-back"
-                size={24}
-                color={isDark ? "white" : "black"}
-              />
-            </TouchableOpacity>
-            <View>
-              <Text className="text-gray-900 dark:text-white text-xl font-bold">
-                Manage Hotels
-              </Text>
-              <Text className="text-gray-500 text-xs">
-                {hotels.length} {activeTab.toLowerCase()} listings found
-              </Text>
-            </View>
+  const filteredHotels = hotels.filter(
+    (h) =>
+      h.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      h.ownerName?.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
+  const renderItem = ({ item: h }: { item: any }) => (
+    <View className="bg-white dark:bg-[#111827] p-5 rounded-[24px] mb-4 shadow-sm border border-gray-100 dark:border-gray-800">
+      <View className="flex-row justify-between items-start mb-3">
+        <View className="flex-1 pr-4">
+          <Text
+            className="text-gray-900 dark:text-white font-black text-lg tracking-tight mb-1"
+            numberOfLines={1}
+          >
+            {h.name || "Unnamed Property"}
+          </Text>
+          <Text className="text-gray-500 text-xs font-medium">
+            Partner: {h.ownerName || h.ownerEmail || "Unknown"}
+          </Text>
+        </View>
+
+        {/* Status Badge */}
+        {h.status === "pending" ? (
+          <View className="bg-amber-100 dark:bg-amber-900/30 px-2.5 py-1 rounded-md">
+            <Text className="text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase">
+              Pending
+            </Text>
           </View>
+        ) : h.isSoldOut ? (
+          <View className="bg-red-100 dark:bg-red-900/30 px-2.5 py-1 rounded-md">
+            <Text className="text-red-600 dark:text-red-400 text-[10px] font-bold uppercase">
+              Sold Out
+            </Text>
+          </View>
+        ) : (
+          <View className="bg-emerald-100 dark:bg-emerald-900/30 px-2.5 py-1 rounded-md">
+            <Text className="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase">
+              Active
+            </Text>
+          </View>
+        )}
+      </View>
 
-          {/* INTERACTIVE FILTER TABS */}
-          <View className="flex-row gap-2 bg-gray-100 dark:bg-[#111827] p-1 rounded-lg border border-gray-200 dark:border-gray-800">
-            <TouchableOpacity
-              onPress={() => setActiveTab("approved")}
-              className={`${activeTab === "approved" ? "bg-green-100 dark:bg-green-500/20 shadow-sm" : ""} px-3 py-1 rounded-md`}
+      {/* Admin Controls */}
+      <View className="flex-row justify-between items-center mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+        {/* Sold Out Toggle (Only show if approved) */}
+        {h.status === "approved" ? (
+          <View className="flex-row items-center gap-3">
+            <Switch
+              value={h.isSoldOut}
+              onValueChange={() => toggleSoldOut(h.id, h.isSoldOut, h.name)}
+              trackColor={{
+                false: isDark ? "#374151" : "#E5E7EB",
+                true: "#EF4444",
+              }}
+              thumbColor={"#FFFFFF"}
+            />
+            <Text
+              className={`text-xs font-bold ${h.isSoldOut ? "text-red-500" : "text-gray-500"}`}
             >
-              <Text
-                className={`${activeTab === "approved" ? "text-green-600 dark:text-green-500" : "text-gray-500"} text-xs font-bold`}
-              >
-                Active
-              </Text>
-            </TouchableOpacity>
+              {h.isSoldOut ? "LOCKED" : "TAKING BOOKINGS"}
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={() => approveHotel(h.id)}
+            className="bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2 rounded-xl border border-indigo-100 dark:border-indigo-900/30"
+          >
+            <Text className="text-indigo-600 dark:text-indigo-400 text-xs font-bold">
+              Approve Property
+            </Text>
+          </TouchableOpacity>
+        )}
 
-            <TouchableOpacity
-              onPress={() => setActiveTab("Pending")}
-              className={`${activeTab === "Pending" ? "bg-yellow-100 dark:bg-yellow-500/20 shadow-sm" : ""} px-3 py-1 rounded-md`}
-            >
-              <Text
-                className={`${activeTab === "Pending" ? "text-yellow-600 dark:text-yellow-500" : "text-gray-500"} text-xs font-bold`}
-              >
-                Pending
-              </Text>
-            </TouchableOpacity>
+        <TouchableOpacity className="w-8 h-8 bg-gray-50 dark:bg-gray-800 rounded-full items-center justify-center border border-gray-200 dark:border-gray-700">
+          <Ionicons
+            name="pencil"
+            size={14}
+            color={isDark ? "white" : "black"}
+          />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <View className="flex-1 bg-[#F8F9FA] dark:bg-[#09090B]">
+      <StatusBar style={isDark ? "light" : "dark"} />
+      <SafeAreaView className="flex-1" edges={["top", "left", "right"]}>
+        {/* Header */}
+        <View className="px-6 py-2 flex-row justify-between items-center mb-4">
+          <Text className="text-gray-900 dark:text-white text-2xl font-black tracking-tight">
+            Inventory
+          </Text>
+        </View>
+
+        {/* Search */}
+        <View className="px-6 mb-6">
+          <View className="flex-row items-center bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 rounded-2xl px-4 h-12 shadow-sm">
+            <Ionicons name="search" size={20} color="#9CA3AF" />
+            <TextInput
+              placeholder="Search properties or partners..."
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              className="flex-1 ml-3 text-gray-900 dark:text-white font-medium"
+            />
           </View>
         </View>
 
-        <ScrollView className="p-6" showsVerticalScrollIndicator={false}>
-          {loading ? (
-            <ActivityIndicator size="large" color="#FF5A1F" className="mt-10" />
-          ) : hotels.length === 0 ? (
-            <View className="items-center mt-10">
-              <Ionicons
-                name="bed-outline"
-                size={64}
-                color={isDark ? "#374151" : "#D1D5DB"}
-              />
-              <Text className="text-gray-400 font-bold text-lg mt-4">
-                No {activeTab.toLowerCase()} hotels
-              </Text>
-            </View>
-          ) : (
-            hotels.map((h) => (
-              <View
-                key={h.id}
-                className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden mb-6 shadow-sm dark:shadow-none"
-              >
-                {/* Top Bar */}
-                <View className="bg-gray-50 dark:bg-[#0f1218] p-4 flex-row justify-between items-start border-b border-gray-100 dark:border-transparent">
-                  <View className="flex-1 pr-2">
-                    <Text
-                      className="text-gray-900 dark:text-white font-bold text-lg"
-                      numberOfLines={1}
-                    >
-                      {h.name}
-                    </Text>
-                    <View className="flex-row items-center mt-1">
-                      <Ionicons
-                        name="location-outline"
-                        size={12}
-                        color="#EF4444"
-                      />
-                      <Text
-                        className="text-gray-500 dark:text-gray-400 text-xs ml-1"
-                        numberOfLines={1}
-                      >
-                        {h.address}
-                      </Text>
-                    </View>
-                  </View>
-                  <View className="items-end">
-                    <Text className="text-gray-900 dark:text-white font-bold text-lg">
-                      {h.price}
-                    </Text>
-                    <Text className="text-gray-500 text-[10px]">per night</Text>
-                  </View>
-                </View>
-
-                {/* Body & Action */}
-                <View className="p-4">
-                  <View className="flex-row items-center gap-3 mb-4">
-                    <View className="w-10 h-10 bg-blue-50 dark:bg-blue-900/30 rounded-full items-center justify-center border border-blue-100 dark:border-blue-900/50">
-                      <Text className="text-blue-600 dark:text-blue-400 font-bold text-sm uppercase">
-                        {h.owner.charAt(0)}
-                      </Text>
-                    </View>
-                    <View>
-                      <Text className="text-gray-900 dark:text-white font-bold text-sm">
-                        {h.owner}
-                      </Text>
-                      <Text className="text-gray-500 text-[10px]">
-                        Owner ID: #{h.ownerId}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={() => router.push(`/admin/hotels/${h.id}` as any)}
-                    className="bg-gray-900 dark:bg-white py-3 rounded-xl items-center shadow-md dark:shadow-none active:scale-95"
-                  >
-                    <Text className="text-white dark:text-black font-bold text-sm">
-                      Manage Hotel
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          )}
-          <View className="h-10" />
-        </ScrollView>
+        {/* List */}
+        {loading ? (
+          <ActivityIndicator size="large" color="#10B981" className="mt-10" />
+        ) : (
+          <FlatList
+            data={filteredHotels}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={{
+              paddingHorizontal: 24,
+              paddingBottom: 100,
+            }}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </SafeAreaView>
     </View>
   );

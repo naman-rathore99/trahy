@@ -17,6 +17,7 @@ import {
   Menu,
   IndianRupee,
   Bell,
+  ShieldCheck,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -56,54 +57,64 @@ export default function PartnerSidebar({
 
   return (
     <>
-      {/* 🚨 NEW: MOBILE OVERLAY (Dark background when menu is open) */}
+      {/* 🚨 MOBILE OVERLAY */}
       {!isCollapsed && (
         <div
           onClick={toggleSidebar}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-200"
+          className="fixed inset-0 bg-gray-900/60 dark:bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-200"
         />
       )}
 
-      {/* 🚨 FIXED: RESPONSIVE SIDEBAR */}
-      {/* It now uses 'translate-x' to slide in/out on mobile, and 'w-20/w-64' for desktop collapsing */}
+      {/* 🚨 RESPONSIVE SIDEBAR */}
       <aside
-        className={`fixed left-0 top-0 z-50 h-screen bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col transition-all duration-300 ease-in-out md:translate-x-0 ${
-          isCollapsed
-            ? "-translate-x-full w-64 md:w-20" // Hidden on mobile, shrunk on desktop
-            : "translate-x-0 w-64"              // Visible on mobile, expanded on desktop
+        className={`fixed left-0 top-0 z-50 h-screen bg-white dark:bg-[#111827] border-r border-gray-100 dark:border-gray-800 flex flex-col transition-all duration-300 ease-in-out md:translate-x-0 ${
+          isCollapsed ? "-translate-x-full w-64 md:w-20" : "translate-x-0 w-64"
         }`}
       >
         {/* Header / Brand */}
         <div
-          className={`h-16 flex items-center justify-between border-b border-gray-100 dark:border-gray-800 ${isCollapsed ? "justify-center" : "px-6"}`}
+          className={`h-20 flex items-center justify-between border-b border-gray-100 dark:border-gray-800 ${isCollapsed ? "justify-center" : "px-5"}`}
         >
           {isCollapsed ? (
-            <span className="text-xl font-extrabold text-rose-600 hidden md:block">P.</span>
+            <div className="bg-gradient-to-br from-[#FF5A1F] to-orange-400 text-white p-2 rounded-xl shadow-sm shadow-orange-500/20 hidden md:flex items-center justify-center">
+              <span className="font-black text-lg leading-none">P</span>
+            </div>
           ) : (
-            <div className="overflow-hidden whitespace-nowrap">
-              <h1 className="text-xl font-extrabold tracking-tight text-gray-900 dark:text-white">
-                PARTNER<span className="text-rose-600">.</span>
-              </h1>
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest">
-                Manager Console
-              </p>
+            <div className="flex items-center gap-3 overflow-hidden whitespace-nowrap">
+              <div className="bg-gradient-to-br from-[#FF5A1F] to-orange-400 text-white p-2.5 rounded-xl shadow-sm shadow-orange-500/20 shrink-0">
+                <ShieldCheck size={20} strokeWidth={2.5} />
+              </div>
+              <div>
+                <h1 className="text-lg font-black tracking-tight text-gray-900 dark:text-white leading-none">
+                  Partner OS
+                </h1>
+                <p className="text-[9px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mt-1">
+                  Shubh Yatra
+                </p>
+              </div>
             </div>
           )}
-          
+
           <button
             onClick={toggleSidebar}
             className="w-auto flex items-center justify-center p-2 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             {isCollapsed ? (
-              <ChevronRight size={20} className="hidden md:block" />
+              <ChevronRight size={18} className="hidden md:block" />
             ) : (
-              <ChevronLeft size={20} />
+              <ChevronLeft size={18} />
             )}
           </button>
         </div>
 
         {/* Menu Items */}
-        <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto custom-scrollbar">
+          {!isCollapsed && (
+            <h3 className="px-3 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">
+              Management
+            </h3>
+          )}
+
           {MENU_ITEMS.map((item) => {
             const isActive = pathname === item.href;
             const isNotif = item.label === "Notifications";
@@ -113,30 +124,30 @@ export default function PartnerSidebar({
                 key={item.href}
                 href={item.href}
                 onClick={() => {
-                  // Auto-close sidebar on mobile when a link is clicked!
                   if (window.innerWidth < 768) {
                     toggleSidebar();
                   }
                 }}
                 title={isCollapsed ? item.label : ""}
-                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-bold transition-all group ${
+                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all group ${
                   isActive
-                    ? "bg-black text-white dark:bg-white dark:text-black shadow-lg"
-                    : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-black dark:hover:text-white"
+                    ? "bg-orange-50 text-[#FF5A1F] dark:bg-[#FF5A1F]/10 dark:text-[#FF5A1F]"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800/50"
                 } ${isCollapsed ? "md:justify-center" : ""}`}
               >
                 {/* Icon Container */}
                 <div className="relative flex items-center justify-center">
                   <item.icon
                     size={20}
-                    className={`shrink-0 ${isActive ? "" : "group-hover:text-rose-600 transition-colors"}`}
+                    strokeWidth={isActive ? 2.5 : 2}
+                    className={`shrink-0 ${isActive ? "text-[#FF5A1F]" : "group-hover:text-[#FF5A1F] transition-colors"}`}
                   />
 
-                  {/* PULSING DOT */}
+                  {/* PULSING DOT (Collapsed View) */}
                   {isNotif && unreadCount > 0 && isCollapsed && (
                     <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 hidden md:flex">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FF5A1F]"></span>
                     </span>
                   )}
                 </div>
@@ -149,9 +160,9 @@ export default function PartnerSidebar({
                 >
                   {item.label}
 
-                  {/* NUMBER BADGE */}
+                  {/* NUMBER BADGE (Expanded View) */}
                   {isNotif && unreadCount > 0 && (
-                    <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">
+                    <span className="bg-[#FF5A1F] text-white text-[10px] font-black px-2 py-0.5 rounded shadow-sm">
                       {unreadCount}
                     </span>
                   )}
@@ -162,12 +173,12 @@ export default function PartnerSidebar({
         </nav>
 
         {/* Footer / Toggle & Logout */}
-        <div className="p-3 border-t border-gray-100 dark:border-gray-800 space-y-2">
+        <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
           <button
             onClick={handleLogout}
             className={`flex items-center gap-3 px-3 py-3 w-full rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors ${isCollapsed ? "md:justify-center" : ""}`}
           >
-            <LogOut size={20} />
+            <LogOut size={20} strokeWidth={2.5} />
             <span
               className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${isCollapsed ? "md:w-0 md:opacity-0" : "w-auto opacity-100"}`}
             >
@@ -178,30 +189,35 @@ export default function PartnerSidebar({
       </aside>
 
       {/* MOBILE HEADER */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 z-30 flex items-center justify-between px-4">
-        <span className="font-bold text-lg text-gray-900 dark:text-white">
-          Partner Panel
-        </span>
-
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-[#111827] border-b border-gray-100 dark:border-gray-800 z-30 flex items-center justify-between px-4">
         <div className="flex items-center gap-2">
+          <div className="bg-gradient-to-br from-[#FF5A1F] to-orange-400 text-white p-1.5 rounded-lg shadow-sm">
+            <ShieldCheck size={16} strokeWidth={2.5} />
+          </div>
+          <span className="font-black text-lg text-gray-900 dark:text-white tracking-tight">
+            Partner<span className="text-[#FF5A1F]">.</span>
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
           {/* MOBILE BELL ICON */}
           <Link
             href="/partner/notifications"
-            className="relative p-2 text-gray-600 dark:text-gray-300 hover:text-rose-600 transition-colors"
+            className="relative p-2 text-gray-500 dark:text-gray-400 hover:text-[#FF5A1F] dark:hover:text-[#FF5A1F] transition-colors"
           >
             <Bell size={22} />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1.5 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+              <span className="absolute top-1.5 right-2 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FF5A1F]"></span>
               </span>
             )}
           </Link>
 
-          {/* 🚨 FIXED: ADDED onClick TO HAMBURGER MENU */}
-          <button 
-            onClick={toggleSidebar} 
-            className="p-2 text-gray-600 dark:text-gray-300 hover:text-rose-600 transition-colors"
+          {/* HAMBURGER MENU */}
+          <button
+            onClick={toggleSidebar}
+            className="p-2 text-gray-500 dark:text-gray-400 hover:text-[#FF5A1F] dark:hover:text-[#FF5A1F] transition-colors"
           >
             <Menu size={24} />
           </button>

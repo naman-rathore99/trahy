@@ -16,11 +16,12 @@ import {
   Users,
   Clock,
   Car,
-  ArrowUpRight,
-  ArrowDownRight,
   Loader2,
   BellRing,
   CheckCircle2,
+  Calendar,
+  ChevronDown,
+  Building2,
 } from "lucide-react";
 import Link from "next/link";
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from "recharts";
@@ -34,7 +35,7 @@ export default function PartnerDashboard() {
   // Used to prevent firing toasts the moment the page loads
   const isInitialLoad = useRef(true);
 
-  // 🚨 NEW: Tracks exactly which notifications we've already "dinged" for
+  // 🚨 Tracks exactly which notifications we've already "dinged" for
   const notifiedIds = useRef(new Set());
 
   // 1. FETCH DASHBOARD STATS
@@ -68,42 +69,37 @@ export default function PartnerDashboard() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      // Update the UI list
       const notifs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
       setRecentAlerts(notifs);
 
-      // Handle Toasts & Sound (with duplicate protection)
       if (isInitialLoad.current) {
-        // On first load, silently add existing IDs to memory so they don't trigger sounds
         snapshot.docs.forEach((doc) => notifiedIds.current.add(doc.id));
         isInitialLoad.current = false;
       } else {
         snapshot.docChanges().forEach((change) => {
           if (change.type === "added") {
             const newAlert = change.doc.data();
-            const alertId = change.doc.id; // Get the unique Firebase document ID
+            const alertId = change.doc.id;
 
-            // 🚨 FIX: Check if we've already alerted the user for this specific ID
             if (!notifiedIds.current.has(alertId)) {
-              notifiedIds.current.add(alertId); // Mark as notified in memory
+              notifiedIds.current.add(alertId);
 
-              // Play sound safely
               audio?.play().catch((e) => console.log("Audio blocked:", e));
 
-              // Show Toast
               toast.custom(
                 (t) => (
                   <div
                     className={`${
-                      t.visible ? "animate-enter" : "animate-leave"
-                    } max-w-sm w-full bg-white dark:bg-gray-900 shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-black/5 border-l-4 border-rose-500 overflow-hidden cursor-pointer`}
+                      t.visible
+                        ? "animate-in slide-in-from-right"
+                        : "animate-out fade-out"
+                    } max-w-sm w-full bg-white dark:bg-[#111827] shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-black/5 dark:ring-white/10 border-l-4 border-[#FF5A1F] overflow-hidden cursor-pointer`}
                   >
-                    {/* Clicking the body takes them to notifications & dismisses toast */}
                     <div
-                      className="flex-1 w-0 p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      className="flex-1 w-0 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                       onClick={() => {
                         toast.dismiss(alertId);
                         window.location.href = "/partner/notifications";
@@ -111,7 +107,7 @@ export default function PartnerDashboard() {
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex-shrink-0 pt-0.5">
-                          <div className="h-10 w-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
+                          <div className="h-10 w-10 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-[#FF5A1F]">
                             <BellRing size={20} />
                           </div>
                         </div>
@@ -125,13 +121,11 @@ export default function PartnerDashboard() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Fixed Close Button */}
                     <div className="flex border-l border-gray-100 dark:border-gray-800">
                       <button
                         onClick={(e) => {
                           e.preventDefault();
-                          e.stopPropagation(); // Stops the click from triggering the body link
+                          e.stopPropagation();
                           toast.dismiss(alertId);
                         }}
                         className="w-full border border-transparent rounded-none rounded-r-2xl p-4 flex items-center justify-center text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none transition-colors"
@@ -141,11 +135,7 @@ export default function PartnerDashboard() {
                     </div>
                   </div>
                 ),
-                {
-                  id: alertId, // Guaranteed to match and allow dismissal
-                  duration: 120000, // 120,000 ms = 2 minutes
-                  position: "top-right",
-                },
+                { id: alertId, duration: 120000, position: "top-right" },
               );
             }
           }
@@ -158,8 +148,8 @@ export default function PartnerDashboard() {
 
   if (loading)
     return (
-      <div className="h-screen flex items-center justify-center">
-        <Loader2 className="animate-spin text-rose-600" size={40} />
+      <div className="min-h-screen flex items-center justify-center bg-[#F4F7F9] dark:bg-[#09090B]">
+        <Loader2 className="animate-spin text-[#FF5A1F]" size={40} />
       </div>
     );
 
@@ -169,185 +159,224 @@ export default function PartnerDashboard() {
   const activeOccupancy = data?.occupancy || 0;
 
   return (
-    <main className="p-6 lg:p-10 max-w-[1600px] mx-auto space-y-8">
-      {/* 🚨 Inject the Toast Container */}
+    <main className="min-h-screen bg-[#F4F7F9] dark:bg-[#09090B] pb-12">
       <Toaster />
 
-      {/* 1. HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Good Morning, Partner!
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Here is your live property performance.
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <Link
-            href="/partner/bookings"
-            className="bg-black dark:bg-white text-white dark:text-black px-4 py-2 rounded-xl font-bold text-sm shadow-lg hover:opacity-90 flex items-center"
-          >
-            View All Bookings
-          </Link>
+      {/* --- TOP HEADER (SAAS STYLE) --- */}
+      <div className="bg-white dark:bg-[#111827] border-b border-gray-100 dark:border-gray-800 px-8 py-4 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+          <div>
+            <h1 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
+              Good Morning, Partner!
+            </h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+              Here is your live property performance.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Link
+              href="/partner/bookings"
+              className="bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black px-5 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-2"
+            >
+              <Calendar size={14} /> View All Bookings
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* 2. REAL QUICK STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Revenue"
-          value={`₹${totalRevenue.toLocaleString()}`}
-          change="+Realtime"
-          trend="up"
-          icon={TrendingUp}
-        />
-        <StatCard
-          title="Total Guests"
-          value={totalGuests}
-          change="Lifetime"
-          trend="up"
-          icon={Users}
-        />
-        <StatCard
-          title="Active Rooms"
-          value={activeOccupancy}
-          sub="Guests staying now"
-          icon={Users}
-          color="rose"
-        />
-        <StatCard
-          title="Vehicle Activity"
-          value="3"
-          sub="Estimated Inbound"
-          icon={Car}
-          color="blue"
-        />
-      </div>
+      <div className="max-w-7xl mx-auto px-8 pt-8">
+        <h2 className="text-lg font-black text-gray-900 dark:text-white mb-6">
+          Highlights
+        </h2>
 
-      {/* 3. MAIN GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* --- LEFT: REVENUE CHART (2 Cols) --- */}
-        <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-lg">Weekly Earnings</h3>
-              <div className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded-lg">
-                Last 7 Days
-              </div>
-            </div>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#e11d48" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#e11d48" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#000",
-                      color: "#fff",
-                      borderRadius: "8px",
-                      border: "none",
-                    }}
-                    itemStyle={{ color: "#fff" }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#e11d48"
-                    strokeWidth={3}
-                    fillOpacity={1}
-                    fill="url(#colorVal)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* OCCUPANCY VISUAL */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-rose-600 p-6 rounded-3xl text-white relative overflow-hidden">
-              <div className="relative z-10">
-                <div className="text-sm font-medium opacity-80 mb-1">
-                  Live Occupancy
-                </div>
-                <div className="text-4xl font-extrabold mb-4">
-                  {activeOccupancy}
-                </div>
-                <div className="text-sm opacity-80">
-                  Rooms currently occupied by guests.
-                </div>
-              </div>
-              <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-            </div>
-          </div>
+        {/* --- 1. HIGHLIGHTS GRID --- */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <HighlightCard
+            title="Total Revenue"
+            value={`₹${totalRevenue.toLocaleString()}`}
+            icon={TrendingUp}
+            trend="+Realtime"
+            isAlert={false}
+          />
+          <HighlightCard
+            title="Total Guests"
+            value={totalGuests}
+            icon={Users}
+            trend="Lifetime"
+            isAlert={false}
+          />
+          <HighlightCard
+            title="Active Rooms"
+            value={activeOccupancy}
+            icon={Building2}
+            trend="Live"
+            isAlert={true}
+          />
+          <HighlightCard
+            title="Vehicle Activity"
+            value="3"
+            icon={Car}
+            trend="Inbound"
+            isAlert={false}
+          />
         </div>
 
-        {/* --- RIGHT: LIVE ACTIVITY FEED --- */}
-        <div className="space-y-8">
-          <div className="bg-white dark:text-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden">
-            {/* Live Radar Pulse Effect */}
-            <div className="absolute top-10 right-6 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+        {/* --- 2. MAIN GRID (Chart + Feed) --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* LEFT: REVENUE & OCCUPANCY (2 Cols) */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Chart Card */}
+            <div className="bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-base font-black text-gray-900 dark:text-white mb-1">
+                    Weekly Earnings
+                  </h3>
+                  <p className="text-xs text-gray-500 font-medium">
+                    Your 7-day revenue trend.
+                  </p>
+                </div>
+                <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-600 dark:text-gray-300">
+                  Last 7 Days <ChevronDown size={14} />
+                </button>
+              </div>
+
+              {/* Native Recharts upgraded to SaaS Colors */}
+              <div className="h-[280px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient
+                        id="colorOrange"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#FF5A1F"
+                          stopOpacity={0.2}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#FF5A1F"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: isDark() ? "#111827" : "#fff",
+                        color: isDark() ? "#fff" : "#111827",
+                        borderRadius: "12px",
+                        border: isDark()
+                          ? "1px solid #1F2937"
+                          : "1px solid #F3F4F6",
+                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                        fontWeight: "bold",
+                        fontSize: "12px",
+                      }}
+                      itemStyle={{ color: "#FF5A1F", fontWeight: "900" }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#FF5A1F"
+                      strokeWidth={4}
+                      fillOpacity={1}
+                      fill="url(#colorOrange)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
+            {/* Occupancy Mini-Card */}
+            <div className="bg-gradient-to-br from-[#FF5A1F] to-orange-400 p-6 rounded-[24px] text-white relative overflow-hidden shadow-lg shadow-orange-500/20">
+              <div className="relative z-10 flex justify-between items-center">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">
+                    Live Occupancy
+                  </div>
+                  <div className="text-4xl font-black mb-1">
+                    {activeOccupancy}
+                  </div>
+                  <div className="text-xs font-medium opacity-90">
+                    Rooms currently occupied by guests.
+                  </div>
+                </div>
+                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+                  <Building2 size={32} className="text-white" />
+                </div>
+              </div>
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+              <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-black/10 rounded-full blur-2xl"></div>
+            </div>
+          </div>
+
+          {/* RIGHT: LIVE ACTIVITY FEED */}
+          <div className="bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-lg">Live Activity</h3>
+              <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+                <div className="flex h-2.5 w-2.5 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A1F] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FF5A1F]"></span>
+                </div>
+                Live Activity
+              </h3>
               <Link
                 href="/partner/notifications"
-                className="text-xs font-bold mt-10 text-rose-600 hover:underline"
+                className="text-xs font-bold text-[#FF5A1F] hover:underline"
               >
                 View All
               </Link>
             </div>
 
-            {recentAlerts.length === 0 ? (
-              <div className="py-8 text-center text-gray-500">
-                <Clock className="mx-auto mb-2 opacity-50" size={24} />
-                <p className="text-sm font-medium">
-                  Waiting for new bookings...
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentAlerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className={`flex items-start gap-3 p-3 rounded-2xl transition-colors ${!alert.isRead ? "bg-rose-50 dark:bg-rose-900/10" : "bg-gray-50 dark:bg-gray-800/50"}`}
-                  >
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              {recentAlerts.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                  <Clock className="mb-2 opacity-50" size={24} />
+                  <p className="text-xs font-bold uppercase tracking-wider">
+                    Waiting for activity
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentAlerts.map((alert) => (
                     <div
-                      className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${!alert.isRead ? "bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400" : "bg-gray-200 text-gray-500 dark:bg-gray-700"}`}
+                      key={alert.id}
+                      className="group flex items-start gap-4"
                     >
-                      {alert.type === "new_booking" ? (
-                        <CheckCircle2 size={18} />
-                      ) : (
-                        <BellRing size={18} />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4
-                        className={`font-bold text-sm truncate ${!alert.isRead ? "text-gray-900 dark:text-white" : "text-gray-700 dark:text-gray-300"}`}
+                      <div className="relative flex flex-col items-center mt-1">
+                        <div
+                          className={`w-2 h-2 rounded-full z-10 ${!alert.isRead ? "bg-[#FF5A1F] ring-4 ring-orange-50 dark:ring-orange-900/20" : "bg-gray-300 dark:bg-gray-600"}`}
+                        />
+                        <div className="w-[1px] h-full bg-gray-100 dark:bg-gray-800 absolute top-2 bottom-[-16px]" />
+                      </div>
+                      <div
+                        className={`flex-1 p-3 rounded-xl transition-colors border ${!alert.isRead ? "bg-orange-50/50 border-orange-100 dark:bg-orange-900/10 dark:border-orange-900/30" : "bg-white border-gray-50 hover:border-gray-100 dark:bg-[#111827] dark:border-gray-800/50 dark:hover:border-gray-700"}`}
                       >
-                        {alert.title}
-                      </h4>
-                      <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">
-                        {alert.message}
-                      </p>
-                      <p className="text-[10px] text-gray-400 mt-1 font-medium">
-                        {new Date(alert.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
+                        <h4
+                          className={`text-xs font-bold ${!alert.isRead ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-400"}`}
+                        >
+                          {alert.title}
+                        </h4>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-500 line-clamp-2 mt-1 font-medium leading-relaxed">
+                          {alert.message}
+                        </p>
+                        <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase tracking-wider">
+                          {new Date(alert.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -355,47 +384,34 @@ export default function PartnerDashboard() {
   );
 }
 
-// --- STAT CARD COMPONENT ---
-function StatCard({
-  title,
-  value,
-  change,
-  trend,
-  sub,
-  icon: Icon,
-  color = "gray",
-}: any) {
+// --- SUB COMPONENTS ---
+
+// Helper for Recharts Tooltip styling
+const isDark = () => {
+  if (typeof document !== "undefined") {
+    return document.documentElement.classList.contains("dark");
+  }
+  return false;
+};
+
+function HighlightCard({ title, value, icon: Icon, trend, isAlert }: any) {
   return (
-    <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex justify-between items-start mb-4">
-        <div
-          className={`p-3 rounded-xl bg-${color}-50 dark:bg-${color}-900/10 text-${color}-600`}
+    <div className="bg-white dark:bg-[#111827] rounded-[24px] p-5 border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
+          <Icon size={16} className="text-gray-400" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            {title}
+          </span>
+        </div>
+        <span
+          className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isAlert ? "bg-orange-50 text-[#FF5A1F] dark:bg-[#FF5A1F]/10" : "bg-green-50 text-green-600 dark:bg-green-900/20"}`}
         >
-          <Icon size={20} />
-        </div>
-        {change && (
-          <div
-            className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${trend === "up" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}
-          >
-            {trend === "up" ? (
-              <ArrowUpRight size={12} />
-            ) : (
-              <ArrowDownRight size={12} />
-            )}
-            {change}
-          </div>
-        )}
+          {trend}
+        </span>
       </div>
-      <div>
-        <div className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-          {value}
-        </div>
-        <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mt-1">
-          {title}
-        </div>
-        {sub && (
-          <div className="text-xs text-blue-500 font-medium mt-1">{sub}</div>
-        )}
+      <div className="text-3xl font-black text-gray-900 dark:text-white">
+        {value}
       </div>
     </div>
   );

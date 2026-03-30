@@ -12,15 +12,13 @@ export default function TabLayout() {
   const renderTabIcon = (name: any, focused: boolean) => {
     return (
       <View className="items-center justify-center gap-1">
-        <Ionicons 
-          name={name} 
-          size={24} // Standard size looks sharpest
-          color={focused ? '#FF5A1F' : (isDark ? '#9CA3AF' : '#6B7280')} 
+        <Ionicons
+          name={name}
+          size={24}
+          color={focused ? "#FF5A1F" : isDark ? "#9CA3AF" : "#6B7280"}
         />
         {/* Active Indicator Dot */}
-        {focused && (
-          <View className="w-1.5 h-1.5 bg-[#FF5A1F] rounded-full" />
-        )}
+        {focused && <View className="w-1.5 h-1.5 bg-[#FF5A1F] rounded-full" />}
       </View>
     );
   };
@@ -29,22 +27,22 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: true, // Labels ON for clarity
+        tabBarShowLabel: true,
         tabBarLabelStyle: {
-             fontSize: 10,
-             fontWeight: 'bold',
-             marginBottom: 6, // Pushes text slightly up from bottom
-             marginTop: -2,   // Pulls text closer to icon
+          fontSize: 10,
+          fontWeight: "bold",
+          marginBottom: 6,
+          marginTop: -2,
         },
-        tabBarActiveTintColor: '#FF5A1F',
-        tabBarInactiveTintColor: isDark ? '#9CA3AF' : '#6B7280',
+        tabBarActiveTintColor: "#FF5A1F",
+        tabBarInactiveTintColor: isDark ? "#9CA3AF" : "#6B7280",
         tabBarStyle: {
-          backgroundColor: isDark ? '#09090B' : '#FFFFFF',
-          borderTopColor: isDark ? '#1F2937' : '#F3F4F6',
-          height: Platform.OS === "ios" ? 90 : 70, // Perfect height
+          backgroundColor: isDark ? "#09090B" : "#FFFFFF",
+          borderTopColor: isDark ? "#1F2937" : "#F3F4F6",
+          height: Platform.OS === "ios" ? 90 : 70,
           elevation: 0,
           borderTopWidth: 1,
-          paddingTop: 8, // Gives breathing room at the top
+          paddingTop: 8,
         },
       }}
     >
@@ -53,16 +51,18 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ focused }) => renderTabIcon(focused ? "home" : "home-outline", focused),
+          tabBarIcon: ({ focused }) =>
+            renderTabIcon(focused ? "home" : "home-outline", focused),
         }}
       />
 
       {/* 2. RIDES */}
       <Tabs.Screen
-        name="vehicle" 
+        name="vehicle"
         options={{
           title: "Rides",
-          tabBarIcon: ({ focused }) => renderTabIcon(focused ? "car-sport" : "car-sport-outline", focused),
+          tabBarIcon: ({ focused }) =>
+            renderTabIcon(focused ? "car-sport" : "car-sport-outline", focused),
         }}
       />
 
@@ -71,24 +71,24 @@ export default function TabLayout() {
         name="create"
         options={{
           title: "",
-          tabBarLabelStyle: { display: "none" }, // Hide text for this one
+          tabBarLabelStyle: { display: "none" },
           tabBarIcon: ({ focused }) => (
             <View
               style={{
-                top: -24, // Floats it perfectly above the bar
+                top: -24,
                 width: 56,
                 height: 56,
                 borderRadius: 28,
-                backgroundColor: '#FF5A1F',
-                justifyContent: 'center',
-                alignItems: 'center',
-                shadowColor: '#FF5A1F',
+                backgroundColor: "#FF5A1F",
+                justifyContent: "center",
+                alignItems: "center",
+                shadowColor: "#FF5A1F",
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.3,
                 shadowRadius: 4,
                 elevation: 6,
                 borderWidth: 4,
-                borderColor: isDark ? '#09090B' : '#FFFFFF',
+                borderColor: isDark ? "#09090B" : "#FFFFFF",
               }}
             >
               <Ionicons name="add" size={32} color="white" />
@@ -102,7 +102,8 @@ export default function TabLayout() {
         name="bookings"
         options={{
           title: "Trips",
-          tabBarIcon: ({ focused }) => renderTabIcon(focused ? "ticket" : "ticket-outline", focused),
+          tabBarIcon: ({ focused }) =>
+            renderTabIcon(focused ? "ticket" : "ticket-outline", focused),
         }}
       />
 
@@ -111,14 +112,10 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ focused }) => renderTabIcon(focused ? "person" : "person-outline", focused),
+          tabBarIcon: ({ focused }) =>
+            renderTabIcon(focused ? "person" : "person-outline", focused),
         }}
       />
-
-      {/* Hidden Screens */}
-      <Tabs.Screen name="explore" options={{ href: null }} />
-      <Tabs.Screen name="saved" options={{ href: null }} />
-      <Tabs.Screen name="rides" options={{ href: null }} /> 
     </Tabs>
   );
 }
