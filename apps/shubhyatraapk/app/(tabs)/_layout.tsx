@@ -108,14 +108,14 @@ export default function TabLayout() {
       />
 
       {/* 5. SAVED */}
-      <Tabs.Screen
+      {/* <Tabs.Screen
         name="saved"
         options={{
           title: "Saved",
           tabBarIcon: ({ focused }) =>
             renderTabIcon(focused ? "bookmark" : "bookmark-outline", focused),
         }}
-      />
+      /> */}
 
       {/* 6. PROFILE */}
       <Tabs.Screen

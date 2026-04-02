@@ -462,7 +462,7 @@ export default function AdminBookings() {
                   />
                 </View>
                 <Text className="text-gray-900 dark:text-white font-black text-lg">
-                  {debouncedSearch ? "No matches found" : "No appointments"}
+                  {debouncedSearch ? "No matches found" : "No bookings found"}
                 </Text>
                 <Text className="text-gray-500 text-center mt-2 text-sm max-w-[200px]">
                   {debouncedSearch

@@ -397,11 +397,7 @@ export default function PartnerProfile() {
                   icon: "bed-outline",
                   route: "/partner/rooms",
                 },
-                {
-                  label: "Manage Fleet (Vehicles)",
-                  icon: "car-outline",
-                  route: "/partner/fleet",
-                },
+
                 {
                   label: "Verification Documents",
                   icon: "document-text-outline",
