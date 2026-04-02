@@ -2,24 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import {
   Users,
   Briefcase,
   Building2,
   AlertCircle,
-  ChevronRight,
-  Loader2,
   RefreshCcw,
   Bell,
   X,
   CheckCircle2,
   Info,
   Calendar,
-  Wallet,
-  TrendingUp,
   PieChart,
   Search,
   ChevronDown,
+  IndianRupee,
+  Landmark,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -39,29 +40,25 @@ interface ToastMsg {
   type: "success" | "error" | "info";
 }
 
-// Mock Chart Data for the visual representation
-const CHART_DATA = [
-  { day: "10 Oct", value: 25 },
-  { day: "15 Oct", value: 50 },
-  { day: "20 Oct", value: 45 },
-  { day: "25 Oct", value: 75 },
-  { day: "30 Oct", value: 100 },
-];
-
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Stats State
+  // 🚨 Real Live Stats State
   const [stats, setStats] = useState({
     travelers: 0,
     partners: 0,
     activeListings: 0,
     pendingRequests: 0,
     pendingProperties: 0,
-    revenue: 124500,
-    totalBookings: 142, // Mock value for visual
+    totalBookings: 0,
+    grossRevenue: 0,
+    platformEarnings: 0, // 15%
+    partnerPayable: 0, // 85%
   });
+
+  // 🚨 Real Chart Data State
+  const [chartData, setChartData] = useState<any[]>([]);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
@@ -83,11 +80,94 @@ export default function AdminDashboard() {
   const fetchData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
+      // Fetch APIs
       const [usersData, reqData, propData] = await Promise.all([
         apiRequest("/api/admin/users", "GET"),
         apiRequest("/api/admin/approve-request", "GET"),
         apiRequest("/api/admin/hotels", "GET"),
       ]);
+
+      // Fetch Real Bookings directly from Firebase
+      const bookingsSnap = await getDocs(
+        query(collection(db, "bookings"), orderBy("createdAt", "desc")),
+      );
+
+      let calcGrossRevenue = 0;
+      let validBookingsCount = 0;
+
+      // Setup empty chart for last 7 days (guaranteed zero baseline)
+      const last7Days = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        return {
+          day: d.toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+          }),
+          value: 0,
+          rawAmount: 0, // Added rawAmount upfront
+        };
+      });
+
+      bookingsSnap.docs.forEach((doc) => {
+        const data = doc.data();
+        const status = (data.status || "").toLowerCase();
+
+        // 🚨 STRICT CHECK: Only count successful bookings
+        if (["confirmed", "paid", "success", "completed"].includes(status)) {
+          // 🚨 STRICT MATH: Ensure it's a valid, positive number
+          let rawAmt =
+            data.totalAmount !== undefined ? data.totalAmount : data.price;
+          let amount = Number(rawAmt);
+
+          if (isNaN(amount) || amount < 0) {
+            amount = 0; // Fallback safely to 0 if data is corrupt
+          }
+
+          calcGrossRevenue += amount;
+          validBookingsCount++;
+
+          // Add to chart if it falls in the last 7 days
+          if (data.createdAt) {
+            let bookingDate;
+            if (data.createdAt.toDate) {
+              bookingDate = data.createdAt.toDate();
+            } else if (
+              typeof data.createdAt === "string" ||
+              typeof data.createdAt === "number"
+            ) {
+              bookingDate = new Date(data.createdAt);
+            }
+
+            if (bookingDate instanceof Date && !isNaN(bookingDate.valueOf())) {
+              const dateStr = bookingDate.toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+              });
+              const chartDay = last7Days.find((d) => d.day === dateStr);
+              if (chartDay) {
+                chartDay.value += amount;
+                chartDay.rawAmount += amount;
+              }
+            }
+          }
+        }
+      });
+
+      // Normalize chart data into percentages (0 to 100) for the CSS bar chart
+      const maxDailyRevenue = Math.max(...last7Days.map((d) => d.value), 1);
+
+      const normalizedChartData = last7Days.map((d) => ({
+        ...d,
+        value:
+          maxDailyRevenue <= 1 && d.value === 0
+            ? 5
+            : Math.max((d.value / maxDailyRevenue) * 100, 5),
+      }));
+
+      // Calculate the 15% / 85% Split safely
+      const platformEarnings = calcGrossRevenue * 0.15;
+      const partnerPayable = calcGrossRevenue * 0.85;
 
       const allUsers = usersData.users || [];
       const travelers = allUsers.filter(
@@ -114,10 +194,15 @@ export default function AdminDashboard() {
         activeListings,
         pendingRequests,
         pendingProperties,
-        revenue: 124500,
-        totalBookings: 142,
+        totalBookings: validBookingsCount,
+        grossRevenue: calcGrossRevenue,
+        platformEarnings: platformEarnings,
+        partnerPayable: partnerPayable,
       });
 
+      setChartData(normalizedChartData);
+
+      // Notifications
       const newNotifs: Notification[] = [];
       if (pendingRequests > 0)
         newNotifs.push({
@@ -137,18 +222,9 @@ export default function AdminDashboard() {
           type: "alert",
           time: "Action Required",
         });
-      if (activeListings > 0 && !isRefresh)
-        newNotifs.push({
-          id: "sys-1",
-          title: "System Status",
-          desc: `System running smoothly with ${activeListings} active listings.`,
-          link: "#",
-          type: "success",
-          time: "Just now",
-        });
 
       setNotifications(newNotifs);
-      if (isRefresh) addToast("Dashboard updated successfully", "success");
+      if (isRefresh) addToast("Dashboard synced with Firebase", "success");
     } catch (err) {
       console.error("Dashboard Load Failed", err);
       addToast("Failed to load data", "error");
@@ -165,7 +241,12 @@ export default function AdminDashboard() {
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F4F7F9] dark:bg-[#09090B]">
-        <Loader2 className="animate-spin text-[#FF5A1F]" size={40} />
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-gray-200 border-t-[#FF5A1F] rounded-full animate-spin"></div>
+          <p className="text-sm font-bold text-gray-500 uppercase tracking-widest animate-pulse">
+            Syncing Database...
+          </p>
+        </div>
       </div>
     );
 
@@ -181,10 +262,10 @@ export default function AdminDashboard() {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className="pointer-events-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-xl rounded-xl p-4 flex items-center gap-3 animate-in slide-in-from-right duration-300"
+            className="pointer-events-auto bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 shadow-xl rounded-xl p-4 flex items-center gap-3 animate-in slide-in-from-right duration-300"
           >
             {toast.type === "success" && (
-              <CheckCircle2 className="text-green-500" size={20} />
+              <CheckCircle2 className="text-emerald-500" size={20} />
             )}
             {toast.type === "error" && (
               <AlertCircle className="text-red-500" size={20} />
@@ -192,7 +273,7 @@ export default function AdminDashboard() {
             {toast.type === "info" && (
               <Info className="text-blue-500" size={20} />
             )}
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
+            <span className="text-sm font-bold text-gray-900 dark:text-white">
               {toast.message}
             </span>
             <button
@@ -207,7 +288,7 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* --- TOP HEADER (SAAS STYLE) --- */}
+      {/* --- TOP HEADER --- */}
       <div className="bg-white dark:bg-[#111827] border-b border-gray-100 dark:border-gray-800 px-8 py-4 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex-1 w-full">
@@ -215,12 +296,11 @@ export default function AdminDashboard() {
               Welcome Back, Admin!
             </h1>
             <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
-              You have {totalAlerts} tasks pending today — keep it up!
+              You have {totalAlerts} tasks pending today.
             </p>
           </div>
 
           <div className="flex items-center gap-4 w-full sm:w-auto">
-            {/* Global Search */}
             <div className="relative flex-1 sm:w-64 hidden md:block">
               <Search
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -228,8 +308,8 @@ export default function AdminDashboard() {
               />
               <input
                 type="text"
-                placeholder="Search for Bookings, Partners..."
-                className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A1F]/20 text-gray-900 dark:text-white"
+                placeholder="Search for Bookings..."
+                className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-[#09090B] border border-gray-200 dark:border-gray-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A1F]/20 text-gray-900 dark:text-white transition-all"
               />
             </div>
 
@@ -239,11 +319,11 @@ export default function AdminDashboard() {
                 fetchData(true);
               }}
               disabled={refreshing}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
               <RefreshCcw
                 size={18}
-                className={refreshing ? "animate-spin" : ""}
+                className={refreshing ? "animate-spin text-[#FF5A1F]" : ""}
               />
             </button>
 
@@ -254,7 +334,7 @@ export default function AdminDashboard() {
                   e.stopPropagation();
                   setShowNotifMenu(!showNotifMenu);
                 }}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors relative"
+                className="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors relative"
               >
                 <Bell size={20} />
                 {notifications.length > 0 && (
@@ -262,17 +342,16 @@ export default function AdminDashboard() {
                 )}
               </button>
 
-              {/* Notification Dropdown */}
               {showNotifMenu && (
                 <div
-                  className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                  className="absolute right-0 mt-2 w-80 bg-white dark:bg-[#111827] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                  <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-[#09090B]/50">
                     <h3 className="font-bold text-gray-900 dark:text-white">
                       Notifications
                     </h3>
-                    <span className="text-xs font-bold bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-gray-500">
+                    <span className="text-[10px] font-black bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-600 dark:text-gray-400">
                       {notifications.length} New
                     </span>
                   </div>
@@ -287,16 +366,16 @@ export default function AdminDashboard() {
                         >
                           <div className="flex gap-3">
                             <div
-                              className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${note.type === "alert" ? "bg-orange-500" : "bg-blue-500"}`}
+                              className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${note.type === "alert" ? "bg-[#FF5A1F]" : "bg-blue-500"}`}
                             />
                             <div>
                               <p className="text-sm font-bold text-gray-900 dark:text-white">
                                 {note.title}
                               </p>
-                              <p className="text-xs text-gray-500 mt-0.5">
+                              <p className="text-xs text-gray-500 mt-0.5 font-medium leading-relaxed">
                                 {note.desc}
                               </p>
-                              <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-wider">
+                              <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase tracking-wider">
                                 {note.time}
                               </p>
                             </div>
@@ -304,7 +383,7 @@ export default function AdminDashboard() {
                         </Link>
                       ))
                     ) : (
-                      <div className="p-8 text-center text-gray-400 text-sm">
+                      <div className="p-8 text-center text-gray-400 text-sm font-bold">
                         No new notifications
                       </div>
                     )}
@@ -313,8 +392,7 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            {/* Profile Avatar */}
-            <div className="w-8 h-8 bg-[#FF5A1F] text-white rounded-full flex items-center justify-center font-black text-sm shadow-sm cursor-pointer">
+            <div className="w-8 h-8 bg-gradient-to-br from-[#FF5A1F] to-orange-400 text-white rounded-full flex items-center justify-center font-black text-sm shadow-sm cursor-pointer">
               A
             </div>
           </div>
@@ -323,34 +401,90 @@ export default function AdminDashboard() {
 
       {/* --- MAIN DASHBOARD CONTENT --- */}
       <div className="max-w-7xl mx-auto px-8 pt-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-black text-gray-900 dark:text-white">
-            Highlights
-          </h2>
-          <button className="text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center gap-1">
-            <RefreshCcw size={12} /> Refresh Data
-          </button>
+        {/* 1. FINANCIAL HIGHLIGHTS GRID (Real Data) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden group">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                Gross Booking Value
+              </span>
+              <IndianRupee size={16} className="text-gray-400" />
+            </div>
+            <div className="text-3xl font-black text-gray-900 dark:text-white">
+              ₹{stats.grossRevenue.toLocaleString()}
+            </div>
+            <p className="text-xs text-gray-500 font-medium mt-1">
+              Total money processed.
+            </p>
+          </div>
+
+          <div className="bg-gradient-to-br from-[#FF5A1F] to-orange-400 rounded-[24px] p-6 text-white shadow-lg shadow-orange-500/20 relative overflow-hidden">
+            <div className="relative z-10">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">
+                  Platform Earnings (15%)
+                </span>
+                <PieChart size={16} className="opacity-80" />
+              </div>
+              <div className="text-3xl font-black">
+                ₹
+                {stats.platformEarnings.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+              <p className="text-xs font-medium opacity-90 mt-1">
+                Shubh Yatra's true profit.
+              </p>
+            </div>
+            <div className="absolute -right-10 -bottom-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+          </div>
+
+          <Link
+            href="/admin/payouts"
+            className="bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden group hover:border-[#FF5A1F] transition-colors cursor-pointer block"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                Payable to Partners
+              </span>
+              <Landmark
+                size={16}
+                className="text-gray-400 group-hover:text-[#FF5A1F] transition-colors"
+              />
+            </div>
+            <div className="text-3xl font-black text-gray-900 dark:text-white group-hover:text-[#FF5A1F] transition-colors">
+              ₹
+              {stats.partnerPayable.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </div>
+            <p className="text-xs text-gray-500 font-medium mt-1 group-hover:text-[#FF5A1F]/70 transition-colors">
+              Click to manage settlements ➔
+            </p>
+          </Link>
         </div>
 
-        {/* 1. HIGHLIGHTS GRID (4 Cards) */}
+        {/* 2. OPERATIONAL HIGHLIGHTS GRID */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <HighlightCard
             title="Total Partners"
             value={stats.partners}
             icon={Briefcase}
-            trend="+12%"
+            trend="Verified"
           />
           <HighlightCard
             title="Active Listings"
             value={stats.activeListings}
             icon={Building2}
-            trend="+5%"
+            trend="Live"
           />
           <HighlightCard
             title="Total Bookings"
             value={stats.totalBookings}
             icon={Calendar}
-            trend="+18%"
+            trend="Confirmed"
           />
           <HighlightCard
             title="Pending Tasks"
@@ -361,29 +495,23 @@ export default function AdminDashboard() {
           />
         </div>
 
-        {/* 2. MIDDLE SECTION (Chart & Split) */}
+        {/* 3. MIDDLE SECTION (Chart & Split) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Progress Overview (Left - 2/3 width) */}
+          {/* Progress Overview (Real Chart Data) */}
           <div className="lg:col-span-2 bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
             <div className="flex justify-between items-start mb-8">
               <div>
                 <h3 className="text-base font-black text-gray-900 dark:text-white mb-1">
-                  Revenue Overview
+                  7-Day Revenue Trend
                 </h3>
                 <p className="text-xs text-gray-500 font-medium">
-                  Your platform booking trends.
+                  Daily gross booking volume.
                 </p>
-              </div>
-              <div className="flex gap-2">
-                <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-600 dark:text-gray-300">
-                  Oct 2025 <ChevronDown size={14} />
-                </button>
               </div>
             </div>
 
-            {/* Pure CSS Area Chart Visual (No libraries needed) */}
+            {/* Pure CSS Area Chart Visual (Mapped to Real Data) */}
             <div className="h-48 flex items-end justify-between pt-4 relative">
-              {/* Y-Axis Grid lines */}
               <div className="absolute inset-0 flex flex-col justify-between pb-6 opacity-10">
                 <div className="border-b border-gray-400 w-full h-0"></div>
                 <div className="border-b border-gray-400 w-full h-0"></div>
@@ -391,51 +519,42 @@ export default function AdminDashboard() {
                 <div className="border-b border-gray-400 w-full h-0"></div>
               </div>
 
-              {/* Chart Bars */}
-              {CHART_DATA.map((data, idx) => (
+              {chartData.map((data, idx) => (
                 <div
                   key={idx}
-                  className="flex flex-col items-center w-[15%] z-10 group relative"
+                  className="flex flex-col items-center w-[12%] z-10 group relative"
                 >
-                  {/* Tooltip on Hover */}
-                  <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-gray-800 shadow-lg border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-lg flex flex-col items-center pointer-events-none">
-                    <span className="text-[10px] font-bold text-gray-500 whitespace-nowrap">
+                  <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 dark:bg-white shadow-lg px-3 py-1.5 rounded-lg flex flex-col items-center pointer-events-none">
+                    <span className="text-[10px] font-bold text-gray-300 dark:text-gray-500 whitespace-nowrap">
                       {data.day}
                     </span>
-                    <span className="text-xs font-black text-[#FF5A1F]">
-                      +5%
+                    <span className="text-xs font-black text-white dark:text-gray-900">
+                      ₹{data.rawAmount.toLocaleString()}
                     </span>
-                    <div className="absolute -bottom-1 w-2 h-2 bg-white dark:bg-gray-800 rotate-45 border-r border-b border-gray-100 dark:border-gray-700" />
+                    <div className="absolute -bottom-1 w-2 h-2 bg-gray-900 dark:bg-white rotate-45" />
                   </div>
 
-                  {/* The Bar */}
                   <div
-                    className={`w-full max-w-[40px] rounded-t-lg transition-all duration-500 ${data.value === 75 ? "bg-gradient-to-t from-orange-200 to-[#FF5A1F] shadow-lg shadow-orange-500/20" : "bg-orange-100 dark:bg-orange-900/30"}`}
+                    className="w-full max-w-[32px] rounded-t-lg transition-all duration-500 bg-[#FF5A1F] shadow-lg shadow-orange-500/20"
                     style={{ height: `${data.value}%` }}
                   />
-                  <span className="text-[10px] font-bold text-gray-400 mt-3">
-                    {data.day.split(" ")[0]}
+                  <span className="text-[9px] font-bold text-gray-400 mt-3">
+                    {data.day}
                   </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Activity Split (Right - 1/3 width) */}
+          {/* Activity Split */}
           <div className="bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
                 <PieChart size={16} className="text-gray-400" /> Booking Split
               </h3>
-              <div className="flex gap-1">
-                <button className="p-1.5 border border-gray-200 dark:border-gray-700 rounded text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800">
-                  <Search size={14} />
-                </button>
-              </div>
             </div>
 
             <div className="flex-1 flex flex-col items-center justify-center py-4">
-              {/* CSS Donut Chart */}
               <div className="w-40 h-40 rounded-full border-[14px] border-[#FF5A1F] border-r-[#3B82F6] border-b-[#EC4899] flex flex-col items-center justify-center relative shadow-inner">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                   Total
@@ -447,23 +566,24 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-2 gap-y-3 mt-4">
-              <LegendItem color="bg-[#FF5A1F]" label="Hotels" value="45%" />
-              <LegendItem color="bg-[#3B82F6]" label="Cabs" value="35%" />
-              <LegendItem color="bg-[#EC4899]" label="Rentals" value="15%" />
-              <LegendItem color="bg-indigo-500" label="Other" value="5%" />
+              <LegendItem color="bg-[#FF5A1F]" label="Hotels" />
+              <LegendItem color="bg-[#3B82F6]" label="Cabs" />
             </div>
           </div>
         </div>
 
-        {/* 3. BOTTOM SECTION: Recent Activity Table */}
-        <div className="bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
+        {/* 4. BOTTOM SECTION: Recent Activity Table */}
+        <div className="bg-white dark:bg-[#111827] rounded-[24px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm mb-12">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-base font-black text-gray-900 dark:text-white">
               Requires Attention
             </h3>
-            <button className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
-              <Search size={14} /> Sort & Filter
-            </button>
+            <Link
+              href="/admin/payouts"
+              className="text-xs font-bold text-[#FF5A1F] hover:underline"
+            >
+              Go to Payouts ➔
+            </Link>
           </div>
 
           <div className="overflow-x-auto">
@@ -485,11 +605,10 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {/* Pending Partner Row */}
                 {stats.pendingRequests > 0 && (
                   <tr className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
                     <td className="py-4 px-4 flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-orange-500" />
+                      <div className="w-2 h-2 rounded-full bg-[#FF5A1F]" />
                       <span className="font-bold text-sm text-gray-900 dark:text-white">
                         New Partner Signups
                       </span>
@@ -498,7 +617,7 @@ export default function AdminDashboard() {
                       Account Verification
                     </td>
                     <td className="py-4 px-4">
-                      <span className="px-2.5 py-1 rounded bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400 text-[10px] font-bold uppercase tracking-wider">
+                      <span className="px-2.5 py-1 rounded bg-orange-50 text-[#FF5A1F] dark:bg-[#FF5A1F]/10 dark:text-[#FF5A1F] text-[10px] font-bold uppercase tracking-wider">
                         Pending
                       </span>
                     </td>
@@ -512,21 +631,19 @@ export default function AdminDashboard() {
                     </td>
                   </tr>
                 )}
-
-                {/* Pending Property Row */}
                 {stats.pendingProperties > 0 && (
                   <tr className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
                     <td className="py-4 px-4 flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-blue-500" />
                       <span className="font-bold text-sm text-gray-900 dark:text-white">
-                        Unpublished Hotels
+                        Unpublished Listings
                       </span>
                     </td>
                     <td className="py-4 px-4 text-xs font-medium text-gray-500">
                       Listing Approval
                     </td>
                     <td className="py-4 px-4">
-                      <span className="px-2.5 py-1 rounded bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400 text-[10px] font-bold uppercase tracking-wider">
+                      <span className="px-2.5 py-1 rounded bg-orange-50 text-[#FF5A1F] dark:bg-[#FF5A1F]/10 dark:text-[#FF5A1F] text-[10px] font-bold uppercase tracking-wider">
                         Pending
                       </span>
                     </td>
@@ -540,8 +657,6 @@ export default function AdminDashboard() {
                     </td>
                   </tr>
                 )}
-
-                {/* Empty State if all clear */}
                 {totalAlerts === 0 && (
                   <tr>
                     <td
@@ -550,7 +665,7 @@ export default function AdminDashboard() {
                     >
                       <CheckCircle2
                         size={24}
-                        className="mx-auto mb-2 text-green-500/50"
+                        className="mx-auto mb-2 text-emerald-500/50"
                       />
                       All caught up! No pending actions required.
                     </td>
@@ -569,7 +684,7 @@ export default function AdminDashboard() {
 
 function HighlightCard({ title, value, icon: Icon, trend, isAlert }: any) {
   return (
-    <div className="bg-white dark:bg-[#111827] rounded-[24px] p-5 border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden group">
+    <div className="bg-white dark:bg-[#111827] rounded-[24px] p-5 border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
           <Icon size={16} className="text-gray-400" />
@@ -578,7 +693,7 @@ function HighlightCard({ title, value, icon: Icon, trend, isAlert }: any) {
           </span>
         </div>
         <span
-          className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isAlert ? "bg-orange-50 text-orange-600 dark:bg-orange-900/20" : "bg-green-50 text-green-600 dark:bg-green-900/20"}`}
+          className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isAlert ? "bg-orange-50 text-[#FF5A1F] dark:bg-[#FF5A1F]/10" : "bg-green-50 text-emerald-600 dark:bg-emerald-900/20"}`}
         >
           {trend}
         </span>
@@ -588,31 +703,18 @@ function HighlightCard({ title, value, icon: Icon, trend, isAlert }: any) {
           {value.toString().padStart(2, "0")}
         </span>
       </div>
-
-      {/* Decorative Sparkline (Fake) */}
-      <div className="absolute right-0 bottom-0 opacity-10 group-hover:opacity-20 transition-opacity">
+      <div className="absolute right-0 bottom-0 opacity-5 group-hover:opacity-10 transition-opacity">
         <TrendingUp size={64} className="translate-x-4 translate-y-4" />
       </div>
     </div>
   );
 }
 
-function LegendItem({
-  color,
-  label,
-  value,
-}: {
-  color: string;
-  label: string;
-  value: string;
-}) {
+function LegendItem({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-2">
       <div className={`w-2.5 h-2.5 rounded-full ${color}`} />
-      <span className="text-xs font-bold text-gray-500">{label}:</span>
-      <span className="text-xs font-black text-gray-900 dark:text-white">
-        {value}
-      </span>
+      <span className="text-xs font-bold text-gray-500">{label}</span>
     </div>
   );
 }

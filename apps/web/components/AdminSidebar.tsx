@@ -66,13 +66,18 @@ const menuGroups = [
   },
 ];
 
-export default function AdminSidebar() {
+// 🚨 NEW: Accept props from the layout
+export default function AdminSidebar({
+  isCollapsed,
+  toggleSidebar,
+}: {
+  isCollapsed: boolean;
+  toggleSidebar: () => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // 🚨 NEW: Desktop Collapsed State
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // --- PERMISSIONS STATE ---
   const [permissions, setPermissions] = useState({
@@ -82,15 +87,12 @@ export default function AdminSidebar() {
     loading: true,
   });
 
-  // --- SHADCN THEME LOGIC ---
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
-  // 1. AUTH & PERMISSIONS LOGIC
   useEffect(() => {
     setMounted(true);
     const auth = getAuth(app);
-
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         try {
@@ -102,7 +104,6 @@ export default function AdminSidebar() {
             loading: false,
           });
         } catch (error) {
-          console.error("Permissions Error:", error);
           setPermissions((prev) => ({ ...prev, loading: false }));
         }
       } else {
@@ -114,7 +115,6 @@ export default function AdminSidebar() {
         });
       }
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -123,13 +123,10 @@ export default function AdminSidebar() {
     router.push("/login");
   };
 
-  const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  };
+  const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
 
   return (
     <>
-      {/* 🚨 MOBILE TRIGGER (Hidden on Desktop) */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
         className="md:hidden fixed top-4 right-4 z-50 p-2 bg-white dark:bg-[#111827] text-gray-900 dark:text-white border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm"
@@ -137,7 +134,6 @@ export default function AdminSidebar() {
         {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
 
-      {/* 🚨 MOBILE OVERLAY */}
       {isMobileOpen && (
         <div
           onClick={() => setIsMobileOpen(false)}
@@ -145,17 +141,9 @@ export default function AdminSidebar() {
         />
       )}
 
-      {/* SIDEBAR CONTAINER */}
       <aside
-        className={`
-          fixed top-0 left-0 z-40 h-screen transition-all duration-300 ease-in-out
-          bg-white dark:bg-[#111827] border-r border-gray-100 dark:border-gray-800
-          flex flex-col
-          ${isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} 
-          ${isCollapsed ? "w-[80px]" : "w-[280px]"}
-        `}
+        className={`fixed top-0 left-0 z-40 h-screen transition-all duration-300 ease-in-out bg-white dark:bg-[#111827] border-r border-gray-100 dark:border-gray-800 flex flex-col ${isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} ${isCollapsed ? "w-[80px]" : "w-[280px]"}`}
       >
-        {/* Header / Brand */}
         <div
           className={`h-20 flex items-center justify-between border-b border-gray-100 dark:border-gray-800 shrink-0 transition-all ${isCollapsed ? "px-0 justify-center" : "px-5"}`}
         >
@@ -179,8 +167,9 @@ export default function AdminSidebar() {
             </div>
           )}
 
+          {/* 🚨 Uses the prop toggle function here */}
           <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
+            onClick={toggleSidebar}
             className="hidden md:flex items-center justify-center p-2 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
           >
             {isCollapsed ? (
@@ -191,7 +180,6 @@ export default function AdminSidebar() {
           </button>
         </div>
 
-        {/* MENU LINKS */}
         <div className="flex-1 py-6 px-3 space-y-6 overflow-y-auto custom-scrollbar overflow-x-hidden">
           {menuGroups.map((group, groupIdx) => (
             <div key={groupIdx}>
@@ -208,7 +196,6 @@ export default function AdminSidebar() {
                   if (!permissions.loading) {
                     const { role, hasProperty, hasVehicle } = permissions;
                     const isAdmin = role === "admin";
-
                     if (
                       [
                         "Join Requests",
@@ -216,10 +203,10 @@ export default function AdminSidebar() {
                         "Settings",
                         "Invoices",
                         "Pricing",
-                      ].includes(item.name)
-                    ) {
-                      if (!isAdmin) isDisabled = true;
-                    }
+                      ].includes(item.name) &&
+                      !isAdmin
+                    )
+                      isDisabled = true;
                     if (item.name === "Hotels" && !isAdmin && !hasProperty)
                       isDisabled = true;
                     if (item.name === "Vehicles" && !isAdmin && !hasVehicle)
@@ -238,7 +225,6 @@ export default function AdminSidebar() {
                   return (
                     <li key={item.href}>
                       {isDisabled ? (
-                        // DISABLED STATE
                         <div
                           title={isCollapsed ? `${item.name} (Locked)` : ""}
                           className={`flex items-center px-3 py-2.5 rounded-xl text-gray-400 dark:text-gray-600 cursor-not-allowed select-none transition-all ${isCollapsed ? "justify-center" : "justify-between"}`}
@@ -260,20 +246,11 @@ export default function AdminSidebar() {
                           )}
                         </div>
                       ) : (
-                        // ENABLED STATE
                         <Link
                           href={item.href}
                           onClick={() => setIsMobileOpen(false)}
                           title={isCollapsed ? item.name : ""}
-                          className={`
-                            flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-semibold text-sm
-                            ${
-                              isActive
-                                ? "bg-orange-50 text-[#FF5A1F] dark:bg-[#FF5A1F]/10 dark:text-[#FF5A1F]"
-                                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800/50"
-                            }
-                            ${isCollapsed ? "justify-center" : ""}
-                          `}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-semibold text-sm ${isActive ? "bg-orange-50 text-[#FF5A1F] dark:bg-[#FF5A1F]/10 dark:text-[#FF5A1F]" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800/50"} ${isCollapsed ? "justify-center" : ""}`}
                         >
                           <item.icon
                             size={18}
@@ -295,9 +272,7 @@ export default function AdminSidebar() {
           ))}
         </div>
 
-        {/* BOTTOM ACTIONS & PROFILE */}
         <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-4 shrink-0">
-          {/* Quick Actions (Theme & Logout) */}
           <div
             className={`flex items-center gap-2 ${isCollapsed ? "flex-col" : "px-1"}`}
           >
@@ -318,8 +293,6 @@ export default function AdminSidebar() {
               <LogOut size={16} />
             </button>
           </div>
-
-          {/* User Profile Mini-Card */}
           <div
             title={isCollapsed ? `${permissions.role} User` : ""}
             className={`flex items-center rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer ${isCollapsed ? "justify-center p-2" : "justify-between p-3"}`}
@@ -328,7 +301,6 @@ export default function AdminSidebar() {
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-800 to-gray-600 dark:from-white dark:to-gray-300 flex items-center justify-center text-white dark:text-black font-black text-sm shadow-sm shrink-0">
                 {permissions.role === "admin" ? "A" : "P"}
               </div>
-
               {!isCollapsed && (
                 <div className="whitespace-nowrap overflow-hidden">
                   <div className="text-sm font-bold text-gray-900 dark:text-white leading-tight capitalize truncate">
@@ -340,7 +312,6 @@ export default function AdminSidebar() {
                 </div>
               )}
             </div>
-
             {!isCollapsed && (
               <MoreVertical size={16} className="text-gray-400 shrink-0" />
             )}

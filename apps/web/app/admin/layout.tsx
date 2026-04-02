@@ -6,7 +6,7 @@ import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app } from "@/lib/firebase";
 import AdminSidebar from "@/components/AdminSidebar";
 import { ThemeProvider } from "@/context/AdminThemeContext";
-import { Loader2, ShieldAlert } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 export default function AdminLayout({
   children,
@@ -17,6 +17,9 @@ export default function AdminLayout({
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
 
+  // 🚨 1. NEW STATE: Controls the sidebar's open/close status
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   // GLOBAL ADMIN PROTECTION
   useEffect(() => {
     const auth = getAuth(app);
@@ -26,7 +29,6 @@ export default function AdminLayout({
       } else {
         try {
           // 🔒 SECURITY UPGRADE: Check token claims directly
-          // This is faster and harder to fake than an API call
           const token = await user.getIdTokenResult(true);
           const role = token.claims.role;
 
@@ -54,9 +56,11 @@ export default function AdminLayout({
 
   if (loading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50 dark:bg-black gap-4">
-        <Loader2 className="animate-spin text-rose-600 h-10 w-10" />
-        <p className="text-gray-500 font-bold animate-pulse">Verifying Admin Privileges...</p>
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#F4F7F9] dark:bg-[#09090B] gap-4">
+        <Loader2 className="animate-spin text-[#FF5A1F] h-10 w-10" />
+        <p className="text-gray-500 font-bold uppercase tracking-widest animate-pulse text-xs">
+          Verifying Access...
+        </p>
       </div>
     );
   }
@@ -70,14 +74,22 @@ export default function AdminLayout({
       enableSystem
       disableTransitionOnChange
     >
-      <div className="min-h-screen bg-gray-50 dark:bg-black flex transition-colors duration-300">
-        {/* SIDEBAR */}
-        <AdminSidebar />
+      <div className="min-h-screen bg-[#F4F7F9] dark:bg-[#09090B] flex transition-colors duration-300">
+        {/* 🚨 2. PASS THE PROPS TO THE SIDEBAR */}
+        <AdminSidebar
+          isCollapsed={isSidebarCollapsed}
+          toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        />
 
-        {/* MAIN CONTENT */}
-        <main className="flex-1 md:ml-72 p-8 w-full text-gray-900 dark:text-white">
-          {children}
-        </main>
+        {/* 🚨 3. DYNAMIC CONTENT WRAPPER */}
+        {/* This smoothly changes the padding from 280px to 80px when you click the toggle */}
+        <div
+          className={`flex-1 transition-all duration-300 ease-in-out w-full ${
+            isSidebarCollapsed ? "md:pl-20" : "md:pl-[280px]"
+          }`}
+        >
+          <main className="w-full">{children}</main>
+        </div>
       </div>
     </ThemeProvider>
   );
