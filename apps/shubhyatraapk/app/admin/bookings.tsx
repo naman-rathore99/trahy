@@ -215,7 +215,7 @@ export default function AdminBookings() {
       <TouchableOpacity
         onPress={() =>
           router.push({
-            pathname: "/admin/booking-details",
+            pathname: "/admin/booking-details" as any,
             params: { id: b.id },
           })
         }

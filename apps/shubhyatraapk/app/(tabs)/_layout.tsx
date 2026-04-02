@@ -107,13 +107,32 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 5. PROFILE */}
+      {/* 5. SAVED */}
+      <Tabs.Screen
+        name="saved"
+        options={{
+          title: "Saved",
+          tabBarIcon: ({ focused }) =>
+            renderTabIcon(focused ? "bookmark" : "bookmark-outline", focused),
+        }}
+      />
+
+      {/* 6. PROFILE */}
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
           tabBarIcon: ({ focused }) =>
             renderTabIcon(focused ? "person" : "person-outline", focused),
+        }}
+      />
+
+      {/* 🚨 7. HIDDEN SCREENS 🚨 */}
+      {/* Adding href: null completely removes it from the bottom bar while keeping the file routable */}
+      <Tabs.Screen
+        name="settings"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
